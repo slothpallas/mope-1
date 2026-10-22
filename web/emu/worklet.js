@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// FiMba-1 in an AudioWorklet: kalimba.wasm is the whole FM-1 app (web/emu/kalimba_web.c). Each render
+// MOPE-1 in an AudioWorklet: mope.wasm is the whole FM-1 app (web/emu/mope_web.c). Each render
 // quantum asks it for 128 frames, which runs the device's clock forward; between quanta the page's
 // input goes in and, about 30 times a second, the screen, the lights and any saved objects go out.
 
 const clock = globalThis.performance ? () => globalThis.performance.now() : () => Date.now();
 
-class Kalimba extends AudioWorkletProcessor {
+class Mope extends AudioWorkletProcessor {
   constructor() {
     super();
     this.ex = null;
@@ -16,6 +16,27 @@ class Kalimba extends AudioWorkletProcessor {
     this.busy = 0;
     this.frames = 0;
     this.port.onmessage = (e) => this.onMessage(e.data);
+    // a tap shorter than the firmware's scan still counts: a press is held at least MIN_HOLD seconds
+    this.want = { buttons: 0, keys: 0 };
+    this.down = { buttons: new Map(), keys: new Map() };
+  }
+
+  hold(kind, mask) {
+    const prev = this.want[kind], now = currentTime;
+    for (let i = 0; i < 32; i++) if ((mask >>> i & 1) && !(prev >>> i & 1)) this.down[kind].set(i, now);
+    this.want[kind] = mask >>> 0;
+    this.apply(kind);
+  }
+
+  apply(kind) {
+    let m = this.want[kind];
+    const now = currentTime;
+    for (const [i, t] of this.down[kind]) {
+      if (now - t < 0.03) m |= 1 << i;
+      else if (!(m >>> i & 1)) this.down[kind].delete(i);
+    }
+    if (kind === "buttons") this.ex.web_buttons(m >>> 0);
+    else this.ex.web_keys(m >>> 0);
   }
 
   async onMessage(m) {
@@ -48,9 +69,9 @@ class Kalimba extends AudioWorkletProcessor {
     } else if (!this.ex) {
       return;
     } else if (m.type === "buttons") {
-      this.ex.web_buttons(m.mask >>> 0);
+      this.hold("buttons", m.mask);
     } else if (m.type === "keys") {
-      this.ex.web_keys(m.mask >>> 0);
+      this.hold("keys", m.mask);
     } else if (m.type === "enc") {
       this.ex.web_enc(m.role, m.n | 0);
     } else if (m.type === "midi") {
@@ -90,6 +111,8 @@ class Kalimba extends AudioWorkletProcessor {
     if (!this.ex) return true;
     const out = outputs[0];
     const n = out[0].length;
+    if (this.down.buttons.size) this.apply("buttons");
+    if (this.down.keys.size) this.apply("keys");
     const t0 = clock();
     this.ex.web_render(n);
     this.busy += clock() - t0;
@@ -104,4 +127,4 @@ class Kalimba extends AudioWorkletProcessor {
   }
 }
 
-registerProcessor("kalimba", Kalimba);
+registerProcessor("mope", Mope);

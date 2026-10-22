@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* FiMba-1 project: one flash object (OBJ_PROJ). A project of another format, or none (or FoMni's),
+/* MOPE-1 project: one flash object (OBJ_PROJ). A project of another format, or none (or FoMni's),
  * gives the defaults. Part of the unity build, after app.h. */
 project_t proj;
 
@@ -10,7 +10,7 @@ void project_defaults(void)
     proj.magic = PROJ_MAGIC;
     proj.format = PROJ_FORMAT;
     for (i = 0; i < P_NPARAMS; i++)
-        proj.par[i] = km_param_info(i)->def;
+        proj.par[i] = sy_param_info(i)->def;
 }
 
 /* A project of this format loads. Each value out of its range (a setting this version added, that an older
@@ -18,13 +18,20 @@ void project_defaults(void)
 static int project_valid(int bytes)
 {
     int i, have = (bytes - 8) / 2;               /* the values the saved project holds */
+    if (proj.magic == PROJ_MAGIC && proj.format == 1u && bytes >= 8 + 2 * (P_VOLUME + 1) + 4) {
+        uint32_t xp;                                 /* format 1: its XP sat right after its fewer values */
+        memcpy(&xp, (const uint8_t *)&proj + 8 + 2 * (P_VOLUME + 1), 4);
+        proj.xp = xp;
+    } else if (bytes < (int)sizeof proj) {           /* (an older, shorter one: no XP yet) */
+        proj.xp = 0;
+    }
     if (proj.magic != PROJ_MAGIC || proj.format < 1u || proj.format > PROJ_FORMAT)
         return 0;
     if (have > PROJ_NPAR_OF(proj.format))        /* (its spare bytes, zeros, are not settings) */
         have = PROJ_NPAR_OF(proj.format);
     proj.format = PROJ_FORMAT;
     for (i = 0; i < P_NPARAMS; i++) {
-        const km_param_t *p = km_param_info(i);
+        const sy_param_t *p = sy_param_info(i);
         if (i >= have || proj.par[i] < p->lo || proj.par[i] > p->hi)
             proj.par[i] = p->def;
     }
@@ -48,5 +55,5 @@ void project_apply(void)
 {
     int i;
     for (i = 0; i < P_NPARAMS; i++)
-        km_set(i, proj.par[i]);
+        sy_set(i, proj.par[i]);
 }

@@ -1,12 +1,15 @@
-# FiMba-1: working on an issue or a feature
+# MOPE-1 (a fork of FiMba-1): working on a feature
 
 The steps for every GitHub issue or new feature, from the first look to the release.
 
 ## 1. Understand it
 
 - `gh issue view N --json title,body,comments` (plain `gh issue view` can print nothing here).
-- Find the code: the instrument and its music are `firmware/src/dsp/kalimba.{c,h}`; the panel and
-  the screen are `firmware/src/app/ui.c`. The host simulator and the web app build the same sources.
+- Find the code: the instrument (wavetables, voices, FX, drum styles) is `firmware/src/dsp/synth.{c,h}`;
+  the panel is `firmware/src/app/ui.c`, the blob `firmware/src/app/blob.c`, its pixels `px.c`. The
+  screen reads only `proj` and `sy_tel` (the engine's telemetry). The host simulator and the web app
+  build the same sources.
+- The rules of the screen: no menus, no numbers. A value is something that happens to the blob.
 - When the request leaves a real choice open (behaviour, naming, the default), ask before building.
 
 ## 2. Build it on a branch
@@ -19,8 +22,8 @@ The steps for every GitHub issue or new feature, from the first look to the rele
 
 ## 3. Test it
 
-- Unit tests go in `tests/host/kalimba_test.c`. Whole-app behaviour goes in a scenario,
-  `tests/scenarios/<name>.kal` (`tap`, `spin`, `tapkey`, `expect`, `shot`): add one for a new feature.
+- Unit tests go in `tests/host/synth_test.c`. Whole-app behaviour goes in a scenario,
+  `tests/scenarios/<name>.mope` (`tap`, `spin`, `tapkey`, `expect`, `shot`): add one for a new feature.
 - Run `tests/run_tests.sh`. Everything must pass (update-loader is skipped locally without
   `AC79_SDK`). When a change moves existing behaviour, update the scenarios that assumed the old way.
 - Make sure a new check can fail: break one expectation, see it fail, put it back.
@@ -56,7 +59,9 @@ The steps for every GitHub issue or new feature, from the first look to the rele
   The user may have merged (and so released) it already: then branch from `main` again, bump
   `VERSION` again, and open a new PR.
 
-## 7. Release (automatic)
+## 7. Release (automatic, once this fork has its own GitHub repository)
+
+- This checkout's `origin` is still FiMba-1's: never push there.
 
 - Merging to `main` with a new `VERSION` releases it, all in that one run: the release build, the tag
   `vX.Y.Z`, the GitHub Release with the CHANGELOG section, and the site at

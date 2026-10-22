@@ -2,12 +2,12 @@
 # Test FiMba-1, build the firmware and the browser version, publish them.
 #
 #   pull request      the full test suite; the firmware package built and checked; both kept with the
-#                     run as downloads ("fimba-firmware", "FiMba-1-web")
+#                     run as downloads ("mope-firmware", "MOPE-1-web")
 #   push to main      the same, then the browser version published to
 #                     https://jadamsowers.github.io/fm1-fimba/, with the latest release's firmware
 #                     beside it for the page's installer (firmware/latest.json)
 #   a new VERSION     a push to main whose VERSION has no tag yet is a release: a release build
-#                     (identity FM-1_8XXYYZZ, version on the splash and the Setup page), the commit
+#                     (identity FM-1_7XXYYZZ, version on the splash and the Setup page), the commit
 #                     tagged vX.Y.Z and published as a GitHub Release with the .fwsc, the one-file web
 #                     app and its CHANGELOG.md section, and the site published with that firmware in its
 #                     installer, all in this one run. (A tag pushed by a run starts no other run, and
@@ -80,14 +80,14 @@ jobs:
           [ -n "$RELEASE" ] && export OM_VERSION="$RELEASE"
           sh web/emu/build.sh
           mkdir -p site
-          cp build/emu/FiMba-1.html site/index.html
+          cp build/emu/MOPE-1.html site/index.html
           touch site/.nojekyll
 
       - name: Keep the web app with the run
         uses: actions/upload-artifact@v7
         with:
-          name: FiMba-1-web
-          path: build/emu/FiMba-1.html
+          name: MOPE-1-web
+          path: build/emu/MOPE-1.html
 
       - name: Keep the scenario screenshots and audio
         if: always()
@@ -146,21 +146,21 @@ jobs:
 
       - name: Check the package (every CRC; all but the app byte-identical to FoMni's)
         run: |
-          pkg=$(ls build/fimba*.fwsc | head -1)
-          python3 tools/check_fwsc.py "$pkg" --app build/fimba.bin --ref build/fomni-ref/build/omni.fwsc
+          pkg=$(ls build/mope*.fwsc | head -1)
+          python3 tools/check_fwsc.py "$pkg" --app build/mope.bin --ref build/fomni-ref/build/omni.fwsc
 
       - name: Update-path and install tests against the package
         run: |
-          [ -f build/fimba.fwsc ] || cp build/fimba-*.fwsc build/fimba.fwsc   # (the tests look for this name)
+          [ -f build/mope.fwsc ] || cp build/mope-*.fwsc build/mope.fwsc   # (the tests look for this name)
           sh tests/run_tests.sh
 
       - name: Keep the package with the run
         uses: actions/upload-artifact@v7
         with:
-          name: fimba-firmware
+          name: mope-firmware
           path: |
-            build/fimba*.fwsc
-            build/fimba.bin
+            build/mope*.fwsc
+            build/mope.bin
 
   pages:
     name: Publish the web app (and its installer's firmware) to GitHub Pages
@@ -201,8 +201,8 @@ jobs:
                   --jq '.[] | select(.isDraft | not) | .tagName' | grep -E '^v[0-9]+\.[0-9]+' | sort -V | tail -1)
           if [ -z "$tag" ]; then echo "no release yet: the installer offers a file chooser only"; exit 0; fi
           mkdir -p site/firmware
-          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern 'fimba-*.fwsc' --dir site/firmware
-          file=$(cd site/firmware && ls fimba-*.fwsc | head -1)
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern 'mope-*.fwsc' --dir site/firmware
+          file=$(cd site/firmware && ls mope-*.fwsc | head -1)
           python3 - "$tag" "$file" <<'PY'
           import json, sys
           sys.path.insert(0, "tools")
@@ -245,4 +245,4 @@ jobs:
             awk -v v="$VER" '$0 == "## " v {f = 1; next} /^## / {f = 0} f' CHANGELOG.md | sed '/./,$!d'
             echo; sed "s/VERSION/$VER/g" .github/release-notes.md; } > notes.md
           gh release create "v$VER" --target "$GITHUB_SHA" --title "FiMba-1 $VER (beta)" --notes-file notes.md \
-            --prerelease dist/fimba-firmware/fimba-"$VER".fwsc dist/FiMba-1-web/FiMba-1.html
+            --prerelease dist/mope-firmware/mope-"$VER".fwsc dist/MOPE-1-web/MOPE-1.html

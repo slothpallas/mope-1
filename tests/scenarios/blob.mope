@@ -1,0 +1,200 @@
+# The blob through its parts: a screenshot of each, and what the engine says.
+wait 300
+shot 00_idle.png
+expect page 0
+# a chord: the mouth opens, buddies appear
+key 12 down
+key 15 down
+key 19 down
+wait 250
+expect gates 3
+shot 01_chord.png
+key 12 up
+key 15 up
+key 19 up
+wait 400
+shot 02_release.png
+# the envelope's page: its schematic, a note riding it
+tap ENV
+expect page 2
+key 12 down
+wait 60
+shot 02b_env_schematic.png
+key 12 up
+wait 200
+tap LFO
+spin K2 60
+wait 300
+shot 02c_lfo_schematic.png
+wait 450
+shot 02d_lfo_sway_later.png
+spin K3 2
+wait 700
+shot 02e_lfo_bounce.png
+wait 2600
+shot 02f_lfo_bounce_idle.png
+key 12 down
+wait 500
+shot 02g_lfo_bounce_playing.png
+key 12 up
+wait 300
+spin K3 -2
+spin K2 -60
+# EYES: shut the filter (stoned), then resonance to lasers
+tap EDIT
+expect page 1
+spin K1 -50
+tapkey 12
+wait 120
+shot 03_stoned.png
+spin K1 40
+spin K2 80
+tapkey 12
+wait 120
+shot 04_lasers.png
+spin K2 -70
+# PRESETS: a whole sound, its card; ALGORITHM: only the wave
+turn PRESET 2
+wait 400
+shot 04b_preset_card.png
+turn ALGO 1
+wait 300
+shot 04c_algorithm_wave.png
+# TEARS: delay and feedback up, then a note: tears fall
+tap FX
+spin K2 60
+spin K4 40
+spin K1 70
+tapkey 14
+wait 700
+shot 05_tears_chorus.png
+# WALLS: a big room, the blob gets small; then the void
+tap SEL
+spin K1 50
+spin K2 30
+tapkey 10
+wait 300
+shot 06_big_room.png
+spin K2 20
+wait 200
+shot 07_void.png
+spin K2 -60
+# fry it
+spin K3 100
+tapkey 10
+wait 300
+shot 08_deep_fried.png
+spin K3 -100
+# the tape deck: drums and the bass (its page while SEQ is held)
+press SEQ
+tap PLAY
+key 5 down
+wait 1200
+expect drums 1
+expect kicks >0
+shot 09_drums.png
+turn SELECT 2
+wait 900
+shot 10_new_tape.png
+release SEQ
+key 5 up
+# the mixer: voices, drums, bass, gunk
+tap GLO
+expect page 8
+wait 300
+shot 10b_mixer.png
+tap GLO
+expect page 7
+tap PLAY
+wait 600
+# the arpeggiator: a chord held becomes a pattern
+tap ARP
+expect page 9
+expect arp 3
+key 7 down
+key 11 down
+key 14 down
+wait 900
+expect arpseq >3
+shot 10c_arp.png
+key 7 up
+key 11 up
+key 14 up
+tap ARP
+expect arp 0
+wait 400
+# polyphony past the voices: a buddy yeeted
+key 0 down
+key 3 down
+key 7 down
+key 10 down
+key 14 down
+key 17 down
+key 21 down
+wait 120
+expect steals >0
+shot 11_yeet.png
+key 0 up
+key 3 up
+key 7 up
+key 10 up
+key 14 up
+key 17 up
+key 21 up
+# give up
+key 0 down
+key 26 down
+wait 400
+shot 12_same.png
+key 0 up
+key 26 up
+# nothing held: the drawer slides away, the blob alone; then sleep
+tap HOME
+wait 1000
+expect page 0
+shot 12b_blob_alone.png
+wait 30000
+shot 13_asleep.png
+expect dropped 0
+# a long life: levels (and what they give)
+reboot
+wait 300
+strum 0 15 20
+strum 15 0 20
+strum 0 15 20
+strum 15 0 20
+strum 0 15 20
+strum 15 0 20
+strum 0 15 20
+strum 15 0 20
+wait 400
+expect xp >127
+shot 14_levels.png
+# a page is there only while its button is held
+press ENV
+wait 200
+expect page 2
+release ENV
+wait 1000
+expect page 0
+# ARP held: its page, no toggle; a tap: on, then off
+press ARP
+wait 500
+expect page 9
+release ARP
+expect arp 0
+tap ARP
+expect arp 3
+tap ARP
+expect arp 0
+# GLO held: the mixer; a tap, then held again: the setup
+press GLO
+wait 100
+expect page 8
+release GLO
+wait 1000
+tap GLO
+press GLO
+wait 100
+expect page 7
+release GLO

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Boot, audio ISR and main loop adapted from Felucca's main.c / audio.c, Copyright (C) 2026
  * Leo Kuroshita (@kurogedelic), Hugelton Instruments. */
-/* FiMba-1 on the FM-1 (FoMni's, from X0X's): boot (WDT first, boot-loop guard, guards), LCD, input (TIMER5
+/* MOPE-1 on the FM-1 (FiMba-1's, FoMni's, from X0X's): boot (WDT first, boot-loop guard, guards), LCD, input (TIMER5
  * 10 kHz), audio (ALNK0), USB; then the main loop: UI at ~60 frames/s, input polled in between. */
 extern uint32_t _data_start[], _data_end[], _data_load[], _bss_start[], _bss_end[];
 extern uint32_t _pool_start[], _pool_end[], _rt_start[], _rt_end[], _rt_load[];
@@ -11,7 +11,7 @@ extern uint32_t _pool_start[], _pool_end[], _rt_start[], _rt_end[], _rt_load[];
 #define HALF_FRAMES 256u                    /* I2S half buffer: 5.8 ms at 44.1 kHz */
 #define HALF_WORDS (HALF_FRAMES * 2u)
 #define FS 44100u
-#define REND_FRAMES 256u                    /* km_render's frames per call */
+#define REND_FRAMES 256u                    /* sy_render's frames per call */
 #if FELUCCA_UAC
 _Static_assert(REND_FRAMES == UA_HALF, "usb.c sizes the USB audio ring band for this block");
 #endif
@@ -35,7 +35,7 @@ static void render_block(int32_t *o)                /* ALNK0: one half, measured
     {
         uint32_t k;
         for (k = 0; k < HALF_FRAMES; k += REND_FRAMES) {
-            km_render(o + 2u * k, REND_FRAMES, master_q12);
+            sy_render(o + 2u * k, REND_FRAMES, master_q12);
 #if FELUCCA_UAC
             uac_tap(o + 2u * k, REND_FRAMES);       /* the USB audio input: the same master output */
 #endif
@@ -145,7 +145,7 @@ static void fm1_fault(const fm1_crash_t *c)
     uint32_t t0;
     fm1_audio_stop();
     lcd_fill(0, 0, 240, 240, RGB(160, 0, 0));
-    draw_text_box(0, 8, 240, &FONT_S, "FiMba-1 CRASH", C_WHITE, 1);
+    draw_text_box(0, 8, 240, &FONT_S, "MOPE-1 CRASH", C_WHITE, 1);
     hexs(b, c->vec);
     draw_text_box(10, 40, 220, &FONT_S, b, C_WHITE, 0);
     hexs(b, c->pc);
@@ -182,7 +182,7 @@ static void safe_main(void)
     char b[24];
     uint32_t t0, play;
     lcd_fill(0, 0, 240, 240, C_BLACK);
-    draw_text_box(0, 18, 240, &FONT_B, "FiMba-1 SAFE MODE", C_HI, 1);
+    draw_text_box(0, 18, 240, &FONT_B, "MOPE-1 SAFE MODE", C_HI, 1);
     draw_text_box(0, 52, 240, &FONT_S, "IT CRASHED TWICE", C_WHITE, 1);
     draw_text_box(0, 72, 240, &FONT_S, "WHILE STARTING.", C_WHITE, 1);
     draw_text_box(0, 102, 240, &FONT_S, "NO SOUND. USB IS ON:", C_WHITE, 1);
@@ -228,20 +228,12 @@ static void safe_main(void)
     }
 }
 
-static void splash(void)
+static void splash(void)                            /* (gfx.c's canvas is one line of text high now) */
 {
-    lcd_fill(0, 0, 240, 240, RGB(250, 244, 232));
-    cv_begin(240, 84, RGB(250, 244, 232));
-    {
-        int32_t w = text_w(&FONT_L, "FiMba-1");
-        cv_text((240 - w) / 2, 0, &FONT_L, "FiMba-1", RGB(196, 142, 92));
-        w = text_w(&FONT_S, "A thumb piano for the FM-1");
-        cv_text((240 - w) / 2, 42, &FONT_S, "A thumb piano for the FM-1", RGB(150, 132, 110));
-        w = text_w(&FONT_XS, OM_VERSION);              /* "DEV", or a release's "0.1.0 BETA" */
-        cv_text((240 - w) / 2, 66, &FONT_XS, OM_VERSION, RGB(170, 152, 130));
-    }
-    cv_blit(0, 92);
-    lcd_sync();
+    lcd_fill(0, 0, 240, 240, C_BLACK);          /* (draw_text_box clears to black) */
+    draw_text_box(0, 96, 240, &FONT_L, "MOPE-1", RGB(126, 160, 168), 1);
+    draw_text_box(0, 138, 240, &FONT_S, "it plays anyway", RGB(125, 135, 148), 1);
+    draw_text_box(0, 162, 240, &FONT_XS, OM_VERSION, RGB(93, 113, 134), 1);
 }
 
 static void fm1_main(void)
@@ -283,7 +275,8 @@ static void fm1_main(void)
     fm1_adc_init();
     panel_init();
     led_pos_init();
-    km_init();
+    sy_boot_tick = fm1_wdt_feed;                    /* the tables take a moment to build */
+    sy_init();
     project_load();                                 /* defaults when nothing (or another format) is saved */
     project_apply();
     audio_init();
@@ -340,7 +333,7 @@ static void fm1_main(void)
         ota_service();                              /* M-UPGRADE handshake (other SysEx is dropped) */
         if (usb.ota_req) {
             usb.ota_req = 0;
-            km_panic();
+            sy_panic();
             if (flash_ok)
                 ota_session();                      /* returns only if nothing was committed */
             ui_init();

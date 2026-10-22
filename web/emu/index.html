@@ -1,4 +1,4 @@
-<title>FiMba-1</title>
+<title>MOPE-1</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Semi+Condensed:wght@600;700&display=swap">
@@ -76,9 +76,8 @@ kbd { font: 600 .85em ui-monospace, Menlo, monospace; background: var(--card); b
 </style>
 <main>
 <header>
-  <h1>FiMba-1</h1>
-  <p>a thumb piano firmware for the M-VAVE FM-1, running in the browser from the same C code</p>
-  <nav><a href="https://github.com/jadamsowers/fm1-fimba">Source and manual</a></nav>
+  <h1>MOPE-1</h1>
+  <p>a sad wavetable synth for the M-VAVE FM-1. It plays anyway. Running in the browser from the same C code.</p>
 </header>
 
 <p class="turn">Turn your phone sideways for bigger controls.</p>
@@ -104,10 +103,10 @@ kbd { font: 600 .85em ui-monospace, Menlo, monospace; background: var(--card); b
   <ol>
     <li>Connect the FM-1 to this computer with a USB data cable, directly (no hub, probe or Transporter). Close other apps that use MIDI.</li>
     <li>Use Chrome or Edge, and allow MIDI (with SysEx) when the browser asks.</li>
-    <li>Press Install. Don't unplug or close this page while it writes (about a minute). The FM-1 restarts into FiMba-1 and shows its version.</li>
+    <li>Press Install. Don't unplug or close this page while it writes (about a minute). The FM-1 restarts into MOPE-1.</li>
   </ol>
   <div class="row">
-    <button id="instLatest" type="button" disabled>Install FiMba-1</button>
+    <button id="instLatest" type="button" disabled>Install MOPE-1</button>
     <span class="what" id="instWhat">Looking for the latest release&hellip;</span>
   </div>
   <div class="row">
@@ -119,7 +118,7 @@ kbd { font: 600 .85em ui-monospace, Menlo, monospace; background: var(--card); b
   <p class="status" id="instStatus" role="status" aria-live="polite"></p>
   <details>
     <summary><h3>Back to the stock firmware</h3></summary>
-    <p>This writes M-VAVE's own FM-1 V15 back, from FiMba-1 (or its safe mode, or any Felucca-family firmware) over the
+    <p>This writes M-VAVE's own FM-1 V15 back, from MOPE-1 (or its safe mode, or any Felucca-family firmware) over the
       same USB cable. Choose the file you downloaded from M-VAVE: it is checked (SHA-256) before anything is written.
       If the FM-1 doesn't start at all, it comes up in safe mode after two tries, where this still works; past that,
       <code>tools/fm1_rescue.py</code> in the repository restores it from a Mac.</p>
@@ -136,24 +135,28 @@ kbd { font: 600 .85em ui-monospace, Menlo, monospace; background: var(--card); b
 
 <section class="help">
   <div>
-    <h2>Playing</h2>
+    <h2>It is the sound</h2>
     <ul>
-      <li><b>Layout</b> (Keys page): <b>Tine</b>, the default, puts the tines on the white keys as on a real kalimba, lowest note (C4) in the middle, the next (D4) to its left and the scale alternating outward. <b>Mirror</b> is the same, flipped: D4 to the right of C4. <b>Keyboard</b> makes every key, white and black, play its printed note from F3 up, with <b>Transpose</b> on the Keys page (or PRESETS).</li>
-      <li><b>Black keys</b> in the Tine layout follow the Keys page's <b>Black</b> setting: <b>Chords</b> (a thumb roll: C Dm Em F G Am Bdim, then CM7 FM7 G7 Am7), <b>Sharps</b> (the white key to the left, a semitone up) or <b>Perform</b> (mute, cover the hole, freeze, octave down / up while held, six materials).</li>
-      <li><b>PLAY</b> freezes the grain cloud. <b>REC</b> mutes every tine. <b>ARP</b>, tapped, starts and stops the mbira pattern over the chord you pick (a chord key, held keys in Keyboard, or held MIDI notes); held, it opens the pattern's settings.</li>
-      <li><b>OCT−</b> / <b>OCT+</b>: octave. <b>SELECT</b> material, <b>ALGORITHM</b> scale, <b>PRESETS</b> key.</li>
+      <li>There are no menus and no numbers. The blob <i>is</i> the synth: its outline is the wavetable, its eyes are the filter, its mouth is the envelope, its tears are the delay.</li>
+      <li>Hold a part's button: its schematic opens under the blob (the envelope's shape, the LFO's wave, the filter's curve, the wavetable's frames, the echoes, the room's tail, the drum grid, the mixer) and the four knobs turn that part. Let go: the drawer slides away and the knobs go back to the body. <b>Here in the browser</b> (one mouse can't hold a button and turn a knob) the page buttons latch instead: click one and its page stays open while you turn the knobs; click it again, or another, to close it. GLO: Mixer, again Setup, again closed. ARP: a click turns the arpeggiator on or off, a long press opens its page.</li>
+      <li><b>HOME</b> Body: table, position, detune (a ghost of itself), sub (heavier).</li>
+      <li><b>EDIT</b> Eyes: cutoff (closed: stoned), resonance (pinpoint pupils, then lasers), envelope amount and mod decay (the eyebrows).</li>
+      <li><b>ENV</b> Mouth: attack, decay, sustain, release (a long one is a yawn).</li>
+      <li><b>LFO</b> Vibe: rate, depth, shape (sway, bob, bounce, nod, twitch), where it goes (shape, eyes, pitch, volume).</li>
+      <li><b>FX</b> Tears: chorus (more of it, out of step), delay (one tear an echo), time (how far apart they fall), feedback (how many).</li>
+      <li><b>SEL</b> Walls: reverb (waves bounce off the alley), size (the walls go out, the blob gets smaller; then the void), fry, tape.</li>
+      <li><b>SEQ</b> Tape deck: style, tempo, swing, human. <b>GLO</b> Mixer: voice, drums, bass, gunk (the room's rain and crackle, louder when idle); tap GLO then hold it: Setup (glide, MIDI channel, MIDI out, tune). <b>ARP</b> held: the arpeggiator's mode, rate, octaves, gate; tapped: on / off.</li>
     </ul>
   </div>
   <div>
-    <h2>Pages</h2>
+    <h2>Playing</h2>
     <ul>
-      <li>Press a page button again for its next page (the dots by the page's name show which).</li>
-      <li><b>HOME</b> Tine: material, hardness, decay, tone → Character: worn, glide, tuning, release.</li>
-      <li><b>ENV</b> Body: box, gourd or board, buzzers, wah, wah rate.</li>
-      <li><b>FX</b> Space: reverb, size, delay, time → Color: tape, lo-fi, chorus, filter.</li>
-      <li><b>LFO</b> Grain: level, size, density, pitch → Spread: spray, feedback, width.</li>
-      <li><b>SEL</b> Keys: layout, then scale, key and black-key mode (Tine) or transpose and octave (Keyboard) → Play: strum, octave.</li>
-      <li><b>SEQ</b> Pattern: pattern, tempo (or hold <b>ARP</b>). <b>GLO</b> Setup: tune, MIDI channel, MIDI out (off by default), and the <b>Theme</b> (Light or Dark); the header shows the version. Hold <b>SAVE</b> for 1.5 s to reset the sound to its defaults (SAVE again to confirm). <b>EDIT</b> steps through every page.</li>
+      <li>The 27 keys play F3 to G5. <b>OCT−</b> / <b>OCT+</b> move them.</li>
+      <li><b>ALGORITHM</b> changes only the sound source, the wavetable (its body). <b>PRESETS</b> loads a whole sound at once (wave, filter, envelope, LFO, effects) and shows its card: Monday, 3AM, Left on read, Rain again, NPC, Deep fried, Church of nothing, Hold music. <b>SELECT</b> the drum tape: the blob swaps the cassette and shrugs.</li>
+      <li><b>PLAY</b> the drums: grief drill, empty city pop, gloom gabber, missed phonk call, jersey cry club, heartbreakcore, amapia-no, cold footwork, dembow out, vaporweep, hyperflop, funeral bossa, office ambivalent. Kicks squash it, snares make it blink, hats are rain.</li>
+      <li><b>ARP</b> the arpeggiator: hold a chord and it plays it note by note at the tempo (up, down, up and down, wander, stab), with the drums. The auto-bass plays under the drums whenever the mixer's Bass is up, always in a minor key: hold C and it plays A minor (all notes of C major); hold a minor chord and it plays that minor. <b>REC</b> hold: the keys stay down.</li>
+      <li>Six lights over its head are its voices. Chorus: see-through copies of it peek out from behind. On the Eyes and Mouth pages the view moves in close. More notes than voices: a light gets yeeted. Too loud: it catches fire, calmly. Leave it alone: it sleeps; leave it longer: it stares. Every note is XP. Levels don't do anything.</li>
+      <li>Hold <b>SAVE</b> for 1.5 s to forget everything (SAVE again to confirm). It still remembers its level.</li>
     </ul>
   </div>
   <div>
@@ -161,17 +164,17 @@ kbd { font: 600 .85em ui-monospace, Menlo, monospace; background: var(--card); b
     <ul>
       <li>Drag a knob up or down, or scroll over it. Click or touch keys and buttons; several fingers work on a touch screen.</li>
       <li>White keys 1–8: <kbd>Q</kbd>–<kbd>I</kbd>, 9–16: <kbd>A</kbd>–<kbd>K</kbd>. Black keys 1–11: <kbd>1</kbd>–<kbd>0</kbd>, <kbd>-</kbd>.</li>
-      <li><kbd>Space</kbd> freeze, <kbd>Enter</kbd> mute, <kbd>Esc</kbd> HOME, <kbd>Z</kbd> / <kbd>X</kbd> OCT− / OCT+, <kbd>↑</kbd> <kbd>↓</kbd> material.</li>
+      <li><kbd>Space</kbd> drums, <kbd>Enter</kbd> hold, <kbd>B</kbd> arpeggiator, <kbd>Esc</kbd> body, <kbd>Z</kbd> / <kbd>X</kbd> octave, <kbd>↑</kbd> <kbd>↓</kbd> instrument (ALGORITHM), <kbd>←</kbd> <kbd>→</kbd> drum tape (SELECT).</li>
       <li><kbd>Shift</kbd>-click (or right-click) a button to hold it down.</li>
     </ul>
   </div>
   <div>
     <h2>MIDI</h2>
-    <p>Connect MIDI to play from a keyboard: notes pluck the tine of that pitch at their velocity, the mod wheel and pressure cover the sound hole, the sustain pedal holds damps, pitch bend bends every ringing tine, program change picks the material. It needs a browser with Web MIDI (Chrome or Edge), and the page may not be allowed to ask for it when shown inside another site.</p>
+    <p>Connect MIDI to play it from a keyboard: notes at their velocity, pitch bend, the mod wheel moves the table's position, program change picks a mood, CC 74 cutoff, 71 resonance, 73 attack, 72 release, 70 position, 91 reverb, 93 chorus, 94 delay, 7 volume.</p>
   </div>
   <div>
     <h2>What this is</h2>
-    <p>The firmware's UI and sound engine compiled to WebAssembly, running at the FM-1's 44.1 kHz: what you hear is the physical model the FM-1 would run. SAVE keeps your settings in this browser. The emulator is FoMni's, by way of X0X; the idea comes from <a href="https://www.groove-os.com/">Groove OS</a>.</p>
+    <p>The firmware's UI and sound engine compiled to WebAssembly at the FM-1's 44.1 kHz. A fork of <a href="https://github.com/jadamsowers/fm1-fimba">FiMba-1</a> (GPL-3.0), itself from FoMni, X0X and Felucca: their boot, update loader, safe mode, plate reverb and this emulator are theirs.</p>
   </div>
 </section>
 </main>
@@ -185,7 +188,7 @@ const WHITE_K = [0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26];
 const BLACK_K = [1, 3, 5, 8, 10, 13, 15, 17, 20, 22, 25];
 const BLACK_AFTER = [0, 1, 2, 4, 5, 7, 8, 9, 11, 12, 14];
 const BODY = "#3a3d42", TRAY = "#26282c", KEY_W = "#d9dadc", KEY_B = "#c9cacd", KNOB = "#1f2124", BTNC = "#2e3135", LABEL = "#e8e8ea";
-const STORE_KEY = "fimba-emu-store";
+const STORE_KEY = "mope-emu-store";
 
 const svg = document.getElementById("panel");
 function el(tag, attrs, parent = svg) {
@@ -398,11 +401,12 @@ const KEYMAP = {};
 "asdfghjk".split("").forEach((c, i) => KEYMAP["Key" + c.toUpperCase()] = { key: WHITE_K[8 + i] });
 "1234567890".split("").forEach((c, i) => KEYMAP["Digit" + c] = { key: BLACK_K[i] });
 KEYMAP.Minus = { key: BLACK_K[10] };
-Object.assign(KEYMAP, { Space: { btn: BTN.PLAY }, Enter: { btn: BTN.REC },
+Object.assign(KEYMAP, { Space: { btn: BTN.PLAY }, Enter: { btn: BTN.REC }, KeyB: { btn: BTN.ARP },
                         Escape: { btn: BTN.HOME }, KeyZ: { btn: BTN["OCT-"] }, KeyX: { btn: BTN["OCT+"] } });
 addEventListener("keydown", (e) => {
   if (!node || e.metaKey || e.ctrlKey || e.altKey) return;
-  if (e.code === "ArrowUp" || e.code === "ArrowDown") { turn(knobs.SELECT, e.code === "ArrowUp" ? 1 : -1); e.preventDefault(); return; }
+  if (e.code === "ArrowUp" || e.code === "ArrowDown") { turn(knobs.ALGORITHM, e.code === "ArrowUp" ? 1 : -1); e.preventDefault(); return; }
+  if (e.code === "ArrowLeft" || e.code === "ArrowRight") { turn(knobs.SELECT, e.code === "ArrowRight" ? 1 : -1); e.preventDefault(); return; }
   const m = KEYMAP[e.code];
   if (!m) return;
   e.preventDefault();
@@ -439,7 +443,7 @@ function drawLights(b, k, d) {
   for (const x of Object.values(buttons)) x.g.classList.toggle("lit", !!(b & (1 << x.bit)));
   keys.forEach((x, i) => {
     x.g.classList.toggle("lit", !!(k & (1 << i)));
-    x.g.classList.toggle("dim", !(k & (1 << i)) && !!(d & (1 << i)));   // the middle of the kalimba
+    x.g.classList.toggle("dim", !(k & (1 << i)) && !!(d & (1 << i)));   // (unused)
   });
 }
 
@@ -467,9 +471,9 @@ async function switchOn() {
   go.textContent = "Starting...";
   try {
     const ac = new AudioContext({ sampleRate: 44100, latencyHint: "interactive" });
-    const [wasm] = await Promise.all([fetch("kalimba.wasm").then((r) => { if (!r.ok) throw new Error(`kalimba.wasm: ${r.status}`); return r.arrayBuffer(); }),
+    const [wasm] = await Promise.all([fetch("mope.wasm").then((r) => { if (!r.ok) throw new Error(`mope.wasm: ${r.status}`); return r.arrayBuffer(); }),
                                       ac.audioWorklet.addModule("worklet.js")]);
-    node = new AudioWorkletNode(ac, "kalimba", { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
+    node = new AudioWorkletNode(ac, "mope", { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
     node.connect(ac.destination);
     const ready = new Promise((res) => {
       node.port.onmessage = (e) => {
@@ -577,7 +581,7 @@ function readPackage(raw, what) {                      /* a .fwsc: its identity 
     const raw = new Uint8Array(await (await fetch("firmware/" + meta.file, { cache: "no-cache" })).arrayBuffer());
     latest = { ...readPackage(raw, meta.file), version: meta.version };
     if (latest.product !== meta.product) throw new Error("the package's identity is not the release's");
-    $("instLatest").textContent = `Install FiMba-1 ${meta.version}`;
+    $("instLatest").textContent = `Install MOPE-1 ${meta.version}`;
     $("instWhat").textContent = `the latest release (${meta.product})`;
   } catch (e) {
     $("instWhat").textContent = "No release package here: choose a file below.";
@@ -647,7 +651,7 @@ async function run(pkg, label, isStock) {
   sync();
 }
 
-$("instLatest").addEventListener("click", () => latest && run(latest, `FiMba-1 ${latest.version}`, false));
+$("instLatest").addEventListener("click", () => latest && run(latest, `MOPE-1 ${latest.version}`, false));
 $("instFileGo").addEventListener("click", () => chosen && run(chosen, chosen.product, false));
 $("stockGo").addEventListener("click", () => stock && run(stock, "the stock firmware", true));
 </script>

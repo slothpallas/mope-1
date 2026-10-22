@@ -1,17 +1,17 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* FiMba-1 on the host: the whole app (UI, project, engine) against a simulated FM-1 driven by a script.
+/* MOPE-1 on the host: the whole app (UI, project, engine) against a simulated FM-1 driven by a script.
  * Audio goes to a WAV, the screen to PNGs, the lights to text, MIDI out to a log. The device-only
  * parts (HAL, USB, OTA, flash driver) are replaced by plat.h implemented here. (From FoMni's omni_host,
  * itself from X0X's x0x_host.)
  *
- *   kalimba_host SCRIPT [OUTDIR]
+ *   mope_host SCRIPT [OUTDIR]
  *
  * Script, one command per line (# comments):
  *   wait MS                      run the device for MS milliseconds
  *   press BTN | release BTN | tap BTN     (BTN: FX SEL ENV LFO EDIT GLO HOME SAVE ARP SEQ PLAY REC OCT- OCT+)
  *   key K down|up | tapkey K     (K: 0..26 = F3..G5, or w0..w15 white keys, b0..b10 black keys)
  *   strum A B [MS]               white keys A..B pressed in turn (down then up), MS apart (default 25)
- *   (the keys are not velocity sensitive: a key plucks at 100)
+ *   (the keys are not velocity sensitive: a key plays at 100)
  *   turn ENC N [MS]              (ENC: SELECT ALGO PRESET K1 K2 K3 K4; N detents, MS apart, default 80)
  *   spin ENC N                   N detents at once, exactly N (no acceleration)
  *   master N                     MASTER pot 0..4096
@@ -21,14 +21,11 @@
  *   shot FILE.png                save the screen
  *   leds                         print the lit buttons and keys
  *   expect WHAT VALUE            check state: exit 1 on mismatch; VALUE "<N" / ">N" is a bound
- *                                (WHAT: view dirty frozen store_writes midi_out voices grains hole octshift
- *                                 dropped pat pool pulse ext parN whiteW (cents of white key W) keyK (cents of key K, Keyboard
- *                                 layout) tineC (level x100 of the tine at
- *                                 C cents) lumaY (brightness 0..255 of the screen at x 2, row Y: the theme)
- *                                 dimkey (the key whose LED is dim, -1 none) litkeys (bits)
- *                                 peak_db_max peak_db_min)
+ *                                (WHAT: page dirty store_writes midi_out voices gates drums style steals
+ *                                 dropped hold arp arpseq xp parN (parameter N, synth.h P_*) kicks hats
+ *                                 lumaY (brightness 0..255 of the screen at x 2, row Y)
+ *                                 pixRGB X Y (not here: see shot) peak_db_max peak_db_min)
  *   reboot                       re-run boot from the simulated flash (persistence test)
- *   oldproject                   put a format 1 project (Material 2) in the simulated flash
  */
 #define OM_HOST 1
 #ifndef _POSIX_C_SOURCE
@@ -278,7 +275,7 @@ static double now_ns(void)
 
 static void boot(void)
 {
-    km_init();
+    sy_init();
     project_load();
     project_apply();
     lcd_fill(0, 0, 240, 240, 0);
@@ -293,7 +290,7 @@ static void run_ms(uint32_t ms)
         now_ms++;
         while (audio_due_ms <= (double)now_ms) {      /* 256-frame blocks, as the device renders them */
             double t0 = now_ns(), dt;
-            km_render(blk, 256, master);
+            sy_render(blk, 256, master);
 #ifdef OM_WEB
             web_audio(blk, 256);
 #endif
@@ -340,6 +337,8 @@ static int find_name(const char *const *t, int n, const char *s)
     return -1;
 }
 
+static const uint8_t WHITE_K[16] = {0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26};
+static const uint8_t BLACK_K[11] = {1, 3, 5, 8, 10, 13, 15, 17, 20, 22, 25};
 static int key_of(const char *s)
 {
     if (s[0] == 'w')
@@ -349,64 +348,43 @@ static int key_of(const char *s)
     return atoi(s);
 }
 
-static int tine(int cents)
-{
-    int v;
-    float l = 0.0f;
-    for (v = 0; v < KM_NVOICE; v++)
-        if (km_voice_cents[v] == cents && km_voice_level[v] > l)
-            l = km_voice_level[v];
-    return (int)(l * 100.0f);
-}
-
 static int expect(const char *what, const char *val)
 {
     int got;
-    if (!strcmp(what, "view"))
-        got = ui.view;
+    if (!strcmp(what, "page"))
+        got = ui.page;
     else if (!strcmp(what, "dirty"))
         got = ui.dirty;
-    else if (!strcmp(what, "frozen"))
-        got = ui.frozen + 2 * km_frozen;           /* 3: the UI and the engine agree it is frozen */
     else if (!strcmp(what, "store_writes"))
         got = (int)store_writes;
     else if (!strcmp(what, "midi_out"))
         got = (int)midi_out_count;
-    else if (!strcmp(what, "voices")) {
-        int v;
-        for (got = 0, v = 0; v < KM_NVOICE; v++)
-            got += km_voice_cents[v] >= 0;
-    } else if (!strcmp(what, "grains"))
-        got = km_grains_on;
-    else if (!strcmp(what, "hole"))
-        got = (int)(km_hole_open * 100.0f + 0.5f);
-    else if (!strcmp(what, "octshift"))
-        got = ui.oct_shift;
+    else if (!strcmp(what, "voices"))
+        got = sy_tel.voices;
+    else if (!strcmp(what, "gates"))
+        got = sy_tel.gates;
+    else if (!strcmp(what, "drums"))
+        got = sy_tel.drums_on;
+    else if (!strcmp(what, "style"))
+        got = sy_tel.style;
+    else if (!strcmp(what, "steals"))
+        got = (int)sy_tel.steals;
+    else if (!strcmp(what, "kicks"))
+        got = (int)sy_tel.kick_n;
+    else if (!strcmp(what, "hats"))
+        got = (int)sy_tel.hat_n;
     else if (!strcmp(what, "dropped"))
-        got = (int)km_dropped;
-    else if (!strcmp(what, "pat"))                /* the pattern: 3 = the UI and the engine agree it runs */
-        got = ui.pat_on + 2 * km_pat_on;
-    else if (!strcmp(what, "pool"))
-        got = ui.pool_n;
-    else if (!strcmp(what, "pulse"))
-        got = km_pat_pulse;
-    else if (!strcmp(what, "ext"))
-        got = km_ext;
-    else if (!strncmp(what, "par", 3))            /* parN: parameter N (kalimba.h P_*) */
+        got = (int)sy_tel.dropped;
+    else if (!strcmp(what, "hold"))
+        got = ui.hold;
+    else if (!strcmp(what, "arp"))                /* the arpeggiator: 3 = the UI and the engine agree it is on */
+        got = ui.arp + 2 * sy_tel.arp_on;
+    else if (!strcmp(what, "arpseq"))
+        got = (int)sy_tel.arp_seq;
+    else if (!strcmp(what, "xp"))
+        got = (int)proj.xp;
+    else if (!strncmp(what, "par", 3))            /* parN: parameter N (synth.h P_*) */
         got = proj.par[atoi(what + 3)];
-    else if (!strncmp(what, "white", 5))          /* whiteW: the cents white key W plays now */
-        got = white_cents(atoi(what + 5));
-    else if (!strncmp(what, "key", 3))            /* keyK: the cents key K plays in the Keyboard layout */
-        got = key_cents(atoi(what + 3));
-    else if (!strncmp(what, "tine", 4))           /* tineC: the level x 100 of the tine at C cents */
-        got = tine(atoi(what + 4));
-    else if (!strcmp(what, "dimkey")) {            /* the key whose LED is dim (-1: none) */
-        int q;
-        for (got = -1, q = 0; q < NKEYS; q++)
-            if (dim_keys >> q & 1u)
-                got = q;
-    } else if (!strcmp(what, "litkeys"))         /* the keys lit (bit per key) */
-        got = (int)lit_keys;
     else if (!strncmp(what, "luma", 4)) {         /* lumaY: the screen's brightness at (2, Y) */
         uint16_t p = fb[(atoi(what + 4) % 240) * 240 + 2];
         p = (uint16_t)((p >> 8) | (p << 8));
@@ -446,7 +424,7 @@ int main(int argc, char **argv)
     const char *dir = argc > 2 ? argv[2] : ".";
     int lineno = 0, fails = 0;
     if (argc < 2) {
-        fprintf(stderr, "usage: kalimba_host SCRIPT [OUTDIR]\n");
+        fprintf(stderr, "usage: mope_host SCRIPT [OUTDIR]\n");
         return 2;
     }
     sc = fopen(argv[1], "r");
@@ -553,13 +531,7 @@ int main(int argc, char **argv)
             printf("\n");
         } else if (!strcmp(cmd, "expect"))
             fails += expect(a, b);
-        else if (!strcmp(cmd, "oldproject")) {   /* a format 1 project in the store, as 0.1 saved it */
-            project_defaults();
-            proj.format = 1u;
-            memset(proj.par + PROJ_NPAR_OF(1u), 0, sizeof proj.par - PROJ_NPAR_OF(1u) * sizeof proj.par[0]);
-            proj.par[P_MATERIAL] = 2;
-            plat_store_save(OBJ_PROJ, &proj, 8u + 2u * PROJ_NPAR_OF(1u) + 32u);
-        } else if (!strcmp(cmd, "reboot")) {
+        else if (!strcmp(cmd, "reboot")) {
             memset(&proj, 0, sizeof proj);
             boot();
         } else if (!strcmp(cmd, "echo"))
