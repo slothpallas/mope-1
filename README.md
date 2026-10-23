@@ -157,7 +157,7 @@ been run for MOPE-1 yet. Before the first install:
 4. Building the tables at boot takes about 12 ms on a Mac, so expect well under a second on the FM-1.
    The watchdog is fed while they build.
 
-The package identity is `FM-1_7…` (FiMba-1 uses `FM-1_8…`), so the two are never confused.
+The package identity is `FM-1_6673` ("MOPE" on a phone keypad) followed by the version, e.g. `FM-1_6673000100` for 0.1.0. No other firmware on thefirmwarehub.com uses it.
 
 ## Licence
 
