@@ -7,7 +7,7 @@ that is known to install and boot, so that the only bytes that differ are the ap
   check_fwsc.py PACKAGE.fwsc [--app APP.bin] [--ref REF.fwsc]
 
 What it checks:
-  container   the identity (FM-1_8...), the UFW header and file list CRCs, each file's CRC
+  container   the identity (FM-1_7.., 8.. or 9..), the UFW header and file list CRCs, each file's CRC
   head        flash [0, 0x4000): the JLFS entries and their CRCs, the SPL (uboot.boot) and the chip
               key blob. The update loader never writes the head; this is what keeps the chip's
               own boot and update mode, the last way back
@@ -18,6 +18,7 @@ What it checks:
               EQ table are byte-identical to the reference package; only app.bin (and the CRC over
               the block that holds it) may differ
 Exit status 0 when everything holds."""
+import re
 import argparse
 import struct
 import sys
@@ -90,7 +91,8 @@ def app_area(flash):
 def check(path, app=None):
     print(f"{path}")
     p = unpack(path)
-    ok(p["product"].startswith("FM-1_8"), f"identity {p['product']!r} (FM-1_8...: a Felucca-family package)")
+    ok(re.fullmatch(r"FM-1_[789]\d+", p["product"]) is not None,
+       f"identity {p['product']!r} (FM-1_7.., 8.., 9..: a Felucca-family package; MOPE-1 is 7)")
     ok(p["hdr_ok"] and p["list_ok"], "UFW header and file list CRCs")
     ok(set(p["files"]) == {"flash.bin", "ota.bin"}, f"files: {sorted(p['files'])}")
     for n, (d, c) in p["files"].items():
