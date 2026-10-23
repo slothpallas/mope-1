@@ -837,20 +837,20 @@ static void draw_tears(const geo_t *g)
 typedef struct {
     int32_t y0;                                         /* the panel's top */
     int32_t gx0, gx1, gy0, gy1;                         /* the drawing's box */
-} panel_t;
+} drawer_t;
 
-static int32_t gy_of(const panel_t *p, float v)          /* 0..1 up the box */
+static int32_t gy_of(const drawer_t *p, float v)          /* 0..1 up the box */
 {
     return p->gy1 - (int32_t)(fm_clampf(v, 0.0f, 1.0f) * (float)(p->gy1 - p->gy0) + 0.5f);
 }
 
-static void grid(const panel_t *p)
+static void grid(const drawer_t *p)
 {
     px_line(p->gx0, p->gy1, p->gx1, p->gy1, PC_GRID);
 }
 
 /* a curve through n points (0..1 across, 0..1 up), its area dithered warm underneath */
-static void curve(const panel_t *p, const float *v, int n, uint8_t line, uint8_t fill, int fill_lvl)
+static void curve(const drawer_t *p, const float *v, int n, uint8_t line, uint8_t fill, int fill_lvl)
 {
     int i;
     int32_t px0 = p->gx0, py0 = gy_of(p, v[0]);
@@ -885,7 +885,7 @@ static float lfo_shape_at(int shape, float ph)
     }
 }
 
-static void schem_body(const panel_t *p)                /* the wavetable: its frames, stacked */
+static void schem_body(const drawer_t *p)                /* the wavetable: its frames, stacked */
 {
     const int t = proj.par[P_TABLE];
     const float pos = pn(P_POS), det = pn(P_DETUNE);
@@ -906,7 +906,7 @@ static void schem_body(const panel_t *p)                /* the wavetable: its fr
     for (i = 0; i < 56; i++)                             /* the frame playing, in front */
         v[i] = 0.5f + 0.45f * sy_shape(t, pos, (float)i / 55.0f);
     {
-        panel_t q = *p;
+        drawer_t q = *p;
         q.gx1 = p->gx0 + 78;
         curve(&q, v, 56, PC_BLOB2, PC_BLOBD, 1);
         if (det > 0.05f) {                               /* the detuned one, sliding */
@@ -923,7 +923,7 @@ static void schem_body(const panel_t *p)                /* the wavetable: its fr
     }
 }
 
-static void schem_eyes(const panel_t *p)                /* the filter: its curve, and where the envelope takes it */
+static void schem_eyes(const drawer_t *p)                /* the filter: its curve, and where the envelope takes it */
 {
     const float cut = pn(P_CUTOFF), k = 2.0f - 1.94f * pn(P_RESO), amt = pn(P_ENVAMT);
     float v[56], v2[56];
@@ -949,7 +949,7 @@ static void schem_eyes(const panel_t *p)                /* the filter: its curve
     }
 }
 
-static void schem_mouth(const panel_t *p)               /* the envelope: attack, decay, sustain, release */
+static void schem_mouth(const drawer_t *p)               /* the envelope: attack, decay, sustain, release */
 {
     const float a = 0.05f + 0.25f * pn(P_ATTACK), d = 0.05f + 0.25f * pn(P_DECAY), r = 0.05f + 0.3f * pn(P_RELEASE);
     const float sus = pn(P_SUSTAIN), hold = 1.0f - a - d - r, w = (float)(p->gx1 - p->gx0);
@@ -1000,7 +1000,7 @@ static void schem_mouth(const panel_t *p)               /* the envelope: attack,
     }
 }
 
-static void schem_vibe(const panel_t *p)                /* the LFO: its wave, its speed, where it is */
+static void schem_vibe(const drawer_t *p)                /* the LFO: its wave, its speed, where it is */
 {
     static const char *const DEST[LD_N] = {"SHAPE", "EYES", "PITCH", "VOL"};
     const int shape = proj.par[P_LFOSHAPE];
@@ -1010,7 +1010,7 @@ static void schem_vibe(const panel_t *p)                /* the LFO: its wave, it
     for (i = 0; i < 64; i++)
         v[i] = 0.5f + 0.48f * depth * lfo_shape_at(shape, (float)i / 63.0f * cycles);
     {
-        panel_t q = *p;
+        drawer_t q = *p;
         q.gx1 = p->gx1 - 26;
         px_line(q.gx0, (q.gy0 + q.gy1) / 2, q.gx1, (q.gy0 + q.gy1) / 2, PC_WALL);
         curve(&q, v, 64, PC_BLOB2, PC_BLOBD, 0);
@@ -1026,7 +1026,7 @@ static void schem_vibe(const panel_t *p)                /* the LFO: its wave, it
     px_text(p->gx1 - 22, p->gy0 + 9, DEST[proj.par[P_LFODEST]], PC_TEAR);
 }
 
-static void schem_tears(const panel_t *p)               /* the delay: the taps, left, right, left, fading */
+static void schem_tears(const drawer_t *p)               /* the delay: the taps, left, right, left, fading */
 {
     const float fb = pn(P_FEEDBACK) * 0.95f, dly = pn(P_DELAY), time = 0.15f + 0.85f * pn(P_TIME);
     const float step = time * 22.0f, h = (float)(p->gy1 - p->gy0);
@@ -1053,7 +1053,7 @@ static void schem_tears(const panel_t *p)               /* the delay: the taps, 
     }
 }
 
-static void schem_walls(const panel_t *p)               /* the room: its tail; the fry: its curve */
+static void schem_walls(const drawer_t *p)               /* the room: its tail; the fry: its curve */
 {
     const float rv = pn(P_REVERB), size = pn(P_SIZE), fry = pn(P_FRY), tape = pn(P_TAPE);
     const int32_t split = p->gx1 - 26;
@@ -1101,7 +1101,7 @@ static void step_dot(int32_t x, int32_t y, int32_t d, uint8_t c, int ring)
         }
 }
 
-static void schem_deck(const panel_t *p)                /* the drums: round steps, cold colours, the playhead */
+static void schem_deck(const drawer_t *p)                /* the drums: round steps, cold colours, the playhead */
 {
     /* kick: the blob's pale blue; snare and clap: a tear's; hats: rain; bass: the ghost's violet */
     static const uint8_t HIT[4] = {PC_BLOB2, PC_TEAR, PC_RAIN2, PC_GHOST};
@@ -1139,7 +1139,7 @@ static void schem_deck(const panel_t *p)                /* the drums: round step
 }
 
 /* the mixer: four channel strips, each a fader (its level) and a meter (what comes through it now) */
-static void schem_mix(const panel_t *p)
+static void schem_mix(const drawer_t *p)
 {
     static const uint8_t CH[4] = {P_SYNTH, P_DRUMS, P_BASS, P_GUNK};
     static float hold[4];
@@ -1160,7 +1160,7 @@ static void schem_mix(const panel_t *p)
 }
 
 /* the arpeggiator: the next steps as a roll, low notes down, high up; the one playing lit; gate as length */
-static void schem_arp(const panel_t *p)
+static void schem_arp(const drawer_t *p)
 {
     uint8_t held[16];
     const int nh = sy_arp_held(held, 16), steps = 16;
@@ -1198,7 +1198,7 @@ static void schem_arp(const panel_t *p)
     }
 }
 
-static void schem_setup(const panel_t *p)               /* the glide: a note sliding to the next */
+static void schem_setup(const drawer_t *p)               /* the glide: a note sliding to the next */
 {
     const float gl = pn(P_GLIDE);
     float v[48];
@@ -1218,7 +1218,7 @@ static int preset_card(void) { return ui.preset_t && plat_ms() - ui.preset_t < 2
  * wave, its filter, its envelope), so it is plain that everything changed, not just the wave. */
 static void draw_preset_card(int32_t y0)
 {
-    panel_t q;
+    drawer_t q;
     float v[33];
     int i;
     px_text(3, y0 + 3, "PRESET", PC_BLOB2);
@@ -1257,7 +1257,7 @@ static void draw_preset_card(int32_t y0)
 
 static void draw_panel(const geo_t *g)
 {
-    panel_t p;
+    drawer_t p;
     const uint32_t now = plat_ms(), since = now - ui.focus_t;
     int i;
     p.y0 = (int32_t)g->drawer;
