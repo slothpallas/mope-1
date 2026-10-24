@@ -73,7 +73,37 @@ kbd { font: 600 .85em ui-monospace, Menlo, monospace; background: var(--card); b
 .install summary { cursor: pointer; color: var(--muted); }
 .install pre { max-height: 12rem; overflow: auto; font: .8rem ui-monospace, Menlo, monospace; color: var(--muted); background: var(--ground);
                padding: .5rem; border-radius: 8px; white-space: pre-wrap; }
+/* the wire look (?look=wire): all dark, the hardware drawn as thin lines, so the screen is what shines */
+:root.wire { --ground: #07080a; --ink: #d6dce3; --muted: #737c87; --rule: #1c2026; --card: #0d0f12; --accent: #f28a5a; --teal: #5fd0c4;
+             --line: rgba(190, 206, 222, .2); --line2: rgba(190, 206, 222, .38); color-scheme: dark; }
+.wire header h1 { font: 500 1.05rem/1.2 ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .14em; color: var(--ink); }
+.wire header p, .wire .bar, .wire .turn { font: .8rem/1.5 ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .02em; }
+.wire .install { display: none; }
+.wire #panel rect, .wire #panel circle { fill: none; stroke: var(--line); stroke-width: 1.2; }
+.wire #panel > rect:first-child { stroke: var(--line2); }
+.wire #panel .knob circle:nth-of-type(1) { stroke: none; }
+.wire #panel .knob circle:nth-of-type(2) { stroke: var(--line2); }
+.wire #panel .knob circle:nth-of-type(3) { stroke: none; }
+.wire #panel .knob line { stroke: #e9eef3; stroke-width: 2; }
+.wire #panel text { fill: rgba(200, 214, 228, .5); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 500; letter-spacing: .1em; }
+.wire #panel .btnface, .wire #panel .keyface { stroke: var(--line2); transition: fill .08s, stroke .08s; }
+.wire #panel .lit .btnface { fill: rgba(242, 138, 90, .16); stroke: #f28a5a; filter: drop-shadow(0 0 6px rgba(242, 138, 90, .55)); }
+.wire #panel .lit text.btn { fill: #ffb48f; }
+.wire #panel .lit .keyface.white { fill: rgba(242, 138, 90, .22); stroke: #f28a5a; filter: drop-shadow(0 0 6px rgba(242, 138, 90, .5)); }
+.wire #panel .lit .keyface.black { fill: rgba(95, 208, 196, .2); stroke: #5fd0c4; filter: drop-shadow(0 0 6px rgba(95, 208, 196, .5)); }
+.wire #panel .dim .keyface.white, .wire #panel .dim .keyface.black { fill: rgba(190, 206, 222, .06); stroke: rgba(190, 206, 222, .55); }
+.wire #panel .held .btnface, .wire #panel .held .keyface { stroke: #f28a5a; stroke-width: 2; }
+.wire #panel .latched .btnface { stroke: #6fc3ff; stroke-width: 2; }
+.wire .device canvas { border-radius: 3px; box-shadow: 0 0 0 1px rgba(150, 190, 225, .35), 0 0 28px 2px rgba(90, 150, 200, .28), 0 0 90px 10px rgba(70, 120, 170, .16); }
+.wire .start { background: rgba(4, 5, 7, .55); }
+.wire .bar button, .wire kbd { background: transparent; border-color: var(--line2); }
+.wire .help { border-top: 1px solid var(--rule); padding-top: 1.2rem; }
+.wire .help h2 { font: 500 .78rem/1.4 ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .16em; text-transform: uppercase; color: var(--ink); }
+.wire .help p, .wire .help ul { font-size: .9rem; }
+.wire .help b { color: var(--ink); font-weight: 600; }
+.wire a { color: #9fc4e6; }
 </style>
+<script>if (/[?&]look=wire\b/.test(location.search)) document.documentElement.classList.add("wire");</script>
 <main>
 <header>
   <h1>MOPE-1</h1>
