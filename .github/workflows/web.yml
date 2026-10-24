@@ -244,5 +244,5 @@ jobs:
           { echo "### What's new in $VER"; echo
             awk -v v="$VER" '$0 == "## " v {f = 1; next} /^## / {f = 0} f' CHANGELOG.md | sed '/./,$!d'
             echo; sed "s/VERSION/$VER/g" .github/release-notes.md; } > notes.md
-          gh release create "v$VER" --target "$GITHUB_SHA" --title "FiMba-1 $VER (beta)" --notes-file notes.md \
+          gh release create "v$VER" --target "$GITHUB_SHA" --title "MOPE-1 $VER (beta)" --notes-file notes.md \
             --prerelease dist/mope-firmware/mope-"$VER".fwsc dist/MOPE-1-web/MOPE-1.html

@@ -13,9 +13,10 @@ MOPE-1 is a fork of [FiMba-1](https://github.com/jadamsowers/fm1-fimba). The boo
 update loader, installer, plate reverb and browser emulator are FiMba-1's, inherited from FoMni, X0X
 and Felucca. The instrument and the screen are new.
 
-> **Status: untested on hardware.** Everything below runs in the host simulator and the browser
-> emulator, built from the same C code. The device build has not been compiled or flashed yet; see
-> [Before it goes on an FM-1](#before-it-goes-on-an-fm-1).
+> **Status: beta, tested on a real FM-1.** It installs from M-VAVE's own firmware, plays, records and
+> updates itself on the device. Install it from **https://slothpallas.github.io/mope-1/** (Chrome or Edge, USB)
+> or play it there in the browser. Custom firmware is installed at your own risk: keep M-VAVE's stock
+> firmware (m-vave.com/download) to go back.
 
 ## The blob is the synth
 
@@ -160,22 +161,17 @@ Then open <http://localhost:8137>, or open `build/emu/MOPE-1.html` straight from
 `Q`–`I` and `A`–`K` play the white keys and `1`–`0`, `-` the black ones. `Space` starts the drums,
 `B` the bass and `Enter` hold. `↑` `↓` turn ALGORITHM (the instrument) and `←` `→` SELECT (the drum tape).
 
-## Before it goes on an FM-1
+## Installing it
 
-The device build needs Docker and the JieLi toolchain and SDK ([BUILDING.md](BUILDING.md)). Neither has
-been run for MOPE-1 yet. Before the first install:
+1. Download M-VAVE's stock firmware (FM-1 V15 or V16, "PC Firmware", m-vave.com/download) so you can always go back.
+2. Plug the FM-1 into the computer directly with a USB data cable, open **https://slothpallas.github.io/mope-1/** in Chrome or Edge, and press **Install MOPE-1**. Or from a terminal: `python3 tools/fm1_install.py mope-0.1.0.fwsc`.
+3. It takes about a minute; don't unplug while it writes (if it's cut off, press Install again: it continues).
 
-1. Run `./build.sh`. It checks the image size and the RAM and pool budget. The pool should fit: the
-   simulator asserts the same sum.
-2. Download M-VAVE's stock FM-1 V15 ("PC Firmware") so you can always go back. FiMba-1's safe mode and
-   rescue tools are unchanged: after two failed starts it comes up in safe mode with USB on.
-3. Measure the audio load: hold six notes with the drums and every effect on. Compared on the same Mac
-   against FiMba-1's measured 48% for 12 voices, the estimate is about 40% of the FM-1's budget. If it
-   is too high, lower `SY_NVOICE` in `firmware/src/dsp/synth.h`.
-4. Building the tables at boot takes about 12 ms on a Mac, so expect well under a second on the FM-1.
-   The watchdog is fed while they build.
+Leaving it is the same: install another firmware, or M-VAVE's, from the hub or its own installer. If a firmware ever crashes at start-up, the FM-1 comes up in safe mode after two tries (USB on, the installer works); the chip's own update mode can't be overwritten.
 
-The package identity is `FM-1_6673` ("MOPE" on a phone keypad) followed by the version, e.g. `FM-1_6673000100` for 0.1.0. No other firmware on thefirmwarehub.com uses it.
+**Saves and other firmwares:** MOPE-1 keeps its sound and loop in the same flash slot FiMba-1 and FoMni use for their projects (0xFC000), and the panel calibration at 0xDC000, as they do. It can't read another firmware's project there (it starts from its defaults) and saving overwrites it; the same goes the other way.
+
+The package identity is `FM-1_6673` ("MOPE" on a phone keypad) followed by the version, e.g. `FM-1_6673000100` for 0.1.0. No other firmware on thefirmwarehub.com uses it. The device build runs on GitHub (the JieLi toolchain is Linux-only); [BUILDING.md](BUILDING.md) has the details.
 
 ## Licence
 

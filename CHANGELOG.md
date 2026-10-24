@@ -4,9 +4,9 @@ A release is a push to `main` that changes `VERSION` to a version with no tag ye
 release build, tags the commit `vX.Y.Z` and publishes the GitHub Release with that version's notes,
 taken from its section below. Add the section in the same pull request as the `VERSION` change.
 
-## 0.1.0 (MOPE-1)
+## 0.1.0
 
-MOPE-1 forks FiMba-1 and replaces the kalimba with a different instrument. FiMba-1's history is below.
+The first MOPE-1. It forks FiMba-1 and replaces the kalimba with a different instrument. FiMba-1's history is below.
 
 - **A wavetable synth:** 8 tables (Sigh, Moan, Pulse, Crush, Warble, Fold, Church, Sync) and 6 voices.
   Each voice has two detuned oscillators, a sub, analog drift and a resonant low-pass with its own
