@@ -1,4 +1,4 @@
-**MOPE-1**: a sad wavetable synth and drum machine for the M-VAVE FM-1, with no menus and no numbers: a blob in the rain that is the sound. A fork of FiMba-1.
+**MOPE-1**: a sad wavetable synth for the M-VAVE FM-1 with a toy-keyboard backing band of depressing beats. Its main character is a blob in the rain that shows the sound. A fork of FiMba-1.
 
 | File | What |
 | --- | --- |

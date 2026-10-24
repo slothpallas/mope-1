@@ -15,7 +15,7 @@ complete corresponding source under the same licence.
 | The emulator (`web/emu/`), the host simulator's frame, the scripted scenarios' format | FiMba-1 / FoMni / X0X | GPL-3.0-only |
 | Platform tests (`tests/host/{fastmath,encoder,uac,trs}_test.c`, `tests/{storage,ota,ldr}_test.c`, `tests/install_test.py`) | FoMni / Felucca | GPL-3.0-only |
 | The simulated FM-1 for the web installer's tests (`tests/web/fake_fm1.mjs`) and the installer panel's protocol use (`web/fm1ota.js`, `web/fm1pkg.js`, inlined into the page) | Felucca's `web/test_web.mjs` and update modules, by way of FoMni's web installer | GPL-3.0-only |
-| Everything else: the wavetable synth and drum machine (`firmware/src/dsp/synth.{c,h}`), the blob and its pixels (`firmware/src/app/{ui,blob,px}.c`), `tests/host/synth_test.c`, `tests/scenarios/` | MOPE-1 | GPL-3.0-only |
+| Everything else: the wavetable synth and its backing band (`firmware/src/dsp/synth.{c,h}`), the blob and its pixels (`firmware/src/app/{ui,blob,px}.c`), `tests/host/synth_test.c`, `tests/scenarios/` | MOPE-1 | GPL-3.0-only |
 
 ## Third-party material
 

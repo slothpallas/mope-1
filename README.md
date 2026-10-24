@@ -1,9 +1,10 @@
 # MOPE-1
 
-A sad wavetable synth and drum machine for the M-VAVE FM-1. It plays anyway.
+A sad wavetable synth for the M-VAVE FM-1, with an old-toy-keyboard backing band that only plays
+depressing beats. It plays anyway.
 
-There are no menus and no numbers. The screen shows one blob, a lit, glossy jelly in chunky pixels,
-floating in a small sad room with a rainy window behind it, and the blob *is* the sound. Everything you turn happens to it. Under it, the
+The main character is a blob: a lit, glossy jelly in chunky pixels, floating in a small sad room with
+a rainy window behind it. It shows what the sound is doing, and everything you turn happens to it. Under it, the
 part you are working on opens as a schematic: the envelope, the LFO, the filter curve, drawn the
 classic way, live.
 

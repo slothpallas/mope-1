@@ -11,12 +11,12 @@ The first MOPE-1. It forks FiMba-1 and replaces the kalimba with a different ins
 - **A wavetable synth:** 8 tables (Sigh, Moan, Pulse, Crush, Warble, Fold, Church, Sync) and 6 voices.
   Each voice has two detuned oscillators, a sub, analog drift and a resonant low-pass with its own
   envelope. There is one LFO. The effects are fry, chorus, a ping-pong delay, a plate reverb and tape.
-- **A drum machine with styles:** 13 of them, each named after its genre, sadly: Grief drill, Empty city pop, Gloom gabber, Missed phonk call, Jersey cry club, Heartbreakcore, Amapia-no, Cold footwork, Dembow out, Vaporweep, Hyperflop, Funeral bossa, Office ambivalent. Each has a main
+- **A toy-keyboard backing band:** 13 depressing beats, each named after its genre, sadly: Grief drill, Empty city pop, Gloom gabber, Missed phonk call, Jersey cry club, Heartbreakcore, Amapia-no, Cold footwork, Dembow out, Vaporweep, Hyperflop, Funeral bossa, Office ambivalent. Each has a main
   bar, a fill every fourth bar, its own tempo and swing, and a synthesized kit. An optional auto-bass
   plays the style's bass line, always in a minor key: the relative minor of what you hold (C held: A
   minor), or the minor you hold.
-- **No menus, no numbers: the blob.** The screen shows one sad pixel creature in a rainy alley, and it
-  is the sound. Its outline is the wavetable. Its eyes are the filter (stoned when it is closed, laser
+- **The blob, the main character.** The screen shows one sad pixel creature in a rainy alley, and it
+  shows the sound. Its outline is the wavetable. Its eyes are the filter (stoned when it is closed, laser
   eyes at full resonance) and its mouth is the envelope. Its tears are the delay, the alley's walls are
   the reverb, chorus adds more of it, and fry deep-fries it. The drums squash it, make it blink and
   rain on it. It floats in a small room in perspective whose walls move with the reverb size, and warm
