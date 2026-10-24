@@ -381,6 +381,8 @@ static int expect(const char *what, const char *val)
         got = ui.arp + 2 * sy_tel.arp_on;
     else if (!strcmp(what, "arpseq"))
         got = (int)sy_tel.arp_seq;
+    else if (!strcmp(what, "latch"))              /* a page pressed twice: it stays until HOME */
+        got = ui.latch;
     else if (!strcmp(what, "xp"))
         got = (int)proj.xp;
     else if (!strncmp(what, "par", 3))            /* parN: parameter N (synth.h P_*) */

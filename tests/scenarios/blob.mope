@@ -101,7 +101,7 @@ key 5 up
 # the mixer: voices, drums, bass, gunk
 tap GLO
 expect page 8
-wait 300
+wait 500
 shot 10b_mixer.png
 tap GLO
 expect page 7
@@ -148,9 +148,9 @@ wait 400
 shot 12_same.png
 key 0 up
 key 26 up
-# nothing held: the drawer slides away, the blob alone; then sleep
+# nothing held: 3 s after the last touch the drawer slides away, the blob alone; then sleep
 tap HOME
-wait 1000
+wait 3500
 expect page 0
 shot 12b_blob_alone.png
 wait 30000
@@ -170,12 +170,27 @@ strum 15 0 20
 wait 400
 expect xp >127
 shot 14_levels.png
-# a page is there only while its button is held
+# a page shows while its button is held, and 3 s after
 press ENV
 wait 200
 expect page 2
 release ENV
-wait 1000
+wait 2000
+expect page 2
+wait 1500
+expect page 0
+# pressed twice: it stays, until HOME
+tap EDIT
+tap EDIT
+wait 6000
+expect page 1
+expect latch 1
+tap SEL
+wait 4000
+expect page 5
+tap HOME
+wait 200
+expect latch 0
 expect page 0
 # ARP held: its page, no toggle; a tap: on, then off
 press ARP
@@ -187,14 +202,12 @@ tap ARP
 expect arp 3
 tap ARP
 expect arp 0
-# GLO held: the mixer; a tap, then held again: the setup
+# GLO: the mixer; pressed again while it shows: the setup
 press GLO
 wait 100
 expect page 8
 release GLO
 wait 1000
 tap GLO
-press GLO
-wait 100
 expect page 7
-release GLO
+wait 4000

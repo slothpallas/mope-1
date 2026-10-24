@@ -132,7 +132,8 @@ typedef struct {
     float face_dy;                                      /* the nod */
     float ab;                                           /* the room's area ends here (the whole screen: the drawer is see-through) */
     float drawer;                                       /* the drawer's top (PX_H: closed) */
-    float rcx, rcy;                                     /* the room's vanishing middle */
+    float rcx, rcy;                                     /* where the blob floats */
+    float vy;                                           /* the back wall's middle: above it (we look down into the room) */
     float bw, bh;                                       /* the back wall's half width, half height */
     float floor;                                        /* the floor under the blob */
 } geo_t;
@@ -192,7 +193,7 @@ static void draw_room(const geo_t *g)
     const float size = pn(P_SIZE), voidness = fm_clampf((size - 0.82f) / 0.18f, 0.0f, 1.0f);
     const int32_t ab = (int32_t)g->ab;
     const int32_t x0 = (int32_t)(g->rcx - g->bw), x1 = (int32_t)(g->rcx + g->bw);
-    const int32_t y0 = (int32_t)(g->rcy - g->bh), y1 = (int32_t)(g->rcy + g->bh);
+    const int32_t y0 = (int32_t)(g->vy - g->bh), y1 = (int32_t)(g->vy + g->bh);
     const int32_t wx0 = x0 + 4, wx1 = x1 - 4, wy0 = y0 + 4, wy1 = y1 - 6;
     const int win = wx1 - wx0 > 8 && wy1 - wy0 > 6;
     int32_t x, y;
@@ -478,9 +479,9 @@ static void draw_shadow(const geo_t *g)
 {
     const float lift = g->floor - (g->cy + g->r), w = g->r * (0.9f - fm_clampf(lift, 0.0f, 20.0f) * 0.02f);
     int32_t x, y;
-    for (y = (int32_t)(g->floor - 3.0f); y <= (int32_t)(g->floor + 3.0f); y++)
+    for (y = (int32_t)(g->floor - 5.0f); y <= (int32_t)(g->floor + 5.0f); y++)   /* (seen from above: rounder) */
         for (x = (int32_t)(g->cx - w); x <= (int32_t)(g->cx + w); x++) {
-            const float dx = ((float)x - g->cx) / w, dy = ((float)y - g->floor) / 3.0f, d = dx * dx + dy * dy;
+            const float dx = ((float)x - g->cx) / w, dy = ((float)y - g->floor) / 5.0f, d = dx * dx + dy * dy;
             if (d < 1.0f && px_dith4(x, y) + 0.5f < (1.0f - d) * 1.4f)
                 px_pset(x, y, PC_BG0);
         }
@@ -582,7 +583,7 @@ static void draw_body(const geo_t *g, float sqx, float sqy)
 static void draw_face(const geo_t *g)
 {
     const float s = g->r / 26.0f, cut = pn(P_CUTOFF), reso = pn(P_RESO);
-    const float cx = g->cx, ey = g->cy - 7.5f * s + g->face_dy;
+    const float cx = g->cx, ey = g->cy - 6.0f * s + g->face_dy;   /* (from above: the face sits a little lower) */
     const int fine = bs.fire > 0.3f;
     /* the filter opens and shuts them all the way (and a little more than linearly, so the middle reads) */
     float open = cut < 0.04f ? 0.0f : 0.08f + 0.92f * fm_sqrtf(cut), brow = sy_tel.mod_env * pn(P_ENVAMT) * 7.0f * s + bs.shrug * 4.0f;
@@ -650,7 +651,7 @@ static void draw_face(const geo_t *g)
         }
     }
     {   /* the mouth: the amp envelope */
-        const float a = sy_tel.amp_env, my = g->cy + 9.0f * s + g->face_dy * 0.5f;
+        const float a = sy_tel.amp_env, my = g->cy + 10.0f * s + g->face_dy * 0.5f;
         const int yawn = !sy_tel.gates && a > 0.05f && pn(P_RELEASE) > 0.6f;
         if (fine) {                                       /* a small calm smile */
             px_line((int32_t)(cx - 4.5f * s), (int32_t)my, (int32_t)(cx + 4.5f * s), (int32_t)my, PC_PUPIL);
@@ -1223,14 +1224,22 @@ static void draw_preset_card(int32_t y0)
     int i;
     px_text(3, y0 + 3, "PRESET", PC_BLOB2);
     {
-        const char *nm = MOOD_NAME[ui.mood];
+        const char *nm = MOODS[ui.mood].name;
         px_text(PX_W - 3 - px_text_w(nm) > 36 ? PX_W - 3 - px_text_w(nm) : 36, y0 + 3, nm, PC_WHITE);
     }
-    for (i = 0; i < NMOOD; i++)
-        px_rect(3 + i * 5, y0 + 11, 3, 2, i == ui.mood ? PC_SPEC : PC_GRID);
+    {   /* its kind, and where it sits among that kind's presets */
+        const int cat = MOODS[ui.mood].cat;
+        int k = 0;
+        px_text(3, y0 + 10, CAT_NAME[cat], PC_TEAR);
+        for (i = 0; i < NMOOD; i++)
+            if (MOODS[i].cat == cat) {
+                px_rect(4 + px_text_w(CAT_NAME[cat]) + 3 + k * 5, y0 + 12, 3, 2, i == ui.mood ? PC_SPEC : PC_GRID);
+                k++;
+            }
+    }
     q.y0 = y0;
-    q.gy0 = y0 + 16;
-    q.gy1 = y0 + 33;
+    q.gy0 = y0 + 19;
+    q.gy1 = y0 + 34;
     for (i = 0; i < 3; i++) {
         static const char *const NAME[3] = {"WAVE", "FILTER", "ENV"};
         int k;
@@ -1586,7 +1595,10 @@ static void blob_draw(void)
     g.rcx = 60.0f;
     g.rcy = 55.0f - 12.0f * pa;                          /* (the room lifts a little when the drawer opens) */
     g.bw = 12.0f + 46.0f * size;
-    g.bh = fm_minf(g.bw * 0.72f, g.rcy - 4.0f);
+    /* the camera looks down from above (the synth is on a table below you): the back wall sits high, the
+     * ceiling is a sliver, the floor fills the lower half */
+    g.vy = g.rcy - 17.0f - 6.0f * size;
+    g.bh = fm_minf(g.bw * 0.6f, g.vy - 3.0f);
     g.r = lerpf(38.0f, 34.0f, pa) * (1.0f - 0.35f * size);
     g.face_dy = 0.0f;
     /* the LFO's dance: big enough to see at any depth. It moves, and its body goes with it: it leans
@@ -1652,7 +1664,7 @@ static void blob_draw(void)
     g.cx = g.rcx + bobx;
     g.cy = g.rcy + boby - bs.shrug * 2.0f + 1.2f * fm_sin_turns(bs.t * 0.23f) + bs.pancake * g.r * 0.6f;   /* it hovers */
     g.cy -= bs.focus * g.r;                              /* the part in focus, to the middle */
-    g.floor = fm_minf(g.cy + g.r + 7.0f + 4.0f * size, g.ab - 3.0f);
+    g.floor = fm_minf(g.cy + g.r * 0.8f + 6.0f + 3.0f * size, g.ab - 3.0f);   /* (from above: right under it) */
     if (g.floor < g.cy + g.r * 0.9f)                     /* (close up: the floor is out of the picture) */
         g.floor = (float)PX_H + 40.0f;
 

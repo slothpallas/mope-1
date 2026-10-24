@@ -55,7 +55,7 @@ and Felucca. The instrument and the screen are new.
 
 ## Controls
 
-Hold a part's button (in the browser emulator, click it: the page buttons latch there, since one mouse can't hold a button and turn a knob): its schematic opens in a dark glass drawer over the bottom of the screen and the four knobs turn that part, each knob's name over its meter (the one you turn lights up). Let go and the drawer slides away and the knobs go back to the Body. Turning a knob with nothing held shows the Body's drawer for a moment. The blob stays big and shows faintly through the glass. The drawer is drawn in the room's cold colours, like the drum grid.
+Press or hold a part's button: its schematic opens in a dark glass drawer over the bottom of the screen and the four knobs turn that part, each knob's name over its meter (the one you turn lights up). The drawer stays until 3 seconds after your last touch, then slides away and the knobs go back to the Body. **Press a part's button twice quickly and its page stays** (switch pages with the other buttons) until you press **HOME**. The blob stays big and shows faintly through the glass. The drawer is drawn in the room's cold colours, like the drum grid.
 
 | Page | Its schematic |
 | --- | --- |
@@ -80,7 +80,7 @@ Hold a part's button (in the browser emulator, click it: the page buttons latch 
 | SEL | Walls | Reverb | Size | Fry | Tape |
 | SEQ | Tape deck | Style | Tempo | Swing | Human (looser timing and velocity) |
 | GLO | Mixer | Voice | Drums | Bass (0: no bass) | Gunk |
-| GLO tap, then hold | Setup | Glide | MIDI channel | MIDI out | Tune |
+| GLO again | Setup | Glide | MIDI channel | MIDI out | Tune |
 | ARP | Arp | Mode (up, down, up and down, wander, stab) | Rate (1/4 .. 1/32, triplets) | Octaves (1-3) | Gate |
 
 - **ALGORITHM** changes only the instrument's sound source, its wavetable (the blob's body shape). The caption says which ("WAVE: SIGH"); everything else stays.
@@ -92,7 +92,13 @@ Hold a part's button (in the browser emulator, click it: the page buttons latch 
 - **SAVE**: saves (it also saves by itself when quiet). Hold for 1.5 s, then press SAVE again, to reset everything. The blob keeps its level.
 - The lowest and highest keys together: it gives up.
 
-**Moods:** Monday, 3AM, Left on read, Rain again, NPC, Deep fried, Church of nothing, Hold music.
+**Presets** (21, in six kinds; the card shows the kind):
+- **Pad:** Monday, 3AM, Rain again, Church of nothing, Sunday scaries
+- **Keys:** Left on read, Hold music, Open plan
+- **Pluck:** NPC, Read receipt, Bubble wrap
+- **Lead:** Main character, Low battery, Deep fried
+- **Bass** (an octave down): Sub-par, Bottom text, Doomscroll, Basement
+- **FX:** Tinnitus, Dial tone, Ghosted
 
 **Drum styles:** each named after its genre, sadly: Grief drill, Empty city pop, Gloom gabber, Missed phonk call, Jersey cry club, Heartbreakcore, Amapia-no, Cold footwork, Dembow out, Vaporweep, Hyperflop, Funeral bossa, Office ambivalent. Each style has a main bar, a fill every fourth bar, its own tempo and swing, and a synthesized kit (no samples). In Amapia-no the bass is a log drum.
 

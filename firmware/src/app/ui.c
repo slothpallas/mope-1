@@ -34,17 +34,9 @@ static const char *const PAGE_LABEL[NPAGES][4] = {
     {"RATE", "DPTH", "SHPE", "DEST"}, {"CHOR", "DLY", "TIME", "FDBK"}, {"VERB", "SIZE", "FRY", "TAPE"},
     {"STYL", "BPM", "SWNG", "HUMN"}, {"GLID", "CH", "OUT", "TUNE"}, {"VOX", "DRUM", "BASS", "GUNK"},
     {"MODE", "RATE", "OCT", "GATE"}};
-#define LINGER_MS 600u                 /* a page's drawer after its button is let go (it slides away) */
-#define TOUCH_MS 2500u                 /* the drawer after a knob turned with no button held */
+#define STAY_MS 3000u                  /* a drawer stays this long after the last touch (a press, a turn) */
+#define DOUBLE_MS 350u                 /* a part's button pressed twice this fast: its page stays until HOME */
 #define TAP_MS 300u                    /* ARP let go sooner: a tap (on / off), not a look at its page */
-#define GLO_AGAIN_MS 400u              /* GLO pressed again this soon after: the setup, not the mixer */
-/* In the browser one mouse can't hold a button and turn a knob: there the page buttons latch (a click
- * opens the page and leaves it open; the same button again, or another, closes it). */
-#ifdef OM_WEB
-#define LATCH_PAGES 1
-#else
-#define LATCH_PAGES 0
-#endif
 #define K_NONE 255
 static const uint8_t PAGE_KNOB[NPAGES][4] = {
     {P_TABLE, P_POS, P_DETUNE, P_SUB},
@@ -63,20 +55,42 @@ static const uint8_t PAGE_KNOB[NPAGES][4] = {
 #define KEY0_NOTE 53                   /* the lowest key, F3 */
 
 /* moods: the presets, Table .. Tape (P_TABLE .. P_TAPE) */
-#define NMOOD 8
+/* The presets: whole sounds (Table .. Tape, P_TABLE .. P_TAPE), plus an octave and a glide, in six
+ * kinds. Columns: table pos detune sub | cutoff reso env mdecay | A D S R | lfo rate depth shape dest |
+ * chorus delay time feedback | reverb size fry tape */
+enum { CAT_PAD, CAT_KEYS, CAT_PLUCK, CAT_LEAD, CAT_BASS, CAT_FX, NCAT };
+static const char *const CAT_NAME[NCAT] = {"PAD", "KEYS", "PLUCK", "LEAD", "BASS", "FX"};
 #define MOOD_N (P_TAPE + 1)
-static const char *const MOOD_NAME[NMOOD] = {"MONDAY", "3AM", "LEFT ON READ", "RAIN AGAIN", "NPC", "DEEP FRIED",
-                                             "CHURCH OF NOTHING", "HOLD MUSIC"};
-static const int8_t MOOD[NMOOD][MOOD_N] = {
-    {0, 20, 25, 30, 58, 20, 35, 45, 10, 50, 60, 50, 30, 12, 0, 0, 30, 22, 50, 45, 38, 62, 0, 35},
-    {1, 40, 15, 20, 45, 35, 50, 55, 35, 60, 70, 65, 15, 30, 0, 0, 45, 35, 65, 55, 60, 85, 0, 50},
-    {6, 30, 10, 0, 70, 10, 10, 30, 5, 40, 80, 40, 40, 20, 0, 2, 20, 40, 40, 60, 45, 70, 0, 25},
-    {4, 60, 35, 25, 50, 25, 40, 50, 20, 55, 50, 70, 20, 25, 1, 1, 50, 45, 55, 65, 55, 80, 0, 60},
-    {2, 55, 0, 40, 65, 30, 45, 25, 2, 30, 40, 20, 60, 10, 2, 0, 0, 15, 30, 30, 15, 30, 0, 10},
-    {5, 70, 30, 50, 80, 55, 40, 40, 2, 45, 70, 30, 70, 40, 3, 1, 20, 10, 20, 20, 20, 40, 62, 40},
-    {6, 80, 40, 10, 60, 15, 20, 60, 60, 70, 90, 85, 10, 15, 0, 0, 60, 30, 70, 50, 85, 98, 0, 40},
-    {0, 10, 20, 10, 55, 10, 20, 40, 15, 50, 70, 55, 55, 25, 0, 2, 70, 20, 45, 30, 30, 40, 0, 70},
+typedef struct {
+    const char *name;
+    uint8_t cat;
+    int8_t oct, glide;
+    int8_t v[MOOD_N];
+} mood_t;
+static const mood_t MOODS[] = {
+    {"MONDAY", CAT_PAD, 0, 0, {0, 20, 25, 30, 58, 20, 35, 45, 10, 50, 60, 50, 30, 12, 0, 0, 30, 22, 50, 45, 38, 62, 0, 35}},
+    {"3AM", CAT_PAD, 0, 0, {1, 40, 15, 30, 52, 35, 50, 55, 35, 60, 75, 65, 15, 30, 0, 0, 45, 35, 65, 55, 60, 85, 0, 50}},
+    {"RAIN AGAIN", CAT_PAD, 0, 0, {4, 60, 35, 25, 50, 25, 40, 50, 20, 55, 50, 70, 20, 25, 1, 1, 50, 45, 55, 65, 55, 80, 0, 60}},
+    {"CHURCH OF NOTHING", CAT_PAD, 0, 0, {6, 80, 40, 10, 60, 15, 20, 60, 60, 70, 90, 85, 10, 15, 0, 0, 60, 30, 70, 50, 85, 98, 0, 40}},
+    {"SUNDAY SCARIES", CAT_PAD, 0, 0, {1, 70, 45, 25, 40, 20, 30, 70, 75, 80, 80, 90, 8, 40, 1, 0, 70, 30, 75, 55, 75, 90, 0, 55}},
+    {"LEFT ON READ", CAT_KEYS, 0, 0, {6, 30, 10, 0, 70, 10, 10, 30, 5, 40, 80, 40, 40, 20, 0, 2, 20, 40, 40, 60, 45, 70, 0, 25}},
+    {"HOLD MUSIC", CAT_KEYS, 0, 0, {0, 10, 20, 10, 55, 10, 20, 40, 15, 50, 70, 55, 55, 25, 0, 2, 70, 20, 45, 30, 30, 40, 0, 70}},
+    {"OPEN PLAN", CAT_KEYS, 0, 0, {0, 30, 20, 25, 58, 15, 45, 35, 1, 55, 30, 40, 45, 15, 0, 3, 40, 20, 40, 30, 30, 45, 5, 50}},
+    {"NPC", CAT_PLUCK, 0, 0, {2, 55, 0, 45, 72, 30, 45, 25, 2, 40, 62, 20, 60, 10, 2, 0, 0, 15, 30, 30, 15, 30, 0, 10}},
+    {"READ RECEIPT", CAT_PLUCK, 0, 0, {3, 50, 10, 30, 62, 35, 70, 25, 1, 35, 10, 30, 0, 0, 0, 0, 20, 40, 45, 50, 30, 55, 0, 30}},
+    {"BUBBLE WRAP", CAT_PLUCK, 1, 0, {1, 70, 5, 30, 72, 40, 80, 30, 1, 42, 10, 25, 70, 20, 4, 0, 10, 30, 25, 35, 25, 40, 0, 20}},
+    {"MAIN CHARACTER", CAT_LEAD, 0, 25, {7, 55, 25, 20, 70, 35, 40, 50, 3, 50, 75, 35, 45, 25, 0, 2, 25, 35, 45, 40, 30, 50, 10, 30}},
+    {"LOW BATTERY", CAT_LEAD, 0, 10, {4, 60, 15, 10, 60, 20, 20, 40, 5, 40, 80, 40, 55, 35, 0, 2, 20, 30, 55, 45, 35, 60, 0, 70}},
+    {"DEEP FRIED", CAT_LEAD, 0, 0, {5, 70, 30, 50, 80, 55, 40, 40, 2, 45, 70, 30, 70, 40, 3, 1, 20, 10, 20, 20, 20, 40, 62, 40}},
+    {"SUB-PAR", CAT_BASS, -1, 0, {0, 0, 5, 90, 35, 10, 20, 30, 2, 40, 85, 15, 20, 0, 0, 0, 0, 0, 40, 0, 8, 30, 0, 30}},
+    {"BOTTOM TEXT", CAT_BASS, -1, 0, {2, 50, 60, 50, 40, 25, 30, 35, 3, 50, 80, 20, 15, 30, 0, 0, 10, 0, 40, 0, 10, 30, 15, 40}},
+    {"DOOMSCROLL", CAT_BASS, -1, 35, {7, 30, 10, 50, 33, 75, 75, 35, 1, 40, 55, 15, 0, 0, 0, 0, 0, 20, 30, 30, 10, 30, 25, 30}},
+    {"BASEMENT", CAT_BASS, -1, 0, {5, 40, 15, 60, 45, 30, 40, 40, 2, 45, 70, 20, 10, 20, 1, 1, 0, 0, 40, 0, 12, 25, 40, 45}},
+    {"TINNITUS", CAT_FX, 1, 0, {7, 100, 70, 0, 90, 70, 0, 50, 70, 80, 100, 90, 30, 60, 4, 2, 50, 60, 60, 70, 80, 95, 20, 40}},
+    {"DIAL TONE", CAT_FX, 0, 0, {3, 90, 5, 30, 75, 40, 10, 30, 1, 50, 100, 40, 3, 50, 3, 1, 0, 50, 70, 60, 40, 60, 35, 60}},
+    {"GHOSTED", CAT_FX, 0, 0, {1, 20, 80, 20, 45, 30, 20, 60, 78, 90, 80, 100, 5, 70, 0, 0, 100, 70, 85, 75, 95, 100, 0, 60}},
 };
+#define NMOOD ((int)(sizeof MOODS / sizeof MOODS[0]))
 /* what a level-up feels like */
 static const char *const LEVEL_UP[] = {"OK.", "COOL. I GUESS.", "LEVEL UP. NOTHING CHANGED.", "+1 SADNESS",
                                        "ACHIEVEMENT: STILL HERE", "GG", "IT LISTENED.", "NEW SKILL: NONE"};
@@ -98,7 +112,10 @@ static struct {
     uint8_t arp, hold, pancake, mood;
     uint8_t panel;                     /* the schematic is open */
     int8_t held_btn;                   /* the page button held down (its page shows), -1 none */
-    uint32_t held_t, page_until, glo_rel_t;
+    uint32_t held_t, page_until;
+    uint8_t latch;                     /* a page pressed twice: it stays until HOME */
+    int8_t last_up_btn;                /* the page button last let go, and when (a double press) */
+    uint32_t last_up_t;
     uint32_t preset_t;                 /* when PRESETS last turned: its card shows a moment (0: never) */
     uint8_t key_note[NKEYS];           /* the note each key started (its note off) */
     uint32_t latched;                  /* hold: keys let go while held, still sounding */
@@ -224,8 +241,10 @@ static void load_mood(int m)
     int i;
     ui.mood = (uint8_t)m;
     for (i = 0; i < MOOD_N; i++)
-        knob_set(i, MOOD[m][i]);
-    ui.preset_t = plat_ms() | 1u;                        /* its card: the name, and everything it changed */
+        knob_set(i, MOODS[m].v[i]);
+    knob_set(P_OCTAVE, MOODS[m].oct);                    /* (basses sit an octave down, some leads glide) */
+    knob_set(P_GLIDE, MOODS[m].glide);
+    ui.preset_t = plat_ms() | 1u;                        /* its card: the name, its kind, and what it brought */
 }
 
 /* -------------------------------------------------------------- notes --- */
@@ -312,24 +331,34 @@ static void button(int b)
         ui_caption("KEPT.", 900u);
         return;
     }
-    if (LATCH_PAGES && b != B_ARP && b == ui.held_btn && !(b == B_GLO && ui.page == PG_MIX)) {
-        ui.held_btn = -1;                                /* (latched: the same button again closes it) */
-        ui.page_until = plat_ms() + LINGER_MS;
+    if (b == B_HOME && ui.latch) {                       /* HOME ends a page that stays: the blob alone */
+        ui.latch = 0;
+        ui.held_btn = -1;
+        ui.panel = 0;
+        ui.page = PG_BODY;
+        ui_caption("HOME.", 800u);
         return;
     }
-    if (b == B_GLO) {                                    /* held: the mixer; a tap first (latched: again): the setup */
-        set_page(LATCH_PAGES ? (ui.held_btn == B_GLO ? PG_SETUP : PG_MIX)
-                             : plat_ms() - ui.glo_rel_t < GLO_AGAIN_MS ? PG_SETUP : PG_MIX);
-        ui.held_btn = (int8_t)b;
-        return;
-    }
-    for (i = 0; i < NPAGES; i++)                         /* a part's button: its page while held */
-        if (PAGE_BTN[i] == b) {
-            set_page(i);
+    {
+        const uint32_t now = plat_ms();
+        const int dbl = b != B_ARP && b == ui.last_up_btn && now - ui.last_up_t < DOUBLE_MS;
+        int pg = -1;
+        if (b == B_GLO)                                  /* the mixer; pressed again: the setup, and back */
+            pg = dbl ? ui.page : ui.panel && ui.page == PG_MIX ? PG_SETUP : PG_MIX;
+        for (i = 0; pg < 0 && i < NPAGES; i++)
+            if (PAGE_BTN[i] == b)
+                pg = i;
+        if (pg >= 0) {                                   /* a part's button: its page while held, and 3 s on */
+            set_page(pg);
             ui.held_btn = (int8_t)b;
-            ui.held_t = plat_ms();
+            ui.held_t = now;
+            if (dbl && !ui.latch) {
+                ui.latch = 1;                            /* twice: it stays (other pages too) until HOME */
+                ui_caption("STAYS. HOME: BACK.", 1400u);
+            }
             return;
         }
+    }
     switch (b) {
     case B_PLAY:
         sy_drums(!sy_tel.drums_on);
@@ -364,18 +393,14 @@ static void button_up(int b)
     const uint32_t now = plat_ms();
     if (b != ui.held_btn)
         return;
-    if (LATCH_PAGES && (b != B_ARP || now - ui.held_t >= TAP_MS))
-        return;                                          /* (latched: it stays until clicked again) */
     ui.held_btn = -1;
-    ui.page_until = now + LINGER_MS;
-    if (b == B_GLO)
-        ui.glo_rel_t = now;
+    ui.last_up_btn = (int8_t)b;
+    ui.last_up_t = now;
+    ui.page_until = now + STAY_MS;                       /* the drawer stays 3 s after the last touch */
     if (b == B_ARP && now - ui.held_t < TAP_MS) {
         ui.arp = !ui.arp;
         sy_arp(ui.arp);
         ui_caption(ui.arp ? ARP_MODE_NAME[proj.par[P_ARPMODE]] : "ARP: OFF", 1200u);
-        if (ui.arp)
-            ui.page_until = now + 1500u;                 /* (a look at what it will play) */
     }
 }
 
@@ -476,19 +501,24 @@ static void input(void)
     if ((e = plat_enc(EN_ALGO)) != 0) {                  /* the instrument: its table */
         knob_set(P_TABLE, (proj.par[P_TABLE] + (e > 0 ? 1 : SY_NTABLE - 1)) % SY_NTABLE);
         say_choice(P_TABLE);
-        set_page(PG_BODY);
+        if (!ui.latch) {                                 /* (a page that stays, stays) */
+            set_page(PG_BODY);
+            ui.touched = 0;
+        }
         ui.panel = 1;
-        ui.touched = 0;
-        ui.page_until = plat_ms() + TOUCH_MS;
+        ui.page_until = plat_ms() + STAY_MS;
         ui.act_t = plat_ms();
     }
     if ((e = plat_enc(EN_SELECT)) != 0) {                /* the drum tape */
         knob_set(P_STYLE, (proj.par[P_STYLE] + (e > 0 ? 1 : ST_N - 1)) % ST_N);
         knob_set(P_TEMPO, sy_style_tempo(proj.par[P_STYLE]));
         say_choice(P_STYLE);
-        set_page(PG_DECK);
-        ui.touched = 0;
-        ui.page_until = plat_ms() + TOUCH_MS;
+        if (!ui.latch) {
+            set_page(PG_DECK);
+            ui.touched = 0;
+        }
+        ui.panel = 1;
+        ui.page_until = plat_ms() + STAY_MS;
         ui.act_t = plat_ms();
     }
     if ((e = plat_enc(EN_PRESET)) != 0) {                /* the preset: its mood */
@@ -497,13 +527,13 @@ static void input(void)
     }
     for (i = 0; i < 4; i++)
         if ((e = plat_enc(EN_K1 + (int)i)) != 0) {
-            if (ui.held_btn < 0 && (int32_t)(plat_ms() - ui.page_until) > 0)
-                set_page(PG_BODY);                       /* nothing held: the knobs are the body's */
+            if (ui.held_btn < 0 && !ui.latch && (int32_t)(plat_ms() - ui.page_until) > 0)
+                set_page(PG_BODY);                       /* nothing held, nothing open: the knobs are the body's */
             turn(EN_K1 + (int)i, PAGE_KNOB[ui.page][i], e);
             ui.touched = (int8_t)i;
             ui.panel = 1;
             if (ui.held_btn < 0)
-                ui.page_until = plat_ms() + TOUCH_MS;
+                ui.page_until = plat_ms() + STAY_MS;
             ui.preset_t = 0;
             ui.focus_t = ui.act_t = plat_ms();
         }
@@ -542,6 +572,7 @@ void ui_init(void)
     ui.act_t = ui.focus_t = plat_ms();
     ui.panel = 0;
     ui.held_btn = -1;
+    ui.last_up_btn = -1;
     px_init();
     blob_init();
 }
@@ -550,7 +581,7 @@ void ui_frame(void)
 {
     input();
     autosave();
-    if (ui.panel && ui.held_btn < 0 && (int32_t)(plat_ms() - ui.page_until) > 0) {
+    if (ui.panel && ui.held_btn < 0 && !ui.latch && (int32_t)(plat_ms() - ui.page_until) > 0) {
         ui.panel = 0;                                    /* nothing held, nothing turned: the blob alone */
         ui.page = PG_BODY;
     }

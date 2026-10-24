@@ -52,6 +52,9 @@ MOPE-1 forks FiMba-1 and replaces the kalimba with a different instrument. FiMba
 - **The walls:** text drips down them in tiny broken pieces (texture, barely visible); the left wall
   is cold, the right faintly warm; the back wall and the window fade at their edges instead of
   framing the room.
+- **Seen from above:** the camera looks down into the room, as from a table; a darker room lifts the
+  blob. Drawers stay 3 s after the last touch; a part's button pressed twice keeps its page until
+  HOME. **21 presets** in six kinds (pad, keys, pluck, lead, bass, FX).
 - **Clearer cues:** chorus copies are see-through copies of the blob peeking from behind it; the
   voices are six lights over its head; the Eyes and Mouth pages zoom in on the eyes and the mouth;
   the cassette sits in the top-left corner.
