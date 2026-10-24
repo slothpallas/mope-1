@@ -379,7 +379,7 @@ static void button(int b)
         ui_caption("KEPT.", 900u);
         return;
     }
-    if (b == B_HOME && ui.latch) {                       /* HOME ends a page that stays: the blob alone */
+    if (b == B_HOME && ui.latch) {                       /* HOME ends a drawer that stays: the blob alone */
         ui.latch = 0;
         ui.held_btn = -1;
         ui.panel = 0;
@@ -409,7 +409,7 @@ static void button(int b)
             ui.held_t = now;
             if (dbl && !ui.latch) {
                 ui.latch = 1;                            /* twice: it stays (other pages too) until HOME */
-                ui_caption("STAYS. HOME: BACK.", 1400u);
+                ui_caption("STAYS OPEN.", 1200u);
             }
             return;
         }
@@ -602,8 +602,6 @@ static void input(void)
     }
     for (i = 0; i < 4; i++)
         if ((e = plat_enc(EN_K1 + (int)i)) != 0) {
-            if (ui.held_btn < 0 && !ui.latch && (int32_t)(plat_ms() - ui.page_until) > 0)
-                set_page(PG_BODY);                       /* nothing held, nothing open: the knobs are the body's */
             if (ui.page == PG_LOOP && i < 3) {           /* the chosen step (or the whole loop): note, length, velocity */
                 sy_loop_nudge((int)i, e > 0 ? 1 : -1);
                 ui.step_turned = 1;
@@ -629,6 +627,10 @@ static void leds(void)
         b |= 1u << B_REC;                                /* recording: lit; counting in: blinking */
     if (ui.arp)
         b |= 1u << B_ARP;
+    if (step_mode() && proj.par[P_LOOPBARS] > 0)        /* the steps: OCT- / OCT+ go through the bars */
+        b |= 1u << B_OCTDN | 1u << B_OCTUP;
+    else if (proj.par[P_OCTAVE] != 0)                    /* up or down an octave or more: that way lit */
+        b |= 1u << (proj.par[P_OCTAVE] > 0 ? B_OCTUP : B_OCTDN);
     plat_leds(b, ui.keys, 0u);
 }
 
@@ -668,10 +670,8 @@ void ui_frame(void)
             mark_dirty();
     }
     autosave();
-    if (ui.panel && ui.held_btn < 0 && !ui.latch && (int32_t)(plat_ms() - ui.page_until) > 0) {
-        ui.panel = 0;                                    /* nothing held, nothing turned: the blob alone */
-        ui.page = PG_BODY;
-    }
+    if (ui.panel && ui.held_btn < 0 && !ui.latch && (int32_t)(plat_ms() - ui.page_until) > 0)
+        ui.panel = 0;                                    /* nothing held, nothing turned: the drawer hides, the page stays */
     if (plat_ms() - ui.last_draw >= 32u) {               /* ~30 pictures a second */
         ui.last_draw = plat_ms();
         blob_draw();

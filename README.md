@@ -56,7 +56,7 @@ and Felucca. The instrument and the screen are new.
 
 ## Controls
 
-Press or hold a part's button: its schematic opens in a dark glass drawer over the bottom of the screen and the four knobs turn that part, each knob's name over its meter (the one you turn lights up). The drawer stays until 3 seconds after your last touch, then slides away and the knobs go back to the Body. **Press a part's button twice quickly and its page stays** (switch pages with the other buttons) until you press **HOME**. The blob stays big and shows faintly through the glass. The drawer is drawn in the room's cold colours, like the drum grid.
+Press or hold a part's button: its schematic opens in a dark glass drawer over the bottom of the screen and the four knobs turn that part, each knob's name over its meter (the one you turn lights up). The drawer stays until 3 seconds after your last touch, then slides away, but **the page stays**: its button stays lit and the knobs still turn that part (turning one brings the drawer back). **HOME** goes back to the Body. **Press a part's button twice quickly and its drawer stays open** (switch pages with the other buttons) until you press **HOME**. OCT+ or OCT− is lit while the keyboard is shifted up or down. The blob stays big and shows faintly through the glass. The drawer is drawn in the room's cold colours, like the drum grid.
 
 | Page | Its schematic |
 | --- | --- |

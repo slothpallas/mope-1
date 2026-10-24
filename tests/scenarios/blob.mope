@@ -170,14 +170,23 @@ strum 15 0 20
 wait 400
 expect xp >127
 shot 14_levels.png
-# a page shows while its button is held, and 3 s after
+# a page shows while its button is held, and 3 s after; then the drawer hides but the page stays
+# (its button lit, the knobs still its own): a knob brings the drawer back, HOME goes back to the blob
 press ENV
 wait 200
 expect page 2
 release ENV
 wait 2000
-expect page 2
+expect panel 1
 wait 1500
+expect panel 0
+expect page 2
+turn K1 1
+wait 100
+expect panel 1
+expect page 2
+tap HOME
+wait 200
 expect page 0
 # pressed twice: it stays, until HOME
 tap EDIT

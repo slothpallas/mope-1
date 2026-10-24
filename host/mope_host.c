@@ -391,6 +391,8 @@ static int expect(const char *what, const char *val)
         got = ui.arp + 2 * sy_tel.arp_on;
     else if (!strcmp(what, "arpseq"))
         got = (int)sy_tel.arp_seq;
+    else if (!strcmp(what, "panel"))              /* the drawer open (1) or hidden (0; its page stays) */
+        got = ui.panel;
     else if (!strcmp(what, "latch"))              /* a page pressed twice: it stays until HOME */
         got = ui.latch;
     else if (!strcmp(what, "xp"))

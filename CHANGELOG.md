@@ -53,8 +53,9 @@ The first MOPE-1. It forks FiMba-1 and replaces the kalimba with a different ins
   is cold, the right faintly warm; the back wall and the window fade at their edges instead of
   framing the room.
 - **Seen from above:** the camera looks down into the room, as from a table; a darker room lifts the
-  blob. Drawers stay 3 s after the last touch; a part's button pressed twice keeps its page until
-  HOME. **21 presets** in six kinds (pad, keys, pluck, lead, bass, FX).
+  blob. Drawers hide 3 s after the last touch, but the page stays (its button lit, the knobs still
+  its own) until another button or HOME; pressed twice, a drawer stays open. OCT+ / OCT− light while
+  the keys are shifted. **21 presets** in six kinds (pad, keys, pluck, lead, bass, FX).
 - **A loop recorder**, the way other FM-1 firmwares do it: PLAY runs the band, REC records what you
   play into a 1, 2 or 4-bar loop (a bar's count-in when stopped, overdub while playing, notes on the
   1/16 grid), HOME + REC undoes, SAVE + REC clears. SEQ shows the loop as a piano roll, and while it
