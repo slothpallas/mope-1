@@ -102,8 +102,11 @@ kbd { font: 600 .85em ui-monospace, Menlo, monospace; background: var(--card); b
 .wire .help p, .wire .help ul { font-size: .9rem; }
 .wire .help b { color: var(--ink); font-weight: 600; }
 .wire a { color: #9fc4e6; }
+.wire.framed body { padding-block: 14px 32px; }
+.wire.framed header, .wire.framed .turn { display: none; }   /* (the page around it has the title) */
 </style>
-<script>if (/[?&]look=wire\b/.test(location.search)) document.documentElement.classList.add("wire");</script>
+<script>if (/[?&]look=wire\b/.test(location.search)) document.documentElement.classList.add("wire");
+if (window.self !== window.top) document.documentElement.classList.add("framed");</script>
 <main>
 <header>
   <h1>MOPE-1</h1>
