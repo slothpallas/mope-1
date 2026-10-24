@@ -1355,7 +1355,7 @@ static void draw_panel(const geo_t *g)
         case PG_VIBE: what = LFO_SHAPE_NAME[proj.par[P_LFOSHAPE]]; break;
         case PG_DECK: what = sy_style_name(proj.par[P_STYLE]); break;
         case PG_ARP: what = ARP_RATE_NAME[proj.par[P_ARPRATE]]; break;
-        case PG_LOOP: what = sy_tel.rec == 2 ? "REC" : sy_tel.rec == 1 ? "READY" : step_mode() ? "STEPS" : 0; break;
+        case PG_LOOP: what = sy_tel.rec == 2 ? "REC" : sy_tel.rec == 1 ? "READY" : sy_tel.loop_sel >= 0 ? "STEP" : "ALL"; break;
         default: break;
         }
         if (what) {
@@ -1400,10 +1400,10 @@ static void draw_panel(const geo_t *g)
             int n, j;
             const sy_ev_t *ev = sy_loop_events(&n);
             float lv = 0.0f;
-            for (j = 0; j < n; j++)
-                if (sy_tel.loop_sel >= 0 && ev[j].t / 12 == (uint16_t)sy_tel.loop_sel)
+            for (j = 0; j < n; j++)                      /* (no step chosen: the whole loop, its first note shows) */
+                if (sy_tel.loop_sel < 0 ? j == 0 : ev[j].t / 12 == (uint16_t)sy_tel.loop_sel)
                     lv = i == 0 ? (float)ev[j].note / 127.0f : i == 1 ? (float)ev[j].len / 96.0f : (float)ev[j].vel / 127.0f;
-            px_text(x, y, PAGE_LABEL[ui.page][i], hot ? PC_WHITE : sy_tel.loop_sel >= 0 ? PC_DIM : PC_GRID);
+            px_text(x, y, PAGE_LABEL[ui.page][i], hot ? PC_WHITE : n ? PC_DIM : PC_GRID);
             px_rect(x, y + 8, 26, 2, PC_GRID);
             w = (int32_t)(fm_clampf(lv, 0.0f, 1.0f) * 26.0f + 0.5f);
             px_rect(x, y + 8, w, 2, hot ? PC_SPEC : PC_TEAR);

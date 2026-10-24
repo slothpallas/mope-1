@@ -1,5 +1,5 @@
-# The loop: REC while stopped counts in a bar, then records; notes play back with the drums; SEQ held
-# shows the loop and makes the white keys its steps; HOME + REC undoes, SAVE + REC clears; it is saved.
+# The loop: REC while stopped counts in a bar, then records; notes play back with the drums; SEQ opens
+# the loop and its white keys are the steps (chosen, edited by the knobs, tapped away); HOME + REC undoes, SAVE + REC clears; it is saved.
 wait 300
 expect loopn 0
 tap REC
@@ -22,29 +22,55 @@ tap REC
 expect rec 0
 expect loopn 3
 wait 1500
-# its steps, while SEQ is held: the first white key puts a note on step one
-press SEQ
+# its steps: SEQ opens the loop's drawer, and while it is open the white keys are its steps
+tap SEQ
 wait 300
 expect page 10
+expect loopsel -1
 shot 02_steps.png
-tapkey w0
+# nothing chosen: the knobs edit the whole loop (NOTE up two: every note)
+expect lnote0 65
+turn K1 2
+wait 100
+expect lnote0 67
+expect lnote2 74
+turn K1 -2
+wait 100
+expect lnote0 65
+# an empty step: a note comes, chosen, and the knobs edit only it
+tapkey w8
+wait 100
 expect loopn 4
+expect loopsel 8
 turn K1 3
+turn K2 2
 wait 200
 shot 03_step_edited.png
-release SEQ
-# the take undone (HOME + REC), then saved and back after a restart
+expect lnote0 65
+# a step with notes, held while a knob turns: chosen and edited, it stays
+key w8 down
+wait 100
+turn K3 -2
+key w8 up
+wait 100
+expect loopn 4
+# ...tapped untouched: it goes
+tapkey w8
+wait 100
+expect loopn 3
+expect loopsel -1
+# the last change undone (HOME + REC: the removed step is back), then saved and back after a restart
 press HOME
 tap REC
 release HOME
-expect loopn 3
+expect loopn 4
 tap PLAY
 wait 600
 tap SAVE
 wait 200
 reboot
 wait 300
-expect loopn 3
+expect loopn 4
 # cleared (SAVE + REC)
 press SAVE
 tap REC

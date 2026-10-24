@@ -379,6 +379,14 @@ static int expect(const char *what, const char *val)
         got = sy_tel.rec;
     else if (!strcmp(what, "loopn"))              /* notes in the loop */
         got = sy_tel.loop_n;
+    else if (!strcmp(what, "loopsel"))            /* the chosen step (-1: none, the knobs edit them all) */
+        got = sy_tel.loop_sel;
+    else if (!strncmp(what, "lnote", 5) || !strncmp(what, "llen", 4)) { /* lnoteN / llenN: the loop's Nth note */
+        int n2;
+        const sy_ev_t *ev = sy_loop_events(&n2);
+        const int j = atoi(what + (what[1] == 'n' ? 5 : 4));
+        got = j < n2 ? (what[1] == 'n' ? ev[j].note : ev[j].len) : -1;
+    }
     else if (!strcmp(what, "arp"))                /* the arpeggiator: 3 = the UI and the engine agree it is on */
         got = ui.arp + 2 * sy_tel.arp_on;
     else if (!strcmp(what, "arpseq"))

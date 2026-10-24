@@ -94,7 +94,9 @@ void sy_rec(int on);                                /* record on / off (off and 
 void sy_loop_undo(void);                            /* the loop as it was before this take */
 void sy_loop_clear(void);
 void sy_loop_step(int step, int note);              /* a 1/16 step: a note there, or none (toggles) */
-void sy_loop_nudge(int field, int delta);           /* the last stepped step's notes: 0 note, 1 length, 2 velocity */
+void sy_loop_select(int step);                      /* a step chosen (-1: none): the knobs edit it */
+void sy_loop_nudge(int field, int delta);           /* 0 note, 1 length, 2 velocity: the chosen step's notes, or
+                                                     * with none chosen the whole loop's */
 void sy_loop_load(const sy_ev_t *ev, int n);        /* from a saved project (ev stays valid until drained) */
 int sy_loop_copy(sy_ev_t *dst, int max);            /* into a project, to save */
 const sy_ev_t *sy_loop_events(int *n);              /* for the screen: read-only, may change under you */             /* the notes it is cycling, low to high (for the screen) */

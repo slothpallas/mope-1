@@ -34,7 +34,7 @@ const char *const SY_TABLE_NAME[SY_NTABLE] = {"SIGH", "MOAN", "PULSE", "CRUSH", 
 volatile sy_tel_t sy_tel;
 
 /* ----------------------------------------------------------- commands --- */
-enum { C_SET, C_ON, C_OFF, C_BEND, C_MOD, C_DRUMS, C_ARP, C_PANIC, C_REC, C_LUNDO, C_LCLEAR, C_LSTEP, C_LNUDGE, C_LLOAD };
+enum { C_SET, C_ON, C_OFF, C_BEND, C_MOD, C_DRUMS, C_ARP, C_PANIC, C_REC, C_LUNDO, C_LCLEAR, C_LSTEP, C_LNUDGE, C_LLOAD, C_LSEL };
 typedef struct {
     uint8_t c;
     int16_t a, b;
@@ -68,6 +68,7 @@ void sy_loop_undo(void) { post(C_LUNDO, 0, 0); }
 void sy_loop_clear(void) { post(C_LCLEAR, 0, 0); }
 void sy_loop_step(int step, int note) { post(C_LSTEP, step, clampi(note, 0, 127)); }
 void sy_loop_nudge(int field, int delta) { post(C_LNUDGE, field, delta); }
+void sy_loop_select(int step) { post(C_LSEL, step, 0); }
 static const sy_ev_t *load_src;
 void sy_loop_load(const sy_ev_t *ev, int n)
 {
@@ -424,7 +425,6 @@ static void arp_release(void)
     }
     arp_cur = -1;
     sy_tel.arp_note = -1;
-    sy_tel.loop_sel = -1;
 }
 static void arp_tick(void)                             /* one sample */
 {
@@ -1599,12 +1599,18 @@ static void loop_cmd(const cmd_t *c)
         loop_changed();
         break;
     }
-    case C_LNUDGE:                                       /* the stepped step's notes: pitch, length, velocity */
-        if (loop_sel < 0)
-            break;
+    case C_LSEL:
+        loop_sel = c->a < 0 || c->a >= SY_TPB * 4 / 12 ? -1 : c->a;
+        sy_tel.loop_sel = (int16_t)loop_sel;
+        break;
+    case C_LNUDGE:                                       /* the chosen step's notes, or all of them: pitch, length, velocity */
         for (i = 0; i < loop_n; i++)
-            if ((int)loop_ev[i].t >= loop_sel * 12 && (int)loop_ev[i].t < loop_sel * 12 + 12) {
+            if (loop_sel < 0 || ((int)loop_ev[i].t >= loop_sel * 12 && (int)loop_ev[i].t < loop_sel * 12 + 12)) {
                 sy_ev_t *e = &loop_ev[i];
+                if (c->a == 0 && (e->flags & EV_PLAYING)) {   /* (a sounding note, retuned: let go first) */
+                    note_off(e->note);
+                    e->flags &= (uint8_t)~EV_PLAYING;
+                }
                 if (c->a == 0)
                     e->note = (uint8_t)clampi(e->note + c->b, 0, 127);
                 else if (c->a == 1)
@@ -1700,7 +1706,7 @@ static void drain(void)
             }
             sy_tel.drums_on = dr_on;
             break;
-        case C_REC: case C_LUNDO: case C_LCLEAR: case C_LSTEP: case C_LNUDGE: case C_LLOAD:
+        case C_REC: case C_LUNDO: case C_LCLEAR: case C_LSTEP: case C_LNUDGE: case C_LLOAD: case C_LSEL:
             loop_cmd(&c);
             break;
         case C_ARP: arp_set(c.a); break;
@@ -1855,6 +1861,8 @@ void sy_init(void)
     int i, s, t;
     for (i = 0; i < P_NPARAMS; i++)
         par[i] = PARAMS[i].def;
+    loop_sel = -1;
+    sy_tel.loop_sel = -1;                                 /* (no step chosen: the knobs edit the whole loop) */
     for (i = 0; i < SY_NVOICE; i++)
         vc[i].stage = ST_OFF;
     tables_build();

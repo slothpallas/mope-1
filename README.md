@@ -79,7 +79,7 @@ Press or hold a part's button: its schematic opens in a dark glass drawer over t
 | LFO | Vibe | Rate | Depth | Shape (sway, bob, bounce, nod, twitch) | Destination (shape, eyes, voice, volume) |
 | FX | Tears | Chorus | Delay | Time | Feedback |
 | SEL | Walls | Reverb | Size | Fry | Tape |
-| SEQ | Loop | Note | Length | Velocity (of the step you last set) | Bars (1, 2, 4) |
+| SEQ | Loop | Note | Length | Velocity (of the chosen step, or the whole loop) | Bars (1, 2, 4) |
 | SEQ again | Tape deck | Style | Tempo | Swing | Human (looser timing and velocity) |
 | GLO | Mixer | Voice | Drums | Bass (0: no bass) | Gunk |
 | GLO again | Setup | Glide | MIDI channel | MIDI out | Tune |
@@ -98,7 +98,7 @@ As on X0X, Melodee and JIANT FM: **PLAY**, **REC** and **SEQ** do what they say.
 - **REC while stopped**: a one-bar count-in (four red lights, a click on each beat), then the band starts and what you play is recorded into the loop (1, 2 or 4 bars; the Loop page's Bars). Notes snap to the 1/16 grid; the tape deck's Human puts some looseness back. The arpeggiator's notes are recorded too.
 - **REC while playing**: it records at once, on top of what's there (overdub). **REC** again stops recording; the loop keeps playing with the band.
 - **HOME + REC** undoes the last take. **SAVE + REC** clears the loop.
-- **Hold SEQ** (or press it twice to keep it): the loop as a piano roll, and the **16 white keys are the steps** of one bar: a key puts the last note you played on that step, or takes the notes there away. **OCT− / OCT+** go to the other bars. The knobs set the step's note, length and velocity.
+- **SEQ** (press it twice to keep it open): the loop as a piano roll, and while it is open the **16 white keys are the steps** of one bar (not while recording: then they play). Press a step to **choose** it and hear it; an empty step gets the last note you played. Turn **NOTE, LEN, VEL** to edit the chosen step. **Tap** a step without turning a knob to remove its notes. With no step chosen (the drawer says ALL) the knobs edit the **whole loop**: transpose it, make it longer or shorter, louder or softer. **OCT− / OCT+** go to the other bars.
 - The loop is saved with your sound (up to 192 notes).
 - REC used to be "hold"; that's gone.
 - **OCT− / OCT+**: octave. The 27 keys play F3 to G5.

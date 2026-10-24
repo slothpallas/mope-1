@@ -126,6 +126,9 @@ static struct {
     uint8_t key_note[NKEYS];           /* the note each key started (its note off) */
     uint32_t stepped;                  /* keys pressed as the loop's steps (their preview to stop) */
     uint8_t loop_bar, step_note;       /* the bar the steps show; the note a new step gets */
+    int16_t step_held;                 /* a step key down on a step with notes: let go untouched, they go */
+    uint8_t preview;                   /* the note a step key is sounding */
+    uint8_t step_turned;               /* ...a knob turned meanwhile: they stay (edited) */
     uint32_t loop_ver;
     uint32_t save_t, reset_ask;
     uint32_t last_draw;
@@ -152,8 +155,8 @@ static uint32_t xp_level(uint32_t xp)
     return lv;
 }
 
-/* the loop's steps: SEQ held, or its page staying (pressed twice) */
-static int step_mode(void) { return ui.page == PG_LOOP && ui.panel && (ui.held_btn == B_SEQ || ui.latch); }
+/* the loop's steps: while its drawer is open (not while recording: then the keys play) */
+static int step_mode(void) { return ui.page == PG_LOOP && ui.panel && !sy_tel.rec; }
 
 #include "px.c"
 #include "blob.c"
@@ -306,12 +309,27 @@ static void key_down(int k)
     if (step_mode()) {                                   /* a white key: that 1/16 step of the bar on show */
         const int w = white_of(k);
         if (w >= 0) {
-            sy_loop_step(ui.loop_bar * 16 + w, ui.step_note);
-            ui.focus_t = plat_ms();
-            if (!sy_tel.rec) {                           /* (a little preview of the note) */
-                sy_note_on(ui.step_note, 90);
-                ui.stepped |= 1u << k;
+            const int st = ui.loop_bar * 16 + w;
+            int i, cnt, has = 0, pitch = ui.step_note;
+            const sy_ev_t *ev = sy_loop_events(&cnt);
+            for (i = 0; i < cnt; i++)
+                if (ev[i].t / 12 == (uint16_t)st) {
+                    has = 1;
+                    pitch = ev[i].note;
+                }
+            if (has) {                                   /* notes there: chosen (the knobs edit them) */
+                sy_loop_select(st);
+                ui.step_held = (int16_t)st;
+                ui.step_turned = 0;
+            } else {                                     /* none: one comes, chosen */
+                sy_loop_step(st, ui.step_note);
+                ui.step_held = -1;
             }
+            ui.focus_t = plat_ms();
+            ui.page_until = plat_ms() + STAY_MS;
+            sy_note_on(pitch, 90);                       /* (you hear the step) */
+            ui.preview = (uint8_t)pitch;
+            ui.stepped |= 1u << k;
         }
         return;
     }
@@ -323,7 +341,12 @@ static void key_up(int k)
 {
     if (ui.stepped >> k & 1u) {
         ui.stepped &= ~(1u << k);
-        sy_note_off(ui.step_note);
+        sy_note_off(ui.preview);
+        if (ui.step_held >= 0 && !ui.step_turned) {      /* tapped, not edited: its notes go */
+            sy_loop_step(ui.step_held, ui.step_note);
+            sy_loop_select(-1);
+        }
+        ui.step_held = -1;
         return;
     }
     if (step_mode() && white_of(k) >= 0)
@@ -372,8 +395,11 @@ static void button(int b)
          * when it was the last page button too (REC opening the loop's drawer doesn't count) */
         if (b == B_GLO)
             pg = dbl ? ui.page : ui.panel && ui.page == PG_MIX && ui.last_up_btn == B_GLO ? PG_SETUP : PG_MIX;
-        if (b == B_SEQ)
+        if (b == B_SEQ) {
             pg = dbl ? ui.page : ui.panel && ui.page == PG_LOOP && ui.last_up_btn == B_SEQ ? PG_DECK : PG_LOOP;
+            if (pg == PG_LOOP && !(ui.panel && ui.page == PG_LOOP))
+                sy_loop_select(-1);                      /* (a fresh look: the knobs edit the whole loop) */
+        }
         for (i = 0; pg < 0 && i < NPAGES; i++)
             if (PAGE_BTN[i] == b)
                 pg = i;
@@ -578,8 +604,10 @@ static void input(void)
         if ((e = plat_enc(EN_K1 + (int)i)) != 0) {
             if (ui.held_btn < 0 && !ui.latch && (int32_t)(plat_ms() - ui.page_until) > 0)
                 set_page(PG_BODY);                       /* nothing held, nothing open: the knobs are the body's */
-            if (ui.page == PG_LOOP && i < 3)
-                sy_loop_nudge((int)i, e > 0 ? 1 : -1);    /* the stepped step: note, length, velocity */
+            if (ui.page == PG_LOOP && i < 3) {           /* the chosen step (or the whole loop): note, length, velocity */
+                sy_loop_nudge((int)i, e > 0 ? 1 : -1);
+                ui.step_turned = 1;
+            }
             else
                 turn(EN_K1 + (int)i, PAGE_KNOB[ui.page][i], e);
             ui.touched = (int8_t)i;
@@ -626,6 +654,7 @@ void ui_init(void)
     ui.held_btn = -1;
     ui.last_up_btn = -1;
     ui.step_note = 60;
+    ui.step_held = -1;
     px_init();
     blob_init();
 }
