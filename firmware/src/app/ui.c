@@ -11,7 +11,9 @@
  *   LFO   VIBE       Rate  Depth  Shape  Destination
  *   FX    TEARS      Chorus  Delay  Time  Feedback
  *   SEL   WALLS      Reverb  Size  Fry  Tape
- *   SEQ   TAPE DECK  Style  Tempo  Swing  Human
+ *   SEQ   LOOP       the stepped step's Note  Length  Velocity, and the loop's Bars
+ *         held (or pressed twice): the 16 white keys are its steps, OCT- / OCT+ its bars
+ *   SEQ again: TAPE DECK  Style  Tempo  Swing  Human
  *   GLO   MIXER      Voice  Drums  Bass  Gunk (the room's texture: rain, crackle; louder when idle)
  *   GLO tap, then hold: SETUP  Glide  MIDI channel  MIDI out  Tune
  *   ARP   ARP        Mode  Rate  Octaves  Gate (a tap: the arpeggiator on / off; held: its page)
@@ -20,20 +22,23 @@
  *   envelope, LFO, effects; its card shows what it brought)   SELECT  the drum tape (style)
  *   A page button opens that part's schematic under the blob (the envelope's shape, the LFO's wave, the
  *   filter's curve...); HOME again, or a while untouched, hides it: the blob alone, bigger
- *   PLAY    the drums on / off       REC  hold (the keys stay down)          ARP  the arpeggiator
+ *   PLAY    the band on / off (drums, bass, the loop)
+ *   REC     record what you play into the loop: stopped, after a bar's count-in; playing, at once, on top
+ *           HOME + REC: undo the take    SAVE + REC: clear the loop
+ *   ARP     the arpeggiator
  *   OCT- / OCT+  the octave          SAVE  saves (held: back to the defaults?)
  *   The 27 keys play F3..G5. The lowest and the highest together: it gives up. */
 
-enum { PG_BODY, PG_EYES, PG_MOUTH, PG_VIBE, PG_TEARS, PG_WALLS, PG_DECK, PG_SETUP, PG_MIX, PG_ARP, NPAGES };
+enum { PG_BODY, PG_EYES, PG_MOUTH, PG_VIBE, PG_TEARS, PG_WALLS, PG_DECK, PG_SETUP, PG_MIX, PG_ARP, PG_LOOP, NPAGES };
 static const char *const PAGE_NAME[NPAGES] = {"BODY", "EYES", "MOUTH", "VIBE", "TEARS", "WALLS", "TAPE DECK", "SETUP",
-                                              "MIXER", "ARP"};
-static const uint8_t PAGE_BTN[NPAGES] = {B_HOME, B_EDIT, B_ENV, B_LFO, B_FX, B_SEL, B_SEQ, B_GLO, B_GLO, B_ARP};
+                                              "MIXER", "ARP", "LOOP"};
+static const uint8_t PAGE_BTN[NPAGES] = {B_HOME, B_EDIT, B_ENV, B_LFO, B_FX, B_SEL, B_SEQ, B_GLO, B_GLO, B_ARP, B_SEQ};
 /* the knobs' names, under their meters in the schematic */
 static const char *const PAGE_LABEL[NPAGES][4] = {
     {"WAVE", "POS", "DTUN", "SUB"}, {"CUT", "RES", "ENV", "MDEC"}, {"ATK", "DEC", "SUS", "REL"},
     {"RATE", "DPTH", "SHPE", "DEST"}, {"CHOR", "DLY", "TIME", "FDBK"}, {"VERB", "SIZE", "FRY", "TAPE"},
     {"STYL", "BPM", "SWNG", "HUMN"}, {"GLID", "CH", "OUT", "TUNE"}, {"VOX", "DRUM", "BASS", "GUNK"},
-    {"MODE", "RATE", "OCT", "GATE"}};
+    {"MODE", "RATE", "OCT", "GATE"}, {"NOTE", "LEN", "VEL", "BARS"}};
 #define STAY_MS 3000u                  /* a drawer stays this long after the last touch (a press, a turn) */
 #define DOUBLE_MS 350u                 /* a part's button pressed twice this fast: its page stays until HOME */
 #define TAP_MS 300u                    /* ARP let go sooner: a tap (on / off), not a look at its page */
@@ -49,6 +54,7 @@ static const uint8_t PAGE_KNOB[NPAGES][4] = {
     {P_GLIDE, P_MIDICH, P_MIDIOUT, P_TUNE},
     {P_SYNTH, P_DRUMS, P_BASS, P_GUNK},
     {P_ARPMODE, P_ARPRATE, P_ARPOCT, P_ARPGATE},
+    {K_NONE, K_NONE, K_NONE, P_LOOPBARS},            /* the loop: the stepped step's note, length, velocity */
 };
 #define SAVE_HOLD_MS 1500u
 #define RESET_ASK_MS 5000u
@@ -118,7 +124,9 @@ static struct {
     uint32_t last_up_t;
     uint32_t preset_t;                 /* when PRESETS last turned: its card shows a moment (0: never) */
     uint8_t key_note[NKEYS];           /* the note each key started (its note off) */
-    uint32_t latched;                  /* hold: keys let go while held, still sounding */
+    uint32_t stepped;                  /* keys pressed as the loop's steps (their preview to stop) */
+    uint8_t loop_bar, step_note;       /* the bar the steps show; the note a new step gets */
+    uint32_t loop_ver;
     uint32_t save_t, reset_ask;
     uint32_t last_draw;
 } ui;
@@ -143,6 +151,9 @@ static uint32_t xp_level(uint32_t xp)
         lv++;
     return lv;
 }
+
+/* the loop's steps: SEQ held, or its page staying (pressed twice) */
+static int step_mode(void) { return ui.page == PG_LOOP && ui.panel && (ui.held_btn == B_SEQ || ui.latch); }
 
 #include "px.c"
 #include "blob.c"
@@ -278,32 +289,46 @@ static void stop(int n)
     note_out(0, n, 0);
 }
 
+static int white_of(int k)
+{
+    static const uint8_t W[16] = {0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26};
+    int i;
+    for (i = 0; i < 16; i++)
+        if (W[i] == k)
+            return i;
+    return -1;
+}
+
 static void key_down(int k)
 {
     int n = KEY0_NOTE + k + 12 * proj.par[P_OCTAVE];
     n = n < 0 ? 0 : n > 127 ? 127 : n;
-    if (ui.latched >> k & 1u) {                          /* held already (hold): again */
-        stop(ui.key_note[k]);
-        ui.latched &= ~(1u << k);
+    if (step_mode()) {                                   /* a white key: that 1/16 step of the bar on show */
+        const int w = white_of(k);
+        if (w >= 0) {
+            sy_loop_step(ui.loop_bar * 16 + w, ui.step_note);
+            ui.focus_t = plat_ms();
+            if (!sy_tel.rec) {                           /* (a little preview of the note) */
+                sy_note_on(ui.step_note, 90);
+                ui.stepped |= 1u << k;
+            }
+        }
+        return;
     }
     ui.key_note[k] = (uint8_t)n;
+    ui.step_note = (uint8_t)n;                           /* (a new step gets the last note you played) */
     play(n, 100);
 }
 static void key_up(int k)
 {
-    if (ui.hold) {
-        ui.latched |= 1u << k;
+    if (ui.stepped >> k & 1u) {
+        ui.stepped &= ~(1u << k);
+        sy_note_off(ui.step_note);
         return;
     }
+    if (step_mode() && white_of(k) >= 0)
+        return;
     stop(ui.key_note[k]);
-}
-static void release_latched(void)
-{
-    int k;
-    for (k = 0; k < NKEYS; k++)
-        if ((ui.latched >> k & 1u) && !(ui.keys >> k & 1u))
-            stop(ui.key_note[k]);
-    ui.latched = 0;
 }
 
 /* ------------------------------------------------------------ buttons --- */
@@ -343,8 +368,12 @@ static void button(int b)
         const uint32_t now = plat_ms();
         const int dbl = b != B_ARP && b == ui.last_up_btn && now - ui.last_up_t < DOUBLE_MS;
         int pg = -1;
-        if (b == B_GLO)                                  /* the mixer; pressed again: the setup, and back */
-            pg = dbl ? ui.page : ui.panel && ui.page == PG_MIX ? PG_SETUP : PG_MIX;
+        /* GLO: the mixer, pressed again the setup; SEQ: the loop, pressed again the tape deck. "Again" is
+         * when it was the last page button too (REC opening the loop's drawer doesn't count) */
+        if (b == B_GLO)
+            pg = dbl ? ui.page : ui.panel && ui.page == PG_MIX && ui.last_up_btn == B_GLO ? PG_SETUP : PG_MIX;
+        if (b == B_SEQ)
+            pg = dbl ? ui.page : ui.panel && ui.page == PG_LOOP && ui.last_up_btn == B_SEQ ? PG_DECK : PG_LOOP;
         for (i = 0; pg < 0 && i < NPAGES; i++)
             if (PAGE_BTN[i] == b)
                 pg = i;
@@ -365,13 +394,33 @@ static void button(int b)
         ui_caption(sy_tel.drums_on ? "STOP." : sy_style_name(proj.par[P_STYLE]), 1200u);
         break;
     case B_REC:
-        ui.hold = !ui.hold;
-        if (!ui.hold)
-            release_latched();
-        ui_caption(ui.hold ? "HOLDING ON." : "LET GO.", 1200u);
+        if (ui.btn >> B_HOME & 1u) {                     /* HOME + REC: the take undone */
+            sy_loop_undo();
+            ui_caption("UNDONE.", 1000u);
+        } else if (ui.btn >> B_SAVE & 1u) {              /* SAVE + REC: the loop gone (and no save) */
+            ui.btn_used |= 1u << B_SAVE;
+            sy_loop_clear();
+            ui_caption("LOOP: GONE.", 1200u);
+        } else if (sy_tel.rec) {
+            sy_rec(0);
+            ui_caption("GOT IT.", 1000u);
+        } else {
+            sy_rec(1);
+            ui_caption(sy_tel.drums_on ? "REC." : "READY...", 1200u);
+            if (!ui.latch) {                             /* the loop's drawer: the count-in, the take going in */
+                set_page(PG_LOOP);
+                ui.page_until = plat_ms() + (sy_tel.drums_on ? STAY_MS : STAY_MS + 3000u);
+            }
+        }
         break;
     case B_OCTDN:
     case B_OCTUP:
+        if (step_mode()) {                               /* the steps: the next bar, or the one before */
+            const int bars = proj.par[P_LOOPBARS] == 2 ? 4 : proj.par[P_LOOPBARS] + 1;
+            ui.loop_bar = (uint8_t)((ui.loop_bar + (b == B_OCTUP ? 1 : bars - 1)) % bars);
+            ui.focus_t = plat_ms();
+            break;
+        }
         knob_set(P_OCTAVE, proj.par[P_OCTAVE] + (b == B_OCTUP ? 1 : -1));
         ui_caption(b == B_OCTUP ? "UP. WHY." : "DOWN.", 900u);
         break;
@@ -529,7 +578,10 @@ static void input(void)
         if ((e = plat_enc(EN_K1 + (int)i)) != 0) {
             if (ui.held_btn < 0 && !ui.latch && (int32_t)(plat_ms() - ui.page_until) > 0)
                 set_page(PG_BODY);                       /* nothing held, nothing open: the knobs are the body's */
-            turn(EN_K1 + (int)i, PAGE_KNOB[ui.page][i], e);
+            if (ui.page == PG_LOOP && i < 3)
+                sy_loop_nudge((int)i, e > 0 ? 1 : -1);    /* the stepped step: note, length, velocity */
+            else
+                turn(EN_K1 + (int)i, PAGE_KNOB[ui.page][i], e);
             ui.touched = (int8_t)i;
             ui.panel = 1;
             if (ui.held_btn < 0)
@@ -545,11 +597,11 @@ static void leds(void)
     uint32_t b = 1u << PAGE_BTN[ui.page];
     if (sy_tel.drums_on && sy_tel.step % (sy_tel.steps / 4u ? sy_tel.steps / 4u : 4u) != 0u)
         b |= 1u << B_PLAY;                               /* lit, dark on each beat */
-    if (ui.hold)
-        b |= 1u << B_REC;
+    if (sy_tel.rec == 2 || (sy_tel.rec == 1 && (plat_ms() / 125u) & 1u))
+        b |= 1u << B_REC;                                /* recording: lit; counting in: blinking */
     if (ui.arp)
         b |= 1u << B_ARP;
-    plat_leds(b, ui.keys | ui.latched, 0u);
+    plat_leds(b, ui.keys, 0u);
 }
 
 /* AUTOSAVE: a few seconds after a change, when it is quiet (a flash erase silences the audio a moment) */
@@ -573,6 +625,7 @@ void ui_init(void)
     ui.panel = 0;
     ui.held_btn = -1;
     ui.last_up_btn = -1;
+    ui.step_note = 60;
     px_init();
     blob_init();
 }
@@ -580,6 +633,11 @@ void ui_init(void)
 void ui_frame(void)
 {
     input();
+    if (sy_tel.loop_ver != ui.loop_ver) {                /* the loop changed: it wants saving */
+        ui.loop_ver = sy_tel.loop_ver;
+        if (plat_ms() > 1500u)
+            mark_dirty();
+    }
     autosave();
     if (ui.panel && ui.held_btn < 0 && !ui.latch && (int32_t)(plat_ms() - ui.page_until) > 0) {
         ui.panel = 0;                                    /* nothing held, nothing turned: the blob alone */

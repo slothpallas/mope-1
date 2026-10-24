@@ -78,7 +78,8 @@ Press or hold a part's button: its schematic opens in a dark glass drawer over t
 | LFO | Vibe | Rate | Depth | Shape (sway, bob, bounce, nod, twitch) | Destination (shape, eyes, voice, volume) |
 | FX | Tears | Chorus | Delay | Time | Feedback |
 | SEL | Walls | Reverb | Size | Fry | Tape |
-| SEQ | Tape deck | Style | Tempo | Swing | Human (looser timing and velocity) |
+| SEQ | Loop | Note | Length | Velocity (of the step you last set) | Bars (1, 2, 4) |
+| SEQ again | Tape deck | Style | Tempo | Swing | Human (looser timing and velocity) |
 | GLO | Mixer | Voice | Drums | Bass (0: no bass) | Gunk |
 | GLO again | Setup | Glide | MIDI channel | MIDI out | Tune |
 | ARP | Arp | Mode (up, down, up and down, wander, stab) | Rate (1/4 .. 1/32, triplets) | Octaves (1-3) | Gate |
@@ -87,7 +88,18 @@ Press or hold a part's button: its schematic opens in a dark glass drawer over t
 - **PRESETS** loads a whole saved sound at once: wave, filter, envelope, LFO and effects. Its card opens in the drawer: the name, which of the eight it is, and thumbnails of the wave, filter and envelope it brought.
 - **SELECT**: the drum tape (the blob swaps the cassette and shrugs).
 - **Close-ups:** while you hold EDIT (Eyes) the view moves in on its eyes; while you hold ENV (Mouth), on its mouth.
-- **PLAY**: drums on and off. **ARP**: tap for the arpeggiator on or off; hold for its page: the keys you hold become its pattern, at the tempo, starting each bar with the drums. **REC**: hold (the keys stay down, so the arpeggiator keeps going).
+- **PLAY**: the band on and off: drums, bass and your loop. **ARP**: tap for the arpeggiator on or off; hold for its page: the keys you hold become its pattern, at the tempo, starting each bar with the drums.
+
+### Recording a loop
+
+As on X0X, Melodee and JIANT FM: **PLAY**, **REC** and **SEQ** do what they say.
+
+- **REC while stopped**: a one-bar count-in (four red lights, a click on each beat), then the band starts and what you play is recorded into the loop (1, 2 or 4 bars; the Loop page's Bars). Notes snap to the 1/16 grid; the tape deck's Human puts some looseness back. The arpeggiator's notes are recorded too.
+- **REC while playing**: it records at once, on top of what's there (overdub). **REC** again stops recording; the loop keeps playing with the band.
+- **HOME + REC** undoes the last take. **SAVE + REC** clears the loop.
+- **Hold SEQ** (or press it twice to keep it): the loop as a piano roll, and the **16 white keys are the steps** of one bar: a key puts the last note you played on that step, or takes the notes there away. **OCT− / OCT+** go to the other bars. The knobs set the step's note, length and velocity.
+- The loop is saved with your sound (up to 192 notes).
+- REC used to be "hold"; that's gone.
 - **OCT− / OCT+**: octave. The 27 keys play F3 to G5.
 - **SAVE**: saves (it also saves by itself when quiet). Hold for 1.5 s, then press SAVE again, to reset everything. The blob keeps its level.
 - The lowest and highest keys together: it gives up.

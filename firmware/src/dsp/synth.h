@@ -38,6 +38,7 @@ enum {
     P_TUNE, P_VOLUME,
     P_SYNTH, P_GUNK, P_SWING, P_HUMAN,               /* MIX: the voices' level, the texture; DECK: feel */
     P_ARPMODE, P_ARPRATE, P_ARPOCT, P_ARPGATE,       /* ARP */
+    P_LOOPBARS,                                      /* LOOP: 1, 2 or 4 bars */
     P_NPARAMS
 };
 typedef struct {
@@ -78,7 +79,25 @@ void sy_bend(int v);                                /* -8192..8191: +-2 semitone
 void sy_mod(int v);                                 /* mod wheel 0..127: adds to position */
 void sy_drums(int on);                              /* the tape deck: play / stop (starts on a bar) */
 void sy_arp(int on);                                /* the arpeggiator: held notes become its pattern */
-int sy_arp_held(uint8_t *out, int max);             /* the notes it is cycling, low to high (for the screen) */
+int sy_arp_held(uint8_t *out, int max);
+
+/* ---- the loop: what you play, recorded against the drums' clock, played back with them. 192 ticks a
+ * bar (a 1/16 is 12); 1, 2 or 4 bars (P_LOOPBARS). REC while stopped: a bar's count-in, then it records;
+ * while playing: it records at once, on top (overdub). Notes snap to the 1/16 grid. */
+#define SY_TPB 192                                  /* ticks a bar */
+#define SY_LOOP_MAX 192                             /* notes in the loop */
+typedef struct {
+    uint16_t t;                                     /* where it starts, ticks from the loop's start */
+    uint8_t note, vel, len, flags;                  /* len: ticks (up to 255), flags: the engine's */
+} sy_ev_t;
+void sy_rec(int on);                                /* record on / off (off and stopped: a count-in, then on) */
+void sy_loop_undo(void);                            /* the loop as it was before this take */
+void sy_loop_clear(void);
+void sy_loop_step(int step, int note);              /* a 1/16 step: a note there, or none (toggles) */
+void sy_loop_nudge(int field, int delta);           /* the last stepped step's notes: 0 note, 1 length, 2 velocity */
+void sy_loop_load(const sy_ev_t *ev, int n);        /* from a saved project (ev stays valid until drained) */
+int sy_loop_copy(sy_ev_t *dst, int max);            /* into a project, to save */
+const sy_ev_t *sy_loop_events(int *n);              /* for the screen: read-only, may change under you */             /* the notes it is cycling, low to high (for the screen) */
 int sy_arp_note(int held_n, int seq);               /* the note it plays at step seq over held_n notes (-1: a rest; STAB: the lowest) */
 void sy_panic(void);
 
@@ -117,5 +136,12 @@ typedef struct {
     uint8_t arp_on;
     uint32_t arp_seq;             /* steps the arpeggiator has played */
     int16_t arp_note;             /* sounding now, -1 none */
+    uint8_t rec;                  /* the loop: 0 not recording, 1 counting in, 2 recording */
+    uint8_t count;                /* the count-in's beat, 0..3 */
+    uint16_t loop_pos;            /* the loop's playhead, ticks */
+    uint16_t loop_ticks;          /* its length, ticks */
+    uint16_t loop_n;              /* notes in it */
+    int16_t loop_sel;             /* the last stepped step (1/16s), -1 none */
+    uint32_t loop_ver;            /* changes whenever the loop does (to save it) */
 } sy_tel_t;
 extern volatile sy_tel_t sy_tel;

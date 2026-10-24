@@ -100,7 +100,7 @@ static const uint8_t GLASS[PC_N] = {
     [PC_COOLW] = PC_BG0, [PC_WARMW] = PC_BG0, [PC_WARMW2] = PC_BG1,
 };
 
-static int tape_up(void) { return sy_tel.drums_on || ui.page == PG_DECK || bs.tape_anim > 0.0f; }
+static int tape_up(void) { return sy_tel.drums_on || sy_tel.rec || ui.page == PG_DECK || ui.page == PG_LOOP || bs.tape_anim > 0.0f; }
 
 static void blob_init(void)
 {
@@ -726,7 +726,7 @@ static void draw_cassette(const geo_t *g)
         }
     /* the label: off-white paper, a red stripe, the name rolling past */
     px_rect(x + 3, y + 2, 28, 7, PC_EYE);
-    px_rect(x + 3, y + 8, 28, 1, on ? PC_RED : PC_DIM);
+    px_rect(x + 3, y + 8, 28, 1, sy_tel.rec ? PC_RED : on ? PC_TEAR : PC_DIM);
     {
         const int32_t len = px_text_w(name), win = 26;
         const int32_t off = len > win ? ((int32_t)(bs.t * 9.0f) % (len + 14)) - 7 : -(win - len) / 2;
@@ -755,6 +755,13 @@ static void draw_cassette(const geo_t *g)
             px_pset((int32_t)(hx - 1.6f * fm_cosf(a * FM_TWO_PI) + 0.5f), (int32_t)(hy - 1.6f * fm_sin_turns(a) + 0.5f), PC_EYE);
         }
         px_rect(x + 6, y + 10, 22, 1, PC_SMOKE2);           /* the window's top edge, a glint */
+    }
+    if (sy_tel.rec == 2 && ((int)(bs.t * 3.0f) & 1))       /* recording: a red light on the shell */
+        px_rect(x + 29, y + 11, 3, 3, PC_RED);
+    if (sy_tel.rec == 1) {                                   /* counting in: four lights, one a beat */
+        int k;
+        for (k = 0; k < 4; k++)
+            px_rect(x + 8 + k * 5, y + 4, 3, 3, k <= sy_tel.count ? PC_RED : PC_DIM);
     }
     px_pset(x + 2, y + 16, PC_SMOKE2);                      /* screws */
     px_pset(x + 31, y + 16, PC_SMOKE2);
@@ -1199,6 +1206,60 @@ static void schem_arp(const drawer_t *p)
     }
 }
 
+/* the loop: every note as a bar along the loop, low notes down, high up; the playhead (red while it
+ * records); with its steps out (SEQ held, or its page staying), the bar on show and its 16 steps */
+static void schem_loop(const drawer_t *p)
+{
+    int n, i, lo = 127, hi = 0;
+    const sy_ev_t *ev = sy_loop_events(&n);
+    const int lt = sy_tel.loop_ticks ? sy_tel.loop_ticks : SY_TPB, w = p->gx1 - p->gx0;
+    const int steps = step_mode(), bar = ui.loop_bar, bars = lt / SY_TPB;
+    for (i = 0; i < n; i++) {
+        lo = ev[i].note < lo ? ev[i].note : lo;
+        hi = ev[i].note > hi ? ev[i].note : hi;
+    }
+    if (hi - lo < 12) {
+        lo = (lo + hi) / 2 - 6;
+        hi = lo + 12;
+    }
+    for (i = 1; i < bars; i++)                           /* the bars' seams */
+        px_rect(p->gx0 + i * w / bars, p->gy0, 1, p->gy1 - p->gy0, PC_GRID);
+    if (steps) {                                         /* the bar the white keys are, and its steps */
+        const int32_t bx = p->gx0 + bar * w / bars, bw = w / bars;
+        int k;
+        for (k = 0; k < 16; k++) {
+            const int32_t sx = bx + k * bw / 16;
+            const int sel = sy_tel.loop_sel == bar * 16 + k;
+            px_rect(sx, p->gy1 + 1, bw / 16 > 1 ? bw / 16 - 1 : 1, 1, sel ? PC_SPEC : k % 4 ? PC_WALL : PC_BLOB0);
+        }
+        px_rect(bx, p->gy0, 1, p->gy1 - p->gy0, PC_TEAR);
+        px_rect(bx + bw - 1, p->gy0, 1, p->gy1 - p->gy0, PC_TEAR);
+    }
+    for (i = 0; i < n; i++) {
+        const sy_ev_t *e = &ev[i];
+        const int32_t x = p->gx0 + (int32_t)e->t * w / lt;
+        const int32_t len = e->len ? (int32_t)e->len * w / lt : 2;
+        const int32_t y = gy_of(p, 0.08f + 0.84f * (float)(e->note - lo) / (float)(hi - lo));
+        const int sel = sy_tel.loop_sel >= 0 && e->t / 12 == (uint16_t)sy_tel.loop_sel;
+        if ((int)e->t >= lt)
+            continue;
+        px_rect(x, y - 1, len > 1 ? len : 2, 2, sel ? PC_SPEC : (e->flags & 1u) ? PC_BLOB3 : PC_BLOB2);
+    }
+    if (sy_tel.drums_on) {                               /* the playhead */
+        const int32_t x = p->gx0 + (int32_t)sy_tel.loop_pos * w / lt;
+        int32_t y;
+        for (y = p->gy0; y < p->gy1; y += sy_tel.rec == 2 ? 1 : 2)
+            px_pset(x, y, sy_tel.rec == 2 ? PC_RED : PC_SPEC);
+    }
+    if (sy_tel.rec == 1) {                               /* counting in: four lights, one a beat */
+        int k;
+        for (k = 0; k < 4; k++)
+            px_rect((p->gx0 + p->gx1) / 2 - 10 + k * 6, (p->gy0 + p->gy1) / 2 - 1, 4, 4, k <= sy_tel.count ? PC_RED : PC_DIM);
+    } else if (!n) {
+        px_text(p->gx0 + 2, p->gy0 + 6, "REC: PLAY IT IN", PC_DIM);
+    }
+}
+
 static void schem_setup(const drawer_t *p)               /* the glide: a note sliding to the next */
 {
     const float gl = pn(P_GLIDE);
@@ -1294,6 +1355,7 @@ static void draw_panel(const geo_t *g)
         case PG_VIBE: what = LFO_SHAPE_NAME[proj.par[P_LFOSHAPE]]; break;
         case PG_DECK: what = sy_style_name(proj.par[P_STYLE]); break;
         case PG_ARP: what = ARP_RATE_NAME[proj.par[P_ARPRATE]]; break;
+        case PG_LOOP: what = sy_tel.rec == 2 ? "REC" : sy_tel.rec == 1 ? "READY" : step_mode() ? "STEPS" : 0; break;
         default: break;
         }
         if (what) {
@@ -1323,6 +1385,7 @@ static void draw_panel(const geo_t *g)
     case PG_DECK: schem_deck(&p); break;
     case PG_MIX: schem_mix(&p); break;
     case PG_ARP: schem_arp(&p); break;
+    case PG_LOOP: schem_loop(&p); break;
     default: schem_setup(&p); break;
     }
     /* the knobs: a name over a meter, the one being turned lit up */
@@ -1333,6 +1396,19 @@ static void draw_panel(const geo_t *g)
         const sy_param_t *sp;
         float v;
         int32_t w;
+        if (k == K_NONE && ui.page == PG_LOOP) {         /* the stepped step: its note, length, velocity */
+            int n, j;
+            const sy_ev_t *ev = sy_loop_events(&n);
+            float lv = 0.0f;
+            for (j = 0; j < n; j++)
+                if (sy_tel.loop_sel >= 0 && ev[j].t / 12 == (uint16_t)sy_tel.loop_sel)
+                    lv = i == 0 ? (float)ev[j].note / 127.0f : i == 1 ? (float)ev[j].len / 96.0f : (float)ev[j].vel / 127.0f;
+            px_text(x, y, PAGE_LABEL[ui.page][i], hot ? PC_WHITE : sy_tel.loop_sel >= 0 ? PC_DIM : PC_GRID);
+            px_rect(x, y + 8, 26, 2, PC_GRID);
+            w = (int32_t)(fm_clampf(lv, 0.0f, 1.0f) * 26.0f + 0.5f);
+            px_rect(x, y + 8, w, 2, hot ? PC_SPEC : PC_TEAR);
+            continue;
+        }
         if (k == K_NONE)
             continue;
         sp = sy_param_info(k);

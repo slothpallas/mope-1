@@ -22,7 +22,7 @@
  *   leds                         print the lit buttons and keys
  *   expect WHAT VALUE            check state: exit 1 on mismatch; VALUE "<N" / ">N" is a bound
  *                                (WHAT: page dirty store_writes midi_out voices gates drums style steals
- *                                 dropped hold arp arpseq xp parN (parameter N, synth.h P_*) kicks hats
+ *                                 dropped rec loopn arp arpseq latch xp parN (parameter N, synth.h P_*) kicks hats
  *                                 lumaY (brightness 0..255 of the screen at x 2, row Y)
  *                                 pixRGB X Y (not here: see shot) peak_db_max peak_db_min)
  *   reboot                       re-run boot from the simulated flash (persistence test)
@@ -375,8 +375,10 @@ static int expect(const char *what, const char *val)
         got = (int)sy_tel.hat_n;
     else if (!strcmp(what, "dropped"))
         got = (int)sy_tel.dropped;
-    else if (!strcmp(what, "hold"))
-        got = ui.hold;
+    else if (!strcmp(what, "rec"))                /* the loop: 0 off, 1 counting in, 2 recording */
+        got = sy_tel.rec;
+    else if (!strcmp(what, "loopn"))              /* notes in the loop */
+        got = sy_tel.loop_n;
     else if (!strcmp(what, "arp"))                /* the arpeggiator: 3 = the UI and the engine agree it is on */
         got = ui.arp + 2 * sy_tel.arp_on;
     else if (!strcmp(what, "arpseq"))

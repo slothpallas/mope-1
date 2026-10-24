@@ -18,13 +18,19 @@ void project_defaults(void)
 static int project_valid(int bytes)
 {
     int i, have = (bytes - 8) / 2;               /* the values the saved project holds */
-    if (proj.magic == PROJ_MAGIC && proj.format == 1u && bytes >= 8 + 2 * (P_VOLUME + 1) + 4) {
-        uint32_t xp;                                 /* format 1: its XP sat right after its fewer values */
-        memcpy(&xp, (const uint8_t *)&proj + 8 + 2 * (P_VOLUME + 1), 4);
+    if (proj.magic == PROJ_MAGIC && proj.format >= 1u && proj.format < PROJ_FORMAT) {
+        /* an older format: its XP sat right after its fewer values (4-aligned), and it had no loop */
+        const int at = (8 + 2 * PROJ_NPAR_OF(proj.format) + 3) & ~3;
+        uint32_t xp = 0;
+        if (bytes >= at + 4)
+            memcpy(&xp, (const uint8_t *)&proj + at, 4);
+        memset((uint8_t *)&proj + at, 0, sizeof proj - (uint32_t)at);
         proj.xp = xp;
-    } else if (bytes < (int)sizeof proj) {           /* (an older, shorter one: no XP yet) */
-        proj.xp = 0;
+    } else if (bytes < (int)sizeof proj) {           /* (shorter than this one: no loop) */
+        proj.loop_n = 0;
     }
+    if (proj.loop_n > SY_LOOP_MAX)
+        proj.loop_n = 0;
     if (proj.magic != PROJ_MAGIC || proj.format < 1u || proj.format > PROJ_FORMAT)
         return 0;
     if (have > PROJ_NPAR_OF(proj.format))        /* (its spare bytes, zeros, are not settings) */
@@ -49,11 +55,16 @@ int project_load(void)
     return -1;
 }
 
-int project_save(void) { return plat_store_save(OBJ_PROJ, &proj, sizeof proj); }
+int project_save(void)
+{
+    proj.loop_n = (uint16_t)sy_loop_copy(proj.loop, SY_LOOP_MAX);   /* the loop as it is now */
+    return plat_store_save(OBJ_PROJ, &proj, sizeof proj);
+}
 
 void project_apply(void)
 {
     int i;
     for (i = 0; i < P_NPARAMS; i++)
         sy_set(i, proj.par[i]);
+    sy_loop_load(proj.loop, proj.loop_n);
 }

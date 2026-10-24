@@ -55,6 +55,10 @@ MOPE-1 forks FiMba-1 and replaces the kalimba with a different instrument. FiMba
 - **Seen from above:** the camera looks down into the room, as from a table; a darker room lifts the
   blob. Drawers stay 3 s after the last touch; a part's button pressed twice keeps its page until
   HOME. **21 presets** in six kinds (pad, keys, pluck, lead, bass, FX).
+- **A loop recorder**, the way other FM-1 firmwares do it: PLAY runs the band, REC records what you
+  play into a 1, 2 or 4-bar loop (a bar's count-in when stopped, overdub while playing, notes on the
+  1/16 grid), HOME + REC undoes, SAVE + REC clears. Holding SEQ shows the loop as a piano roll with
+  the white keys as its 16 steps. The loop is saved with your sound.
 - **Clearer cues:** chorus copies are see-through copies of the blob peeking from behind it; the
   voices are six lights over its head; the Eyes and Mouth pages zoom in on the eyes and the mouth;
   the cassette sits in the top-left corner.

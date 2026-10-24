@@ -328,6 +328,71 @@ int main(int argc, char **argv)
         CHECK(sy_tel.busy < 1e-4f, "...and it doesn't count as playing (%.5f)", (double)sy_tel.busy);
         sy_set(P_GUNK, 0);
     }
+    printf("loop\n");
+    {
+        /* 120 bpm, one bar: 2 s, a 1/16 every 125 ms (12 ticks). REC while stopped: a bar's count-in. */
+        const sy_ev_t *ev;
+        int k, n, on_grid = 1, played = 0;
+        for (k = 0; k < P_NPARAMS; k++)
+            sy_set(k, sy_param_info(k)->def);
+        sy_set(P_GUNK, 0);
+        sy_set(P_TEMPO, 120);
+        sy_set(P_LOOPBARS, 0);
+        sy_set(P_STYLE, ST_OFFICE);
+        sy_rec(1);
+        run(500);
+        CHECK(sy_tel.rec == 1 && !sy_tel.drums_on, "REC while stopped: counting in, the band waits");
+        run(1600);                                       /* (the count-in is 2 s) */
+        CHECK(sy_tel.rec == 2 && sy_tel.drums_on, "after a bar: recording, the band plays");
+        for (k = 0; k < 3; k++) {                        /* three notes, a little off the grid */
+            run(260 + k * 7);
+            sy_note_on(60 + 3 * k, 100);
+            run(140);
+            sy_note_off(60 + 3 * k);
+        }
+        run(300);
+        sy_rec(0);
+        run(20);
+        ev = sy_loop_events(&n);
+        for (k = 0; k < n; k++)
+            on_grid &= ev[k].t % 12 == 0 && ev[k].len > 0;
+        CHECK(n == 3 && on_grid && sy_tel.rec == 0, "three notes in the loop, on the 1/16 grid (%d)", n);
+        for (k = 0; k < 400; k++) {                      /* the next pass plays them */
+            int32_t b[512];
+            sy_render(b, 256, 4096);
+            played |= sy_tel.gates > 0;
+        }
+        CHECK(played, "the loop plays them back");
+        sy_rec(1);                                       /* playing: records at once, on top */
+        run(30);
+        CHECK(sy_tel.rec == 2, "REC while playing: at once");
+        sy_note_on(72, 90);
+        run(100);
+        sy_note_off(72);
+        sy_rec(0);
+        run(20);
+        sy_loop_events(&n);
+        CHECK(n == 4, "overdub: a fourth (%d)", n);
+        sy_loop_undo();
+        run(20);
+        sy_loop_events(&n);
+        CHECK(n == 3, "undo: the take is gone, the three stay (%d)", n);
+        sy_loop_step(15, 48);                            /* step 16: a note */
+        run(20);
+        sy_loop_events(&n);
+        CHECK(n == 4 && sy_tel.loop_sel == 15, "a step toggled on (%d)", n);
+        sy_loop_step(15, 48);
+        run(20);
+        sy_loop_events(&n);
+        CHECK(n == 3, "...and off again (%d)", n);
+        sy_drums(0);
+        run(300);
+        CHECK(sy_tel.gates == 0, "stopped: nothing hangs");
+        sy_loop_clear();
+        run(20);
+        sy_loop_events(&n);
+        CHECK(n == 0, "cleared");
+    }
     CHECK(sy_tel.dropped == 0u, "no command lost");
     printf(fails ? "SYNTH TESTS FAILED (%d)\n" : "synth: all passed\n", fails);
     return fails != 0;

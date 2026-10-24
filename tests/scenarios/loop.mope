@@ -1,0 +1,53 @@
+# The loop: REC while stopped counts in a bar, then records; notes play back with the drums; SEQ held
+# shows the loop and makes the white keys its steps; HOME + REC undoes, SAVE + REC clears; it is saved.
+wait 300
+expect loopn 0
+tap REC
+wait 200
+expect rec 1
+expect drums 0
+shot 00_count_in.png
+# (Funeral bossa, 84 bpm: a bar is 2.9 s)
+wait 2800
+expect rec 2
+expect drums 1
+tapkey 12
+wait 250
+tapkey 15
+wait 250
+tapkey 19
+wait 400
+shot 01_recording.png
+tap REC
+expect rec 0
+expect loopn 3
+wait 1500
+# its steps, while SEQ is held: the first white key puts a note on step one
+press SEQ
+wait 300
+expect page 10
+shot 02_steps.png
+tapkey w0
+expect loopn 4
+turn K1 3
+wait 200
+shot 03_step_edited.png
+release SEQ
+# the take undone (HOME + REC), then saved and back after a restart
+press HOME
+tap REC
+release HOME
+expect loopn 3
+tap PLAY
+wait 600
+tap SAVE
+wait 200
+reboot
+wait 300
+expect loopn 3
+# cleared (SAVE + REC)
+press SAVE
+tap REC
+release SAVE
+expect loopn 0
+expect dropped 0

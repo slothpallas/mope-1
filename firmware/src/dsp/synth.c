@@ -25,7 +25,7 @@ static const sy_param_t PARAMS[P_NPARAMS] = {
     {"Tune", -100, 100, 0}, {"Volume", 0, 100, 80},
     {"Voice", 0, 100, 80}, {"Gunk", 0, 100, 30}, {"Swing", 0, 100, 0}, {"Human", 0, 100, 15},
     {"Arp mode", 0, ARP_NMODE - 1, ARP_UP}, {"Arp rate", 0, ARP_NRATE - 1, 3}, {"Arp oct", 1, 3, 1},
-    {"Arp gate", 5, 100, 55},
+    {"Arp gate", 5, 100, 55}, {"Loop bars", 0, 2, 1},
 };
 const sy_param_t *sy_param_info(int i) { return &PARAMS[i < 0 ? 0 : i >= P_NPARAMS ? P_NPARAMS - 1 : i]; }
 
@@ -34,7 +34,7 @@ const char *const SY_TABLE_NAME[SY_NTABLE] = {"SIGH", "MOAN", "PULSE", "CRUSH", 
 volatile sy_tel_t sy_tel;
 
 /* ----------------------------------------------------------- commands --- */
-enum { C_SET, C_ON, C_OFF, C_BEND, C_MOD, C_DRUMS, C_ARP, C_PANIC };
+enum { C_SET, C_ON, C_OFF, C_BEND, C_MOD, C_DRUMS, C_ARP, C_PANIC, C_REC, C_LUNDO, C_LCLEAR, C_LSTEP, C_LNUDGE, C_LLOAD };
 typedef struct {
     uint8_t c;
     int16_t a, b;
@@ -63,6 +63,17 @@ void sy_bend(int v) { post(C_BEND, clampi(v, -8192, 8191), 0); }
 void sy_mod(int v) { post(C_MOD, clampi(v, 0, 127), 0); }
 void sy_drums(int on) { post(C_DRUMS, on, 0); }
 void sy_arp(int on) { post(C_ARP, on, 0); }
+void sy_rec(int on) { post(C_REC, on, 0); }
+void sy_loop_undo(void) { post(C_LUNDO, 0, 0); }
+void sy_loop_clear(void) { post(C_LCLEAR, 0, 0); }
+void sy_loop_step(int step, int note) { post(C_LSTEP, step, clampi(note, 0, 127)); }
+void sy_loop_nudge(int field, int delta) { post(C_LNUDGE, field, delta); }
+static const sy_ev_t *load_src;
+void sy_loop_load(const sy_ev_t *ev, int n)
+{
+    load_src = ev;
+    post(C_LLOAD, clampi(n, 0, SY_LOOP_MAX), 0);
+}
 void sy_panic(void) { post(C_PANIC, 0, 0); }
 
 static int16_t par[P_NPARAMS];
@@ -322,6 +333,9 @@ static void note_off(int note)
         }
 }
 
+static void rec_on(int note, int vel);                 /* (the loop records these: below) */
+static void rec_off(int note);
+
 /* ---------------------------------------------------------- arpeggiator --- */
 /* While it is on, held notes don't sound: they become its pattern, low to high, over 1-3 octaves, and it
  * plays them one at a time at the tempo (or all at once, STAB), each for Gate of a step. With the drums
@@ -400,13 +414,17 @@ static void arp_release(void)
 {
     int i;
     if (arp_cur == -2) {
-        for (i = 0; i < arp_nh; i++)
+        for (i = 0; i < arp_nh; i++) {
             note_off(arp_held[i]);
+            rec_off(arp_held[i]);
+        }
     } else if (arp_cur >= 0) {
         note_off(arp_cur);
+        rec_off(arp_cur);
     }
     arp_cur = -1;
     sy_tel.arp_note = -1;
+    sy_tel.loop_sel = -1;
 }
 static void arp_tick(void)                             /* one sample */
 {
@@ -429,13 +447,16 @@ static void arp_tick(void)                             /* one sample */
         if (arp_cur != -1)
             arp_release();
         if (par[P_ARPMODE] == ARP_STAB) {
-            for (i = 0; i < arp_nh; i++)
+            for (i = 0; i < arp_nh; i++) {
                 note_on(arp_held[i], arp_vel);
+                rec_on(arp_held[i], arp_vel);
+            }
             arp_cur = -2;
             sy_tel.arp_note = arp_held[0];
         } else {
             const int n = sy_arp_note(arp_nh, (int)arp_seq);
             note_on(n > 127 ? 127 : n, arp_seq % (uint32_t)(arp_nh * par[P_ARPOCT]) == 0u ? 110 : arp_vel);
+            rec_on(n > 127 ? 127 : n, arp_vel);
             arp_cur = (int16_t)(n > 127 ? 127 : n);
             sy_tel.arp_note = arp_cur;
         }
@@ -1355,6 +1376,275 @@ static void drums_tick(void)                           /* one sample of the sequ
     }
 }
 
+/* --------------------------------------------------------------- loop --- */
+/* It runs on the drums' clock (the same bars, swing aside), so what you record lines up with them. */
+#define EV_PLAYING 1u                                   /* sounding now (its note off still to come) */
+#define EV_FRESH 2u                                     /* just recorded ahead of the playhead: not this pass */
+#define EV_HELD 4u                                      /* being recorded: its key still down */
+static sy_ev_t loop_ev[SY_LOOP_MAX], loop_undo_ev[SY_LOOP_MAX];
+static int loop_n, loop_undo_n, loop_last = -1, loop_sel = -1;
+static uint8_t rec_state, cnt_on;
+static float cnt_t, click_env, click_ph;
+static int loop_ticks(void) { static const int B[3] = {1, 2, 4}; return B[par[P_LOOPBARS]] * SY_TPB; }
+static void loop_changed(void)
+{
+    sy_tel.loop_n = (uint16_t)loop_n;
+    sy_tel.loop_ver++;
+}
+static float loop_now(void)                             /* the playhead, ticks (fractional) */
+{
+    const float tps = (float)SY_TPB / (float)STYLES[dr_style].steps;
+    if (dr_len <= 0.0f)                                 /* (before the drums' first sample) */
+        return 0.0f;
+    {
+    const float inbar = ((float)dr_step + fm_clampf(dr_t / dr_len, 0.0f, 1.0f)) * tps;
+    return (float)((int)(dr_bar % (uint32_t)(loop_ticks() / SY_TPB)) * SY_TPB) + inbar;
+    }
+}
+static void loop_snapshot(void)
+{
+    int i;
+    for (i = 0; i < loop_n; i++)
+        loop_undo_ev[i] = loop_ev[i];
+    loop_undo_n = loop_n;
+}
+static void loop_all_off(void)                          /* everything the loop is sounding, off */
+{
+    int i;
+    for (i = 0; i < loop_n; i++)
+        if (loop_ev[i].flags & EV_PLAYING) {
+            note_off(loop_ev[i].note);
+            loop_ev[i].flags &= (uint8_t)~EV_PLAYING;
+        }
+}
+static void loop_remove(int i)
+{
+    if (loop_ev[i].flags & EV_PLAYING)
+        note_off(loop_ev[i].note);
+    loop_ev[i] = loop_ev[--loop_n];
+}
+static void rec_on(int note, int vel)                   /* a note played while recording: into the loop */
+{
+    const int lt = loop_ticks();
+    float now;
+    int q, ahead;
+    if (rec_state != 2 || !dr_on || loop_n >= SY_LOOP_MAX)
+        return;
+    now = loop_now();
+    q = ((int)(now / 12.0f + 0.5f) * 12) % lt;          /* to the nearest 1/16 */
+    ahead = (float)q > now || now - (float)q > (float)lt * 0.5f;
+    loop_ev[loop_n].t = (uint16_t)q;
+    loop_ev[loop_n].note = (uint8_t)note;
+    loop_ev[loop_n].vel = (uint8_t)vel;
+    loop_ev[loop_n].len = 0;
+    loop_ev[loop_n].flags = (uint8_t)(EV_HELD | (ahead ? EV_FRESH : 0u));
+    loop_n++;
+    loop_changed();
+}
+static void rec_off(int note)                           /* its key up: how long it was held */
+{
+    const int lt = loop_ticks();
+    int i;
+    for (i = loop_n - 1; i >= 0; i--)
+        if ((loop_ev[i].flags & EV_HELD) && loop_ev[i].note == note) {
+            int d = ((int)loop_now() - (int)loop_ev[i].t + lt) % lt;
+            d = d < 3 ? 3 : d > 255 ? 255 : d;
+            loop_ev[i].len = (uint8_t)d;
+            loop_ev[i].flags &= (uint8_t)~EV_HELD;
+            loop_changed();
+            return;
+        }
+}
+static void rec_end(void)                               /* recording stops: notes still held end here */
+{
+    int i;
+    for (i = 0; i < loop_n; i++)
+        if (loop_ev[i].flags & EV_HELD)
+            rec_off(loop_ev[i].note);
+    rec_state = 0;
+    cnt_on = 0;
+    sy_tel.rec = 0;
+}
+static void loop_tick(int p)                            /* one tick of the playhead */
+{
+    const int lt = loop_ticks();
+    int i;
+    for (i = 0; i < loop_n; i++) {                       /* ends first, so a note can start where one ends */
+        sy_ev_t *e = &loop_ev[i];
+        if ((e->flags & EV_PLAYING) && ((int)e->t + (int)e->len) % lt == p) {
+            note_off(e->note);
+            e->flags &= (uint8_t)~EV_PLAYING;
+        }
+    }
+    for (i = 0; i < loop_n; i++) {
+        sy_ev_t *e = &loop_ev[i];
+        if ((int)e->t != p || (int)e->t >= lt)
+            continue;
+        if (e->flags & EV_FRESH) {                       /* recorded a moment ago: you played it already */
+            e->flags &= (uint8_t)~EV_FRESH;
+            continue;
+        }
+        if ((e->flags & EV_HELD) || e->len == 0)
+            continue;
+        if (e->flags & EV_PLAYING)
+            note_off(e->note);
+        note_on(e->note, e->vel);
+        e->flags |= EV_PLAYING;
+    }
+    sy_tel.loop_pos = (uint16_t)p;
+}
+static void loop_run(void)                              /* one sample, after the drums' clock */
+{
+    const int p = (int)loop_now();
+    if (!dr_on)
+        return;
+    if (p != loop_last) {
+        loop_last = p;
+        loop_tick(p);
+    }
+}
+/* the count-in: a bar of clicks, then the band starts and it records */
+static void count_run(void)
+{
+    const float beat = SY_SR * 60.0f / (float)par[P_TEMPO];
+    const int b = (int)(cnt_t / beat);
+    if (!cnt_on)
+        return;
+    if (cnt_t == 0.0f || (int)((cnt_t - 1.0f) / beat) != b) {
+        click_env = b == 0 ? 1.0f : 0.6f;               /* (the one is louder) */
+        click_ph = 0.0f;
+        sy_tel.count = (uint8_t)b;
+    }
+    cnt_t += 1.0f;
+    if (cnt_t >= 4.0f * beat) {
+        cnt_on = 0;
+        dr_on = 1;
+        dr_start = 1;
+        dr_bar = 0;
+        loop_last = -1;
+        rec_state = 2;
+        sy_tel.rec = 2;
+        sy_tel.drums_on = 1;
+    }
+}
+static inline float click_sample(void)
+{
+    float x;
+    if (click_env < 1e-4f)
+        return 0.0f;
+    click_ph += 1700.0f / SY_SR;
+    click_ph -= (float)(int)click_ph;
+    x = fm_sin_turns(click_ph) * click_env * 0.35f;
+    click_env *= 0.9985f;
+    return x;
+}
+static void loop_cmd(const cmd_t *c)
+{
+    int i;
+    switch (c->c) {
+    case C_REC:
+        if (c->a && !rec_state) {
+            loop_snapshot();                             /* (the take can be undone) */
+            if (dr_on) {
+                rec_state = 2;                           /* playing: at once, on top */
+                sy_tel.rec = 2;
+            } else {
+                rec_state = 1;                           /* stopped: a bar's count-in first */
+                cnt_on = 1;
+                cnt_t = 0.0f;
+                sy_tel.rec = 1;
+            }
+        } else if (!c->a && rec_state) {
+            rec_end();
+        }
+        break;
+    case C_LUNDO:
+        loop_all_off();
+        for (i = 0; i < loop_undo_n; i++)
+            loop_ev[i] = loop_undo_ev[i];
+        loop_n = loop_undo_n;
+        for (i = 0; i < loop_n; i++)
+            loop_ev[i].flags = 0;
+        loop_changed();
+        break;
+    case C_LCLEAR:
+        loop_snapshot();
+        loop_all_off();
+        loop_n = 0;
+        loop_sel = -1;
+        sy_tel.loop_sel = -1;
+        loop_changed();
+        break;
+    case C_LSTEP: {                                      /* a step: its notes go, or a note comes */
+        const int t = c->a * 12;
+        int found = 0;
+        if (t < 0 || t >= SY_TPB * 4)
+            break;
+        loop_snapshot();
+        for (i = loop_n - 1; i >= 0; i--)
+            if ((int)loop_ev[i].t >= t && (int)loop_ev[i].t < t + 12) {
+                loop_remove(i);
+                found = 1;
+            }
+        if (!found && loop_n < SY_LOOP_MAX) {
+            loop_ev[loop_n].t = (uint16_t)t;
+            loop_ev[loop_n].note = (uint8_t)c->b;
+            loop_ev[loop_n].vel = 100;
+            loop_ev[loop_n].len = 11;
+            loop_ev[loop_n].flags = 0;
+            loop_n++;
+        }
+        loop_sel = found ? -1 : c->a;
+        sy_tel.loop_sel = (int16_t)loop_sel;
+        loop_changed();
+        break;
+    }
+    case C_LNUDGE:                                       /* the stepped step's notes: pitch, length, velocity */
+        if (loop_sel < 0)
+            break;
+        for (i = 0; i < loop_n; i++)
+            if ((int)loop_ev[i].t >= loop_sel * 12 && (int)loop_ev[i].t < loop_sel * 12 + 12) {
+                sy_ev_t *e = &loop_ev[i];
+                if (c->a == 0)
+                    e->note = (uint8_t)clampi(e->note + c->b, 0, 127);
+                else if (c->a == 1)
+                    e->len = (uint8_t)clampi(e->len + c->b * 3, 3, 255);
+                else
+                    e->vel = (uint8_t)clampi(e->vel + c->b * 4, 1, 127);
+            }
+        loop_changed();
+        break;
+    case C_LLOAD:
+        loop_all_off();
+        loop_n = 0;
+        for (i = 0; i < c->a && load_src; i++)
+            if ((int)load_src[i].t < SY_TPB * 4 && load_src[i].len > 0) {
+                loop_ev[loop_n] = load_src[i];
+                loop_ev[loop_n].flags = 0;
+                loop_n++;
+            }
+        loop_undo_n = 0;
+        loop_changed();
+        break;
+    }
+}
+int sy_loop_copy(sy_ev_t *dst, int max)
+{
+    int i, n = 0;
+    for (i = 0; i < loop_n && n < max; i++)
+        if (loop_ev[i].len > 0) {
+            dst[n] = loop_ev[i];
+            dst[n].flags = 0;
+            n++;
+        }
+    return n;
+}
+const sy_ev_t *sy_loop_events(int *n)
+{
+    *n = loop_n;
+    return loop_ev;
+}
+
 /* ------------------------------------------------------------ commands --- */
 static void drain(void)
 {
@@ -1382,13 +1672,16 @@ static void drain(void)
                 sy_tel.last_note = c.a;
             } else {
                 note_on(c.a, c.b);
+                rec_on(c.a, c.b);
             }
             break;
         case C_OFF:
-            if (arp_on)
+            if (arp_on) {
                 arp_remove(c.a);
-            else
+            } else {
                 note_off(c.a);
+                rec_off(c.a);
+            }
             break;
         case C_BEND: bend_c = (float)c.a * (200.0f / 8192.0f); break;
         case C_MOD: mod_amt = (float)c.a * (0.5f / 127.0f); break;
@@ -1397,11 +1690,18 @@ static void drain(void)
                 dr_on = 1;
                 dr_start = 1;
                 dr_bar = 0;
+                loop_last = -1;
             } else if (!c.a) {
                 dr_on = 0;
                 b_gate = 0.0f;
+                if (rec_state)
+                    rec_end();
+                loop_all_off();
             }
             sy_tel.drums_on = dr_on;
+            break;
+        case C_REC: case C_LUNDO: case C_LCLEAR: case C_LSTEP: case C_LNUDGE: case C_LLOAD:
+            loop_cmd(&c);
             break;
         case C_ARP: arp_set(c.a); break;
         case C_PANIC: {
@@ -1415,6 +1715,11 @@ static void drain(void)
             db.amp = dk.amp = dp.amp = 0.0f;
             sn_env = cl_env = h_env = oh_env = 0.0f;
             sy_tel.drums_on = 0;
+            rec_state = 0;
+            cnt_on = 0;
+            sy_tel.rec = 0;
+            for (i = 0; i < loop_n; i++)
+                loop_ev[i].flags = 0;
             arp_cur = -1;
             arp_nh = 0;
             break;
@@ -1471,9 +1776,11 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
             chorus(&l, &r, chorus_amt, d);
             l *= synth_g;                               /* the mixer: the voices' fader */
             r *= synth_g;
+            count_run();
             drums_tick();
+            loop_run();
             arp_tick();
-            dm = drums_sample(&bass) * drum_g;
+            dm = drums_sample(&bass) * drum_g + click_sample();
             bass *= bass_g;
             {
                 const float a = fm_fabsf(l) + fm_fabsf(r), b = fm_fabsf(dm), c = fm_fabsf(bass);
@@ -1532,6 +1839,7 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
     }
     sy_tel.out_peak = peak;
     sy_tel.busy = busy;
+    sy_tel.loop_ticks = (uint16_t)loop_ticks();
     for (j = 0; j < 4u; j++)
         sy_tel.lvl[j] = lv[j];
     if (gr_min < 0.6f)                                  /* more than ~4.4 dB pulled down: a fight */
