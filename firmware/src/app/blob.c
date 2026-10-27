@@ -190,7 +190,7 @@ static void draw_drips(void)
 
 static void draw_room(const geo_t *g)
 {
-    const float size = pn(P_SIZE), voidness = fm_clampf((size - 0.82f) / 0.18f, 0.0f, 1.0f);
+    const float size = pn(P_SIZE), voidness = mm_clampf((size - 0.82f) / 0.18f, 0.0f, 1.0f);
     const int32_t ab = (int32_t)g->ab;
     const int32_t x0 = (int32_t)(g->rcx - g->bw), x1 = (int32_t)(g->rcx + g->bw);
     const int32_t y0 = (int32_t)(g->vy - g->bh), y1 = (int32_t)(g->vy + g->bh);
@@ -222,11 +222,11 @@ static void draw_room(const geo_t *g)
                 c = px_dith4(x, y) + 0.5f > t * 1.4f ? PC_BG1 : PC_BG0;   /* the ceiling */
             } else if (y > y1) {                         /* the floor: the window's light falls on it */
                 const float wc = ((float)wx0 + (float)wx1) * 0.5f, ww = ((float)wx1 - (float)wx0) * 0.5f * (1.0f + t * 1.6f);
-                const float lit = win ? fm_clampf(1.0f - fm_fabsf((float)x - wc) / (ww + 1.0f), 0.0f, 1.0f) * (1.0f - t * 0.8f) : 0.0f;
+                const float lit = win ? mm_clampf(1.0f - mm_fabsf((float)x - wc) / (ww + 1.0f), 0.0f, 1.0f) * (1.0f - t * 0.8f) : 0.0f;
                 c = px_dith4(x, y) + 0.5f < lit * 0.9f ? PC_SHEEN : px_dith4(x, y) + 0.5f > t ? PC_BG2 : PC_BG1;
             } else {                                     /* the back wall: lit in the middle, its edges fading */
-                const float ex = fm_clampf(fm_minf((float)(x - x0), (float)(x1 - x)) / (g->bw * 0.45f + 1.0f), 0.0f, 1.0f);
-                const float ey = fm_clampf(fm_minf((float)(y - y0), (float)(y1 - y)) / (g->bh * 0.4f + 1.0f), 0.0f, 1.0f);
+                const float ex = mm_clampf(mm_minf((float)(x - x0), (float)(x1 - x)) / (g->bw * 0.45f + 1.0f), 0.0f, 1.0f);
+                const float ey = mm_clampf(mm_minf((float)(y - y0), (float)(y1 - y)) / (g->bh * 0.4f + 1.0f), 0.0f, 1.0f);
                 c = px_dith4(x, y) + 0.5f < ex * ey * (1.0f - 0.4f * (float)(y - y0) / (float)(y1 - y0 + 1)) ? PC_BG2 : PC_BG1;
             }
             px_fb[y * PX_W + x] = c;
@@ -240,8 +240,8 @@ static void draw_room(const geo_t *g)
             for (x = wx0; x < wx1; x++) {
                 const float dx = (float)x - lx, dy = (float)y - ly, d = dx * dx + dy * dy;
                 /* no frame: the glass fades in over its last few pixels, and it is only a little darker */
-                const int32_t de = fm_minf(fm_minf((float)(x - wx0), (float)(wx1 - 1 - x)), fm_minf((float)(y - wy0), (float)(wy1 - 1 - y)));
-                const float alpha = fm_clampf(((float)de + 0.5f) / 4.0f, 0.0f, 1.0f);
+                const int32_t de = mm_minf(mm_minf((float)(x - wx0), (float)(wx1 - 1 - x)), mm_minf((float)(y - wy0), (float)(wy1 - 1 - y)));
+                const float alpha = mm_clampf(((float)de + 0.5f) / 4.0f, 0.0f, 1.0f);
                 if (px_dith4(x, y) + 0.5f >= alpha)
                     continue;
                 px_fb[y * PX_W + x] = px_dith4(x + 1, y) + 0.5f < 0.3f ? PC_BG0 : PC_BG1;
@@ -295,7 +295,7 @@ static void draw_waves(const geo_t *g)
         n = (int)(rx * 5.0f) + 12;
         for (k = 0; k < n; k++) {
             const float t = (float)k / (float)n;
-            const int32_t x = (int32_t)(g->cx + rx * fm_cosf(t * FM_TWO_PI)), y = (int32_t)(g->floor + ry * fm_sin_turns(t));
+            const int32_t x = (int32_t)(g->cx + rx * mm_cosf(t * MM_TWO_PI)), y = (int32_t)(g->floor + ry * mm_sin_turns(t));
             if (y < (int32_t)g->ab && px_dith4(x, y) + 0.5f < a)
                 px_pset(x, y, bs.wave[i].dir < 0.0f ? PC_CORAL : PC_RAIN2);
         }
@@ -317,17 +317,17 @@ static void body_shape(const geo_t *g, float squash_x, float squash_y, float r_s
         sc = sy_tel.scope[k & (SY_SCOPE - 1)];
         sc = sc > 1.0f ? 1.0f : sc < -1.0f ? -1.0f : sc;
         /* lumps that drift (it is never a clean ball) */
-        const float lump = 0.07f * fm_sin_turns(2.0f * th + bs.t * 0.021f) + 0.05f * fm_sin_turns(3.0f * th + 0.37f - bs.t * 0.013f) +
-                           0.1f * bs.wob * fm_sin_turns(4.0f * th + 0.2f);   /* (the LFO wobbles them) */
+        const float lump = 0.07f * mm_sin_turns(2.0f * th + bs.t * 0.021f) + 0.05f * mm_sin_turns(3.0f * th + 0.37f - bs.t * 0.013f) +
+                           0.1f * bs.wob * mm_sin_turns(4.0f * th + 0.2f);   /* (the LFO wobbles them) */
         r = g->r * r_scale * (0.84f + 0.3f * sh + live * sc + lump);
-        x = fm_cosf(th * FM_TWO_PI) * r * squash_x;
-        y = fm_sin_turns(th) * r * squash_y;
+        x = mm_cosf(th * MM_TWO_PI) * r * squash_x;
+        y = mm_sin_turns(th) * r * squash_y;
         if (y > 0.0f) {                                 /* it sags a little: a softer, rounder bottom (Sub: heavier) */
             const float k2 = y / (g->r + 1.0f);
             x *= 1.0f + (0.04f + 0.22f * sub) * k2 - 0.1f * k2 * k2;   /* (and narrower at the very bottom: no jaw) */
             y *= 1.0f - 0.08f * k2;
         }
-        x += y * (0.12f * fm_sin_turns(bs.t * 0.017f) + bs.lean);   /* it leans, slowly, whichever way (and with the LFO) */
+        x += y * (0.12f * mm_sin_turns(bs.t * 0.017f) + bs.lean);   /* it leans, slowly, whichever way (and with the LFO) */
         bvx[k] = g->cx + x;
         bvy[k] = g->cy + y;
     }
@@ -336,7 +336,7 @@ static void body_shape(const geo_t *g, float squash_x, float squash_y, float r_s
 /* the angle of (x, y), in turns (0..1) */
 static float atan_turns(float y, float x)
 {
-    const float ax = fm_fabsf(x), ay = fm_fabsf(y), mx = fm_maxf(ax, ay), mn = fm_minf(ax, ay);
+    const float ax = mm_fabsf(x), ay = mm_fabsf(y), mx = mm_maxf(ax, ay), mn = mm_minf(ax, ay);
     float t, s, a;
     if (mx < 1e-6f)
         return 0.0f;
@@ -364,10 +364,10 @@ static void light_frame(void)
 {
     const float a = bs.lang, el = 0.38f;                 /* its angle round the blob (turns); low */
     float hl;
-    LX = fm_cosf(a * FM_TWO_PI) * (1.0f - el * el);
-    LY = fm_sin_turns(a) * (1.0f - el * el);
+    LX = mm_cosf(a * MM_TWO_PI) * (1.0f - el * el);
+    LY = mm_sin_turns(a) * (1.0f - el * el);
     LZ = el;
-    hl = fm_rsqrtf(LX * LX + LY * LY + (LZ + 1.0f) * (LZ + 1.0f));
+    hl = mm_rsqrtf(LX * LX + LY * LY + (LZ + 1.0f) * (LZ + 1.0f));
     HX = LX * hl;
     HY = LY * hl;
     HZ = (LZ + 1.0f) * hl;
@@ -392,7 +392,7 @@ typedef struct {
 static void shade_px(const shade_t *sh, int32_t x, int32_t y)
 {
     const float dx = (float)x + 0.5f - sh->cx, dy = (float)y + 0.5f - sh->cy;
-    const float dist = fm_sqrtf(dx * dx + dy * dy), a = atan_turns(dy, dx) * (float)NV;
+    const float dist = mm_sqrtf(dx * dx + dy * dy), a = atan_turns(dy, dx) * (float)NV;
     const int k = (int)a;
     const float rr = sh->rr[k] + (sh->rr[k + 1] - sh->rr[k]) * (a - (float)k);
     float nx, ny, nz, d, lam, lv, sp;
@@ -406,7 +406,7 @@ static void shade_px(const shade_t *sh, int32_t x, int32_t y)
         return;
     }
     d = dist / rr;
-    nz = fm_sqrtf(1.0f - d * d);
+    nz = mm_sqrtf(1.0f - d * d);
     nx = dx / rr;
     ny = dy / rr;
     lam = nx * LX + ny * LY + nz * LZ;
@@ -464,8 +464,8 @@ static void shade_ball(const geo_t *g, float cx, float cy, float rx, float ry, f
     sh.cx = cx;
     sh.cy = cy;
     for (k = 0; k <= NV; k++) {
-        const float th = (float)k / (float)NV, c = fm_cosf(th * FM_TWO_PI), s = fm_sin_turns(th);
-        sh.rr[k] = rx * ry / fm_sqrtf(ry * ry * c * c + rx * rx * s * s + 1e-6f);
+        const float th = (float)k / (float)NV, c = mm_cosf(th * MM_TWO_PI), s = mm_sin_turns(th);
+        sh.rr[k] = rx * ry / mm_sqrtf(ry * ry * c * c + rx * rx * s * s + 1e-6f);
     }
     sh.rmax = rx > ry ? rx : ry;
     sh.ramp = fog > 0.4f ? RAMP_FOG : RAMP_BLOB;
@@ -477,7 +477,7 @@ static void shade_ball(const geo_t *g, float cx, float cy, float rx, float ry, f
 
 static void draw_shadow(const geo_t *g)
 {
-    const float lift = g->floor - (g->cy + g->r), w = g->r * (0.9f - fm_clampf(lift, 0.0f, 20.0f) * 0.02f);
+    const float lift = g->floor - (g->cy + g->r), w = g->r * (0.9f - mm_clampf(lift, 0.0f, 20.0f) * 0.02f);
     int32_t x, y;
     for (y = (int32_t)(g->floor - 5.0f); y <= (int32_t)(g->floor + 5.0f); y++)   /* (seen from above: rounder) */
         for (x = (int32_t)(g->cx - w); x <= (int32_t)(g->cx + w); x++) {
@@ -496,9 +496,9 @@ static void draw_copies(const geo_t *g, float sqx, float sqy)
     for (i = n - 1; i >= 0; i--) {                      /* the far ones first */
         const int side = i & 1 ? 1 : -1, layer = i / 2;
         geo_t gg = *g;
-        const float sway = 2.0f * fm_sin_turns(bs.t * (0.31f + 0.07f * (float)i) + (float)i * 0.37f);
+        const float sway = 2.0f * mm_sin_turns(bs.t * (0.31f + 0.07f * (float)i) + (float)i * 0.37f);
         gg.cx = g->cx + (float)side * g->r * (0.42f + 0.3f * (float)layer) + sway;
-        gg.cy = g->cy - (float)layer * 1.5f + 1.2f * fm_sin_turns(bs.t * 0.4f + (float)i * 0.3f);
+        gg.cy = g->cy - (float)layer * 1.5f + 1.2f * mm_sin_turns(bs.t * 0.4f + (float)i * 0.3f);
         gg.r = g->r * (0.92f - 0.08f * (float)layer);
         body_shape(&gg, sqx, sqy, 1.0f, 0.05f * (float)(i + 1));   /* (a beat late: its own lag) */
         px_poly(bvx, bvy, NV, layer == 0 ? PC_BLOB0 : PC_BLOBD, layer == 0 ? 2 : 1);   /* see-through: half there */
@@ -536,7 +536,7 @@ static void draw_body(const geo_t *g, float sqx, float sqy)
     shade_t sh;
     int k;
     if (det > 0.02f) {                                   /* Detune: a ghost of it, drifting apart, beating */
-        const float off = det * 6.0f * fm_sin_turns(bs.t * (0.2f + det * 1.5f));
+        const float off = det * 6.0f * mm_sin_turns(bs.t * (0.2f + det * 1.5f));
         geo_t gg = *g;
         gg.cx += off;
         body_shape(&gg, sqx, sqy, 1.0f, 0.03f * det);
@@ -554,13 +554,13 @@ static void draw_body(const geo_t *g, float sqx, float sqy)
     sh.rmax = 0.0f;
     for (k = 0; k < NV; k++) {
         const float dx = bvx[k] - g->cx, dy = bvy[k] - g->cy;
-        sh.rr[k] = fm_sqrtf(dx * dx + dy * dy);
+        sh.rr[k] = mm_sqrtf(dx * dx + dy * dy);
         sh.rmax = sh.rr[k] > sh.rmax ? sh.rr[k] : sh.rmax;
     }
     sh.rr[NV] = sh.rr[0];
     sh.ramp = RAMP_BLOB;
     sh.fry = fry < 0.2f ? 0.0f : (fry - 0.2f) * 1.6f;
-    sh.spec = (fry > 0.6f ? 0.4f : 0.8f) * fm_clampf(2.4f - bs.zoom, 0.0f, 1.0f);   /* (none in a close-up) */
+    sh.spec = (fry > 0.6f ? 0.4f : 0.8f) * mm_clampf(2.4f - bs.zoom, 0.0f, 1.0f);   /* (none in a close-up) */
     sh.verb = pn(P_REVERB) * sy_tel.verb * 1.5f;
     sh.rim = 0.15f + 0.35f * vol + 0.6f * sy_tel.amp_env * vol;   /* louder: the lamp catches more of it */
     sh.outline = PC_BLOBD;
@@ -586,11 +586,11 @@ static void draw_face(const geo_t *g)
     const float cx = g->cx, ey = g->cy - 6.0f * s + g->face_dy;   /* (from above: the face sits a little lower) */
     const int fine = bs.fire > 0.3f;
     /* the filter opens and shuts them all the way (and a little more than linearly, so the middle reads) */
-    float open = cut < 0.04f ? 0.0f : 0.08f + 0.92f * fm_sqrtf(cut), brow = sy_tel.mod_env * pn(P_ENVAMT) * 7.0f * s + bs.shrug * 4.0f;
+    float open = cut < 0.04f ? 0.0f : 0.08f + 0.92f * mm_sqrtf(cut), brow = sy_tel.mod_env * pn(P_ENVAMT) * 7.0f * s + bs.shrug * 4.0f;
     float lookx = 0.0f, looky = 1.0f;                    /* sad: looking down */
     int e;
     if (sy_tel.last_note >= 0 && sy_tel.voices)
-        lookx = fm_clampf((float)(sy_tel.last_note - 60) / 18.0f, -1.0f, 1.0f);
+        lookx = mm_clampf((float)(sy_tel.last_note - 60) / 18.0f, -1.0f, 1.0f);
     if (bs.stare > 0.5f) {                               /* it looks at you */
         lookx = 0.0f;
         looky = 0.0f;
@@ -677,7 +677,7 @@ static void draw_face(const geo_t *g)
     if (pn(P_LFODEPTH) * bs.vamt > 0.3f && !bs.sleep) {
         const float ph = sy_tel.lfo_phase, side = sy_tel.lfo > 0.0f ? 1.0f : -1.0f;
         const int32_t mx = (int32_t)(cx - side * (g->r + 4.0f)), my = (int32_t)(g->cy - 2.0f);
-        if (fm_fabsf(sy_tel.lfo) > 0.5f) {
+        if (mm_fabsf(sy_tel.lfo) > 0.5f) {
             px_line(mx, my - 2, mx - (int32_t)(side * 3.0f), my - 3, PC_ORANGE);
             px_line(mx, my + 1, mx - (int32_t)(side * 4.0f), my + 1, PC_ORANGE);
             px_line(mx, my + 4, mx - (int32_t)(side * 3.0f), my + 5, PC_ORANGE);
@@ -691,7 +691,7 @@ static void draw_unlocks(const geo_t *g)
 {
     const uint32_t lv = xp_level(proj.xp);
     if (lv >= 10u) {                                    /* a balloon, mostly air gone */
-        const float bx = g->cx + g->r * 1.05f, by = g->cy - g->r * 0.2f + 1.5f * fm_sin_turns(bs.t * 0.3f);
+        const float bx = g->cx + g->r * 1.05f, by = g->cy - g->r * 0.2f + 1.5f * mm_sin_turns(bs.t * 0.3f);
         px_line((int32_t)(g->cx + g->r * 0.6f), (int32_t)(g->cy + 2.0f), (int32_t)bx, (int32_t)(by + 4.0f), PC_DIM);
         px_ellipse(bx, by, 3.0f, 3.8f, PC_RED);
         px_pset((int32_t)bx - 1, (int32_t)by - 2, PC_CORAL);
@@ -741,18 +741,18 @@ static void draw_cassette(const geo_t *g)
     }
     /* the window: the tape on its spools (one fills as the other empties), the hubs turning */
     {
-        const float prog = fm_clampf(bs.reel * 0.02f - fm_floorf(bs.reel * 0.02f), 0.0f, 1.0f);
+        const float prog = mm_clampf(bs.reel * 0.02f - mm_floorf(bs.reel * 0.02f), 0.0f, 1.0f);
         const float rl = 2.0f + 2.5f * (1.0f - prog), rr = 2.0f + 2.5f * prog;
         int k;
         px_rect(x + 6, y + 10, 22, 7, PC_BLACK);
-        px_ellipse((float)(x + 11), (float)(y + 13) + 0.5f, rl, fm_minf(rl, 3.4f), PC_SPOOL);
-        px_ellipse((float)(x + 23), (float)(y + 13) + 0.5f, rr, fm_minf(rr, 3.4f), PC_SPOOL);
+        px_ellipse((float)(x + 11), (float)(y + 13) + 0.5f, rl, mm_minf(rl, 3.4f), PC_SPOOL);
+        px_ellipse((float)(x + 23), (float)(y + 13) + 0.5f, rr, mm_minf(rr, 3.4f), PC_SPOOL);
         px_line(x + 11, y + 16, x + 23, y + 16, PC_SPOOL);    /* the tape running between them, below */
         for (k = 0; k < 2; k++) {                           /* the hubs: white teeth, turning */
             const float hx = (float)(x + 11 + k * 12), hy = (float)(y + 13), a = bs.reel + (float)k * 0.13f;
             px_pset((int32_t)hx, (int32_t)hy, PC_SMOKE);
-            px_pset((int32_t)(hx + 1.6f * fm_cosf(a * FM_TWO_PI) + 0.5f), (int32_t)(hy + 1.6f * fm_sin_turns(a) + 0.5f), PC_EYE);
-            px_pset((int32_t)(hx - 1.6f * fm_cosf(a * FM_TWO_PI) + 0.5f), (int32_t)(hy - 1.6f * fm_sin_turns(a) + 0.5f), PC_EYE);
+            px_pset((int32_t)(hx + 1.6f * mm_cosf(a * MM_TWO_PI) + 0.5f), (int32_t)(hy + 1.6f * mm_sin_turns(a) + 0.5f), PC_EYE);
+            px_pset((int32_t)(hx - 1.6f * mm_cosf(a * MM_TWO_PI) + 0.5f), (int32_t)(hy - 1.6f * mm_sin_turns(a) + 0.5f), PC_EYE);
         }
         px_rect(x + 6, y + 10, 22, 1, PC_SMOKE2);           /* the window's top edge, a glint */
     }
@@ -849,7 +849,7 @@ typedef struct {
 
 static int32_t gy_of(const drawer_t *p, float v)          /* 0..1 up the box */
 {
-    return p->gy1 - (int32_t)(fm_clampf(v, 0.0f, 1.0f) * (float)(p->gy1 - p->gy0) + 0.5f);
+    return p->gy1 - (int32_t)(mm_clampf(v, 0.0f, 1.0f) * (float)(p->gy1 - p->gy0) + 0.5f);
 }
 
 static void grid(const drawer_t *p)
@@ -880,16 +880,16 @@ static void curve(const drawer_t *p, const float *v, int n, uint8_t line, uint8_
 static float tri_wave(float ph) { return ph < 0.5f ? 4.0f * ph - 1.0f : 3.0f - 4.0f * ph; }
 static float lfo_shape_at(int shape, float ph)
 {
-    ph -= fm_floorf(ph);
+    ph -= mm_floorf(ph);
     switch (shape) {
-    case LFO_TRI: return tri_wave(ph + 0.25f - fm_floorf(ph + 0.25f));
+    case LFO_TRI: return tri_wave(ph + 0.25f - mm_floorf(ph + 0.25f));
     case LFO_SQUARE: return ph < 0.5f ? 1.0f : -1.0f;
     case LFO_SAW: return 1.0f - 2.0f * ph;
     case LFO_RANDOM: {
         const uint32_t k = (uint32_t)(ph * 4.0f) * 2654435761u;
         return (float)((k >> 8) & 255u) / 127.5f - 1.0f;
     }
-    default: return fm_sin_turns(ph);
+    default: return mm_sin_turns(ph);
     }
 }
 
@@ -900,7 +900,7 @@ static void schem_body(const drawer_t *p)                /* the wavetable: its f
     float v[56];
     int f, i;
     for (f = 4; f >= 1; f--) {                           /* the frames behind, up and right */
-        const float fp = fm_clampf(pos + (float)f * 0.18f, 0.0f, 1.0f);
+        const float fp = mm_clampf(pos + (float)f * 0.18f, 0.0f, 1.0f);
         const int32_t dx = f * 3, dy = -f * 2;
         int32_t lx = 0, ly = 0;
         for (i = 0; i < 40; i++) {
@@ -919,7 +919,7 @@ static void schem_body(const drawer_t *p)                /* the wavetable: its f
         curve(&q, v, 56, PC_BLOB2, PC_BLOBD, 1);
         if (det > 0.05f) {                               /* the detuned one, sliding */
             for (i = 0; i < 56; i++)
-                v[i] = 0.5f + 0.45f * sy_shape(t, pos, (float)i / 55.0f + det * 0.1f * fm_sin_turns(bs.t * 0.5f));
+                v[i] = 0.5f + 0.45f * sy_shape(t, pos, (float)i / 55.0f + det * 0.1f * mm_sin_turns(bs.t * 0.5f));
             curve(&q, v, 56, PC_GHOST, 0, 0);
         }
     }
@@ -940,9 +940,9 @@ static void schem_eyes(const drawer_t *p)                /* the filter: its curv
         const float oct = cut * 9.3f + (live ? amt * 6.0f * sy_tel.mod_env : 0.0f);
         for (i = 0; i < 56; i++) {
             /* across: 20 Hz .. 20 kHz on octaves; up: -36 .. +18 dB */
-            const float fo = (float)i / 55.0f * 10.0f - (oct + 0.6f), w = fm_exp2f(fo), w2 = w * w;
+            const float fo = (float)i / 55.0f * 10.0f - (oct + 0.6f), w = mm_exp2f(fo), w2 = w * w;
             const float mag2 = 1.0f / ((1.0f - w2) * (1.0f - w2) + w2 * k * k);
-            const float db = 10.0f * fm_log2f(mag2) * 0.30103f;
+            const float db = 10.0f * mm_log2f(mag2) * 0.30103f;
             (live ? v2 : v)[i] = (db + 36.0f) / 54.0f;
         }
     }
@@ -950,7 +950,7 @@ static void schem_eyes(const drawer_t *p)                /* the filter: its curv
     if (amt > 0.02f && sy_tel.mod_env > 0.02f)
         curve(p, v2, 56, PC_SPEC, 0, 0);                  /* where it is now, opened by the note */
     {   /* the cutoff, a marker */
-        const int32_t x = p->gx0 + (int32_t)(fm_clampf((cut * 9.3f + 0.6f) / 10.0f, 0.0f, 1.0f) * (float)(p->gx1 - p->gx0));
+        const int32_t x = p->gx0 + (int32_t)(mm_clampf((cut * 9.3f + 0.6f) / 10.0f, 0.0f, 1.0f) * (float)(p->gx1 - p->gx0));
         int32_t y;
         for (y = p->gy0; y < p->gy1; y += 2)
             px_pset(x, y, PC_TEAR);
@@ -993,9 +993,9 @@ static void schem_mouth(const drawer_t *p)               /* the envelope: attack
         int32_t dx = -1;
         switch (sy_tel.amp_stage) {
         case 1: dx = p->gx0 + (int32_t)(e * (float)(xa - p->gx0)); break;
-        case 2: dx = xa + (int32_t)(fm_clampf((1.0f - e) / (1.0f - sus + 1e-3f), 0.0f, 1.0f) * (float)(xd - xa)); break;
+        case 2: dx = xa + (int32_t)(mm_clampf((1.0f - e) / (1.0f - sus + 1e-3f), 0.0f, 1.0f) * (float)(xd - xa)); break;
         case 3: dx = (xd + xs) / 2; break;
-        case 4: dx = xs + (int32_t)(fm_clampf(1.0f - e / (sus + 1e-3f), 0.0f, 1.0f) * (float)(xr - xs)); break;
+        case 4: dx = xs + (int32_t)(mm_clampf(1.0f - e / (sus + 1e-3f), 0.0f, 1.0f) * (float)(xr - xs)); break;
         default: break;
         }
         if (dx >= 0) {
@@ -1056,8 +1056,8 @@ static void schem_tears(const drawer_t *p)               /* the delay: the taps,
         int32_t xx;
         if (c > 0.02f)
             for (xx = p->gx0; xx < p->gx1; xx++)
-                px_pset(xx, p->gy0 + 2 + (int32_t)(c * 2.5f * fm_sin_turns((float)xx * 0.08f + bs.t * 0.7f) +
-                                                    c * 1.5f * fm_sin_turns((float)xx * 0.13f - bs.t * 0.5f)), PC_GHOST);
+                px_pset(xx, p->gy0 + 2 + (int32_t)(c * 2.5f * mm_sin_turns((float)xx * 0.08f + bs.t * 0.7f) +
+                                                    c * 1.5f * mm_sin_turns((float)xx * 0.13f - bs.t * 0.5f)), PC_GHOST);
     }
 }
 
@@ -1069,8 +1069,8 @@ static void schem_walls(const drawer_t *p)               /* the room: its tail; 
     int32_t x, y;
     for (x = p->gx0; x < split; x++) {                   /* the impulse, then the tail dying away */
         const float t = (float)(x - p->gx0) / ((float)(split - p->gx0) * len);
-        const float wob = tape * 1.2f * fm_sin_turns((float)x * 0.05f + bs.t * 0.4f);
-        const float lv = rv * fm_expf(-t * 4.0f) + wob * 0.03f;
+        const float wob = tape * 1.2f * mm_sin_turns((float)x * 0.05f + bs.t * 0.4f);
+        const float lv = rv * mm_expf(-t * 4.0f) + wob * 0.03f;
         const int32_t top = gy_of(p, lv);
         if (t > 1.2f)
             break;
@@ -1085,7 +1085,7 @@ static void schem_walls(const drawer_t *p)               /* the room: its tail; 
         int32_t lx = 0, ly = 0, i;
         px_rect(split + 2, p->gy0, 1, p->gy1 - p->gy0, PC_WALL);
         for (i = 0; i <= 20; i++) {
-            const float in = (float)i / 10.0f - 1.0f, out = fm_tanhf(in * g) / fm_tanhf(g);
+            const float in = (float)i / 10.0f - 1.0f, out = mm_tanhf(in * g) / mm_tanhf(g);
             const int32_t cx = split + 5 + i, cy = (p->gy0 + p->gy1) / 2 - (int32_t)(out * (float)(p->gy1 - p->gy0) * 0.45f);
             if (i)
                 px_line(lx, ly, cx, cy, fry > 0.6f ? PC_SPEC : PC_TEAR);
@@ -1121,7 +1121,7 @@ static void schem_deck(const drawer_t *p)                /* the drums: round ste
     int r, k;
     for (r = 0; r < 4; r++)
         for (k = 0; k < steps; k++) {
-            const float sw = (k & 1) ? fm_minf(pn(P_SWING) * 0.4f + 0.0f, 0.6f) * cw : 0.0f;   /* swing: late */
+            const float sw = (k & 1) ? mm_minf(pn(P_SWING) * 0.4f + 0.0f, 0.6f) * cw : 0.0f;   /* swing: late */
             const uint32_t hh = (uint32_t)(k * 2654435761u + (uint32_t)r * 40503u);
             const float hu = pn(P_HUMAN) * ((float)((hh >> 12) & 7u) - 3.5f) * 0.3f;   /* human: unsteady */
             const int32_t x = p->gx0 + (int32_t)((float)k * cw + (cw - (float)d) * 0.5f + sw + hu), y = p->gy0 + r * 5;
@@ -1154,7 +1154,7 @@ static void schem_mix(const drawer_t *p)
     int i;
     for (i = 0; i < 4; i++) {
         const int32_t x = 3 + i * 29 + 8, h = p->gy1 - p->gy0;
-        const float lv = fm_clampf(sy_tel.lvl[i] * (i == 3 ? 6.0f : 1.6f), 0.0f, 1.0f);
+        const float lv = mm_clampf(sy_tel.lvl[i] * (i == 3 ? 6.0f : 1.6f), 0.0f, 1.0f);
         const int32_t fy = gy_of(p, pn(CH[i]));
         int32_t y, mh;
         hold[i] = lv > hold[i] ? lv : hold[i] * 0.94f;
@@ -1267,7 +1267,7 @@ static void schem_setup(const drawer_t *p)               /* the glide: a note sl
     int i;
     for (i = 0; i < 48; i++) {
         const float t = (float)i / 47.0f;
-        v[i] = t < 0.3f ? 0.2f : 0.2f + 0.6f * (1.0f - fm_expf(-(t - 0.3f) / (0.01f + gl * 0.3f)));
+        v[i] = t < 0.3f ? 0.2f : 0.2f + 0.6f * (1.0f - mm_expf(-(t - 0.3f) / (0.01f + gl * 0.3f)));
     }
     curve(p, v, 48, PC_BLOB2, PC_BLOBD, 0);
     px_text(p->gx1 - 30, p->gy1 - 6, proj.par[P_MIDIOUT] ? "OUT ON" : "OUT OFF", proj.par[P_MIDIOUT] ? PC_TEAR : PC_DIM);
@@ -1312,8 +1312,8 @@ static void draw_preset_card(int32_t y0)
             if (i == 0) {
                 v[k] = 0.5f + 0.45f * sy_shape(proj.par[P_TABLE], pn(P_POS), t);
             } else if (i == 1) {
-                const float kk = 2.0f - 1.94f * pn(P_RESO), w = fm_exp2f(t * 10.0f - (pn(P_CUTOFF) * 9.3f + 0.6f)), w2 = w * w;
-                v[k] = (10.0f * fm_log2f(1.0f / ((1.0f - w2) * (1.0f - w2) + w2 * kk * kk)) * 0.30103f + 36.0f) / 54.0f;
+                const float kk = 2.0f - 1.94f * pn(P_RESO), w = mm_exp2f(t * 10.0f - (pn(P_CUTOFF) * 9.3f + 0.6f)), w2 = w * w;
+                v[k] = (10.0f * mm_log2f(1.0f / ((1.0f - w2) * (1.0f - w2) + w2 * kk * kk)) * 0.30103f + 36.0f) / 54.0f;
             } else {
                 const float a = 0.05f + 0.25f * pn(P_ATTACK), d = 0.05f + 0.25f * pn(P_DECAY), r = 0.05f + 0.3f * pn(P_RELEASE);
                 const float su = pn(P_SUSTAIN), hs = 1.0f - r;
@@ -1405,7 +1405,7 @@ static void draw_panel(const geo_t *g)
                     lv = i == 0 ? (float)ev[j].note / 127.0f : i == 1 ? (float)ev[j].len / 96.0f : (float)ev[j].vel / 127.0f;
             px_text(x, y, PAGE_LABEL[ui.page][i], hot ? PC_WHITE : n ? PC_DIM : PC_GRID);
             px_rect(x, y + 8, 26, 2, PC_GRID);
-            w = (int32_t)(fm_clampf(lv, 0.0f, 1.0f) * 26.0f + 0.5f);
+            w = (int32_t)(mm_clampf(lv, 0.0f, 1.0f) * 26.0f + 0.5f);
             px_rect(x, y + 8, w, 2, hot ? PC_SPEC : PC_TEAR);
             continue;
         }
@@ -1535,7 +1535,7 @@ static void animate(const geo_t *g)
             if (!bs.echo[i].on) {
                 bs.echo[i].on = 1;
                 bs.echo[i].due = per * (float)(k + 1);
-                bs.echo[i].s = (0.9f + dly * 1.6f) * fm_powf(fb * fb > 0.05f ? fb * fb : 0.05f, (float)k * 0.5f);
+                bs.echo[i].s = (0.9f + dly * 1.6f) * mm_powf(fb * fb > 0.05f ? fb * fb : 0.05f, (float)k * 0.5f);
                 bs.echo[i].side = (uint8_t)(k & 1);
                 k++;
             }
@@ -1572,7 +1572,7 @@ static void animate(const geo_t *g)
                 spawn(PK_SPLASH, bs.tear[i].x, g->floor - 1.0f, 12.0f, -18.0f, 0.25f);
             }
         }
-    bs.puddle = fm_clampf(bs.puddle - dt * 0.012f, 0.0f, 1.0f);
+    bs.puddle = mm_clampf(bs.puddle - dt * 0.012f, 0.0f, 1.0f);
     /* waves: out to the walls (they flare), back, weaker each time (Size: how much comes back) */
     for (i = 0; i < 6; i++)
         if (bs.wave[i].on) {
@@ -1674,7 +1674,7 @@ static void blob_draw(void)
     /* the camera looks down from above (the synth is on a table below you): the back wall sits high, the
      * ceiling is a sliver, the floor fills the lower half */
     g.vy = g.rcy - 17.0f - 6.0f * size;
-    g.bh = fm_minf(g.bw * 0.6f, g.vy - 3.0f);
+    g.bh = mm_minf(g.bw * 0.6f, g.vy - 3.0f);
     g.r = lerpf(38.0f, 34.0f, pa) * (1.0f - 0.35f * size);
     g.face_dy = 0.0f;
     /* the LFO's dance: big enough to see at any depth. It moves, and its body goes with it: it leans
@@ -1682,7 +1682,7 @@ static void blob_draw(void)
     /* how big: full while notes sound (riding the envelope), a preview while you set it, a murmur idle */
     {
         const int setting = ui.page == PG_VIBE && ui.panel && plat_ms() - ui.focus_t < 2000u && ui.touched >= 0;
-        const float want = sy_tel.voices ? 0.45f + 0.55f * fm_clampf(sy_tel.amp_env * 1.3f, 0.0f, 1.0f)
+        const float want = sy_tel.voices ? 0.45f + 0.55f * mm_clampf(sy_tel.amp_env * 1.3f, 0.0f, 1.0f)
                                          : setting ? 0.7f : 0.12f;
         bs.vamt = approach(bs.vamt, want, bs.dt * (want > bs.vamt ? 6.0f : 1.5f));
     }
@@ -1711,11 +1711,11 @@ static void blob_draw(void)
         break;
     default:                                             /* a twitch: sudden, all over */
         bobx = lfo * depth * 8.0f;
-        boby = -fm_fabsf(lfo) * depth * 6.0f;
+        boby = -mm_fabsf(lfo) * depth * 6.0f;
         bs.lean = -lfo * depth * 0.25f;
         break;
     }
-    sqy *= 1.0f + 0.03f * fm_sin_turns(bs.t * (0.18f + 0.1f * (1.0f - bs.sleep)));   /* breathing */
+    sqy *= 1.0f + 0.03f * mm_sin_turns(bs.t * (0.18f + 0.1f * (1.0f - bs.sleep)));   /* breathing */
     sqy *= 1.0f - 0.2f * bs.kick;
     sqx *= 1.0f + 0.12f * bs.kick;
     sqy *= 1.0f - 0.7f * bs.pancake;
@@ -1738,9 +1738,9 @@ static void blob_draw(void)
         bobx *= bs.zoom;
     }
     g.cx = g.rcx + bobx;
-    g.cy = g.rcy + boby - bs.shrug * 2.0f + 1.2f * fm_sin_turns(bs.t * 0.23f) + bs.pancake * g.r * 0.6f;   /* it hovers */
+    g.cy = g.rcy + boby - bs.shrug * 2.0f + 1.2f * mm_sin_turns(bs.t * 0.23f) + bs.pancake * g.r * 0.6f;   /* it hovers */
     g.cy -= bs.focus * g.r;                              /* the part in focus, to the middle */
-    g.floor = fm_minf(g.cy + g.r * 0.8f + 6.0f + 3.0f * size, g.ab - 3.0f);   /* (from above: right under it) */
+    g.floor = mm_minf(g.cy + g.r * 0.8f + 6.0f + 3.0f * size, g.ab - 3.0f);   /* (from above: right under it) */
     if (g.floor < g.cy + g.r * 0.9f)                     /* (close up: the floor is out of the picture) */
         g.floor = (float)PX_H + 40.0f;
 

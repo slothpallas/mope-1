@@ -105,7 +105,7 @@ static void px_ellipse(float cx, float cy, float rx, float ry, uint8_t c)
         float dy = ((float)y + 0.5f - cy) / ry, w;
         if (dy * dy > 1.0f)
             continue;
-        w = rx * fm_sqrtf(1.0f - dy * dy);
+        w = rx * mm_sqrtf(1.0f - dy * dy);
         for (x = (int32_t)(cx - w + 0.5f); x < (int32_t)(cx + w + 0.5f); x++)
             px_pset(x, y, c);
     }
@@ -116,7 +116,7 @@ static void px_ring(float cx, float cy, float r, uint8_t c)
     int k, n = (int)(r * 6.3f) + 8;
     for (k = 0; k < n; k++) {
         float a = (float)k / (float)n;
-        px_pset((int32_t)(cx + r * fm_cosf(a * FM_TWO_PI)), (int32_t)(cy + r * fm_sin_turns(a)), c);
+        px_pset((int32_t)(cx + r * mm_cosf(a * MM_TWO_PI)), (int32_t)(cy + r * mm_sin_turns(a)), c);
     }
 }
 

@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include "plat.h"
 #include "../dsp/synth.h"
-#include "../dsp/fastmath.h"
+#include "../dsp/mopemath.h"
 
 #ifndef OM_VERSION                       /* a release build passes its own (tools/build.py --release) */
 #define OM_VERSION "DEV"

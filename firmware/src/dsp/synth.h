@@ -16,7 +16,7 @@
  *
  * Threads: sy_render() runs in the audio interrupt. Everything else posts commands that the render
  * drains at the start of a block. sy_tel is written by the render, read by the screen. Float only,
- * no libm: fastmath.h. */
+ * no libm: mopemath.h. */
 #pragma once
 #include <stdint.h>
 

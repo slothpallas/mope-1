@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "synth.h"
-#include "fastmath.h"
+#include "mopemath.h"
 
 int sy_style_check(int s);
 static int fails;
@@ -59,7 +59,7 @@ static void run(uint32_t ms)
             int16_t s = (int16_t)(x * 32767.0f);
             if (x != x)
                 bad = 1;
-            x = fm_fabsf(x);
+            x = mm_fabsf(x);
             peak = x > peak ? x : peak;
             if (wav)
                 fwrite(&s, 2, 1, wav);
@@ -82,10 +82,10 @@ static void capture(void)
 }
 static float goertzel(float hz)
 {
-    float c = 2.0f * fm_cosf(FM_TWO_PI * hz / 44100.0f), s1 = 0.0f, s2 = 0.0f, w;
+    float c = 2.0f * mm_cosf(MM_TWO_PI * hz / 44100.0f), s1 = 0.0f, s2 = 0.0f, w;
     int i;
     for (i = 0; i < 8192; i++) {
-        w = 0.5f - 0.5f * fm_cosf(FM_TWO_PI * (float)i / 8192.0f);
+        w = 0.5f - 0.5f * mm_cosf(MM_TWO_PI * (float)i / 8192.0f);
         float s = cap[i] * w + c * s1 - s2;
         s2 = s1;
         s1 = s;
@@ -97,6 +97,67 @@ static void quiet(void)
 {
     sy_panic();
     run(50);
+}
+
+/* the mean level (rms) over ms of output, both sides */
+static float level(uint32_t ms)
+{
+    uint32_t blocks = ms * 441u / 2560u + 1u, b, k;
+    float e = 0.0f;
+    for (b = 0; b < blocks; b++) {
+        sy_render(blk, 256, 4096);
+        for (k = 0; k < 512; k++) {
+            const float x = (float)blk[k] / 8388608.0f;
+            if (x != x)
+                bad = 1;
+            e += x * x;
+        }
+    }
+    return mm_sqrtf(e / (float)(blocks * 512u));
+}
+/* how long a note's room takes to fall 60 dB (-1: longer than max_ms) */
+static int room_t60(int size, int max_ms)
+{
+    float ref, t;
+    quiet();
+    run(400);
+    sy_set(P_SIZE, size);
+    run(20);
+    sy_note_on(57, 110);
+    run(200);
+    sy_note_off(57);
+    run(20);
+    ref = level(50);
+    for (t = 50.0f; t < (float)max_ms; t += 50.0f)
+        if (level(50) < ref * 0.001f)
+            return (int)t;
+    return -1;
+}
+/* when the first echo of a short blip arrives, ms after the blip (-1: none): the blip dies away to
+ * silence, then the first sound back is the echo */
+static int first_echo(int time)
+{
+    uint32_t b, k, n = 0;
+    int silent = 0;
+    sy_set(P_TIME, time);
+    quiet();
+    run(3000);                                          /* (a new Time glides there) */
+    sy_note_on(69, 110);
+    for (b = 0; b < 600; b++, n += 64u) {
+        if (b == 4)
+            sy_note_off(69);
+        float most = 0.0f;
+        sy_render(blk, 64, 4096);
+        for (k = 0; k < 128; k++) {
+            const float a = mm_fabsf((float)blk[k] / 8388608.0f);
+            if (silent && a > 0.02f)
+                return (int)((n + k / 2u) * 1000u / 44100u);
+            most = a > most ? a : most;
+        }
+        if (b > 4 && most < 0.002f)                     /* a whole block (1.5 ms) quiet: the blip is gone */
+            silent = 1;
+    }
+    return -1;
 }
 
 int main(int argc, char **argv)
@@ -151,7 +212,7 @@ int main(int argc, char **argv)
             worst = b > worst ? b : worst;
         }
         CHECK(worst < sig * 1e-5f, "C7 on SYNC: aliases %.1f dB under the fundamental",
-              (double)(10.0f * fm_log2f(worst / sig + 1e-20f) * 0.30103f));
+              (double)(10.0f * mm_log2f(worst / sig + 1e-20f) * 0.30103f));
     }
     quiet();
 
@@ -394,6 +455,53 @@ int main(int argc, char **argv)
         CHECK(n == 0, "cleared");
     }
     CHECK(sy_tel.dropped == 0u, "no command lost");
+
+    printf("the room and the tears\n");
+    {
+        int t0, t1, t2, e1, e2;
+        sy_set(P_GUNK, 0);
+        sy_set(P_DRUMS, 0);
+        sy_set(P_BASS, 0);
+        sy_set(P_CHORUS, 0);
+        sy_set(P_TAPE, 0);
+        sy_set(P_FRY, 0);
+        sy_set(P_ATTACK, 0);
+        sy_set(P_RELEASE, 0);
+        sy_set(P_DELAY, 0);
+        sy_set(P_REVERB, 100);
+        t0 = room_t60(0, 4000);
+        t1 = room_t60(50, 8000);
+        t2 = room_t60(100, 8000);
+        CHECK(t0 > 600 && t0 < 1600, "a closet: about a second (%d ms)", t0);
+        CHECK(t1 > t0 + 500 && t1 < 3500, "a bigger room rings longer (%d ms)", t1);
+        CHECK(t2 < 0, "the void: still going after 8 s");
+        sy_panic();
+        sy_set(P_SIZE, 100);
+        sy_set(P_DELAY, 100);
+        sy_set(P_FEEDBACK, 100);
+        sy_set(P_TIME, 0);
+        bad = 0;
+        peak = 0.0f;
+        for (i = 48; i < 72; i += 4)
+            sy_note_on(i, 127);
+        run(10000);
+        for (i = 48; i < 72; i += 4)
+            sy_note_off(i);
+        run(10000);
+        CHECK(!bad && peak < 1.0f, "flat out (Size, Feedback): no runaway (peak %.2f)", (double)peak);
+        sy_set(P_REVERB, 0);
+        sy_set(P_SIZE, 0);                              /* (the void would ring on under the echoes) */
+        sy_set(P_FEEDBACK, 0);
+        e1 = first_echo(0);
+        e2 = first_echo(50);
+        CHECK(e1 > 45 && e1 < 80, "Time 0: the first tear at ~60 ms (%d)", e1);
+        CHECK(e2 > 340 && e2 < 420, "Time 50: at ~380 ms (%d)", e2);
+        sy_set(P_DELAY, 22);
+        sy_set(P_FEEDBACK, 45);
+        sy_set(P_TIME, 50);
+        sy_set(P_SIZE, 62);
+        sy_set(P_REVERB, 38);
+    }
     printf(fails ? "SYNTH TESTS FAILED (%d)\n" : "synth: all passed\n", fails);
     return fails != 0;
 }
