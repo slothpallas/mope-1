@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
-"""Build MOPE-1 (a fork of FiMba-1, built on Felucca, by way of X0X and FoMni): the app, the update loader and an installable .fwsc package.
+"""Build MOPE-1 on Felucca's platform (by way of X0X, FoMni and FiMba-1): the app, the update loader and an installable .fwsc package.
 
   tools/build.py [--release X.Y[-suffix]]
 

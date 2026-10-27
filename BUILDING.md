@@ -84,17 +84,17 @@ The build also generates `build/gen/` (the font). It fails if a soft-double rout
 tests/run_tests.sh
 ```
 
-Runs, on the build machine: the maths library against libm; the instrument
-(`tests/host/synth_test.c`, linked without libm as on the device: the drum styles, the tables, aliasing, envelopes and voice stealing, with demo WAVs in `build/host/synth/`; previously
-material's pitch to a few cents, decay order, damping and the pedal, one voice per tine, rolls, the
-delay's echo times, grains and freeze, the hole and the buzzers); flash storage; Felucca's update-path
-tests against `build/mope.fwsc` (when it exists); and the whole app in the simulator
-(`tests/scenarios/*.kal`), with its screenshots and audio in `build/scenarios/`. One WAV per tine
-material lands in `build/host/materials/`.
+Runs, on the build machine: MOPE-1's maths (`mopemath.h`) against libm; the instrument
+(`tests/host/synth_test.c`, linked without libm as on the device: the drum styles, the tables,
+aliasing, envelopes, voice stealing, the loop, the room's tail at each Size and the tears' timing,
+with demo WAVs in `build/host/synth/`); the platform pieces (the encoder, USB audio, the TRS jack,
+flash storage); Felucca's update-path tests against `build/mope.fwsc` (when it exists); the whole app
+in the simulator (`tests/scenarios/*.mope`), with its screenshots and audio in `build/scenarios/`;
+and, with Emscripten and Chrome, the browser player (`web/play/`) in Node and in a headless browser.
 
 `host/build_host.sh` builds the simulator alone (`gen_font.py` needs Pillow; `PYTHON=` picks the
-interpreter); `build/host/kalimba_host SCRIPT OUTDIR` runs one script (the command list is at the top
-of `host/kalimba_host.c`).
+interpreter); `build/host/mope_host SCRIPT OUTDIR` runs one script (the command list is at the top
+of `host/mope_host.c`).
 
 ## Install
 

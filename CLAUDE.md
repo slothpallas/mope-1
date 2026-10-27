@@ -1,4 +1,4 @@
-# MOPE-1 (a fork of FiMba-1): working on a feature
+# MOPE-1: working on a feature
 
 The steps for every GitHub issue or new feature, from the first look to the release.
 
@@ -32,11 +32,9 @@ The steps for every GitHub issue or new feature, from the first look to the rele
 
 ## 4. Document it
 
-- `README.md`: the section and the control tables it touches, and one line in the history list
-  ("In rough order") for anything a player would notice.
-- `web/emu/index.html`: the help text, when controls change.
-- `docs/img/*.png`: copy the regenerated screenshots from `build/scenarios/` when the screen changed
-  (not `keyboard.png` unless the Keyboard layout changed).
+- `README.md`: the section and the control tables it touches.
+- `web/play/index.html`: the help text and the hover hints, when controls change.
+- `docs/img/*.png`: copy the regenerated screenshots from `build/scenarios/` when the screen changed.
 
 ## 5. Version and changelog (in the same PR)
 
@@ -59,15 +57,13 @@ The steps for every GitHub issue or new feature, from the first look to the rele
   The user may have merged (and so released) it already: then branch from `main` again, bump
   `VERSION` again, and open a new PR.
 
-## 7. Release (automatic, once this fork has its own GitHub repository)
-
-- This checkout's `origin` is still FiMba-1's: never push there.
+## 7. Release (automatic)
 
 - Merging to `main` with a new `VERSION` releases it, all in that one run: the release build, the tag
   `vX.Y.Z`, the GitHub Release with the CHANGELOG section, and the site at
-  https://jadamsowers.github.io/fm1-fimba/ with the new firmware in its installer.
+  https://slothpallas.github.io/mope-1/ with the new firmware in its installer.
 - Never push tags by hand, never create releases with `gh release create`, and never re-run the
   Pages job. GitHub Pages keeps only the first deployment of a commit, and a tag pushed by a run
   starts no other run.
 - Afterwards, check: `gh release view vX.Y.Z`, and
-  `curl -s https://jadamsowers.github.io/fm1-fimba/firmware/latest.json` shows the new version.
+  `curl -s https://slothpallas.github.io/mope-1/firmware/latest.json` shows the new version.

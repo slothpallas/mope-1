@@ -8,8 +8,9 @@
  *           cost), mipmapped: 256 / 128 / 64 / 32 samples, fewer harmonics each, so nothing aliases.
  *           Position morphs between neighbouring frames.
  *   LFO     one, global: sine, triangle, square, saw, random; to position, cutoff, pitch or volume.
- *   FX      fry (drive and crush), chorus, a ping-pong delay (half rate, int16, a tape's wobble),
- *           Dattorro's plate (from FiMba-1 / FoMni), tape (saturation, wow, a darker top), limiter.
+ *   FX      fry (drive and crush), chorus, the tears (a ping-pong delay, half rate, int16, each echo
+ *           darker and thinner, a tape's wobble), the room (eight breathing walls: a feedback delay
+ *           network), tape (saturation, wow, a darker top), limiter.
  *   DRUMS   synthesised: kick (808 and gabber), snare, clap, hats, perc, a sliding 808 bass. Styles,
  *           like an old toy keyboard's, but newer: drill, city pop, gabber... each a main bar, a
  *           fill, a tempo and a swing. The auto-bass plays the style's bass line on the lowest held key.

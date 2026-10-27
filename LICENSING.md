@@ -1,21 +1,28 @@
 # MOPE-1 licensing
 
-MOPE-1 is a fork of [FiMba-1](https://github.com/jadamsowers/fm1-fimba). It is free software under the GNU General Public License, version 3 only (`GPL-3.0-only`,
-full text in `LICENSE`). It is built on FiMba-1 and FoMni (and through them X0X and Felucca), and keeps
-their licence. If you distribute MOPE-1, or firmware derived from it, you must give your recipients its
-complete corresponding source under the same licence.
+MOPE-1 is free software under the GNU General Public License, version 3 only (`GPL-3.0-only`, full
+text in `LICENSE`). Its instrument, screen, effects, maths and browser player are its own; it runs on
+the open FM-1 platform of Felucca, which reached it through X0X, FoMni and FiMba-1 (the firmware
+MOPE-1 started from), and it keeps that platform's licence. If you distribute MOPE-1, or firmware
+derived from it, give your recipients its complete corresponding source under the same licence.
 
-## Where the code comes from
+## MOPE-1's own
+
+The wavetable synth and its backing band, with the room (reverb) and the tears (delay)
+(`firmware/src/dsp/synth.{c,h}`); its maths (`firmware/src/dsp/mopemath.h`); the blob, its room and its
+pixels (`firmware/src/app/{blob,px}.c`) and the controls (`firmware/src/app/ui.c`, apart from the frame
+below); the browser player (`web/play/`); the host simulator's scenario runner (`host/mope_host.c`);
+the tests of all of these (`tests/host/{synth,mopemath,play,page}_test.*`, `tests/scenarios/`) and the
+documentation. Copyright (C) 2026 slothpallas.
+
+## The platform underneath
 
 | What | Origin | Licence |
 | --- | --- | --- |
-| Platform: `firmware/hal/`, `firmware/loader/`, `firmware/src/{libc,lcd,gfx,usb,storage,ota,midi_uart}.c`, `firmware/crt0.S`, `firmware/app.ld`, `tools/` (build, package, install, rescue, font), `web/fm1*.js` | [Felucca](https://github.com/hugelton/Felucca), Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments, as changed for [X0X](https://github.com/charlesvestal/fm1-x0x) and [FoMni](https://github.com/charlesvestal/fm1-fomni) (USB names changed here) | GPL-3.0-only |
-| `firmware/src/app/{panel,plat_fm1,main_fm1}.c`, `firmware/src/main.c`, `host/mope_host.c`, the frame of `firmware/src/app/ui.c` (bands, knobs, autosave) and `project.c` | adapted from FoMni (itself from X0X and Felucca) | GPL-3.0-only |
-| `firmware/src/dsp/fastmath.h`; the plate reverb and the half-rate delay line in `firmware/src/dsp/synth.c` (Dattorro's design) | FiMba-1 / FoMni / X0X | GPL-3.0-only |
-| The emulator (`web/emu/`), the host simulator's frame, the scripted scenarios' format | FiMba-1 / FoMni / X0X | GPL-3.0-only |
-| Platform tests (`tests/host/{fastmath,encoder,uac,trs}_test.c`, `tests/{storage,ota,ldr}_test.c`, `tests/install_test.py`) | FoMni / Felucca | GPL-3.0-only |
-| The simulated FM-1 for the web installer's tests (`tests/web/fake_fm1.mjs`) and the installer panel's protocol use (`web/fm1ota.js`, `web/fm1pkg.js`, inlined into the page) | Felucca's `web/test_web.mjs` and update modules, by way of FoMni's web installer | GPL-3.0-only |
-| Everything else: the wavetable synth and its backing band (`firmware/src/dsp/synth.{c,h}`), the blob and its pixels (`firmware/src/app/{ui,blob,px}.c`), `tests/host/synth_test.c`, `tests/scenarios/` | MOPE-1 | GPL-3.0-only |
+| Drivers and start-up: `firmware/hal/`, `firmware/loader/` (the update loader, unchanged), `firmware/src/{libc,lcd,gfx,usb,storage,ota,midi_uart}.c`, `firmware/crt0.S`, `firmware/app.ld`; the tools in `tools/` (build, package, install, rescue, font); the installer's protocol `web/fm1{ota,pkg}.js` | [Felucca](https://github.com/hugelton/Felucca), Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments, as changed for [X0X](https://github.com/charlesvestal/fm1-x0x), [FoMni](https://github.com/charlesvestal/fm1-fomni) and [FiMba-1](https://github.com/jadamsowers/fm1-fimba) (USB names changed here) | GPL-3.0-only |
+| The app's frame: `firmware/src/app/{panel,plat_fm1,main_fm1}.c`, `firmware/src/main.c`, `app.h`, `project.c`, and in `ui.c` the page bands, knob acceleration and autosave | FoMni and FiMba-1, from X0X and Felucca | GPL-3.0-only |
+| The simulator's shape (a scripted FM-1 on the host) and the scenario commands; the CI workflow (`.github/workflows/web.yml`) | FiMba-1 / FoMni | GPL-3.0-only |
+| Platform tests: `tests/host/{encoder,uac,trs}_test.c`, `tests/{storage,ota,ldr}_test.c`, `tests/install_test.py`, `tests/web/` (a simulated FM-1 for the installer) | FoMni / Felucca | GPL-3.0-only |
 
 ## Third-party material
 

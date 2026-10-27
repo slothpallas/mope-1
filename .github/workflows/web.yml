@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-only
-# Test FiMba-1, build the firmware and the browser version, publish them.
+# Test MOPE-1, build the firmware and the browser player, publish them.
 #
 #   pull request      the full test suite; the firmware package built and checked; both kept with the
 #                     run as downloads ("mope-firmware", "MOPE-1-web")
 #   push to main      the same, then the browser version published to
-#                     https://jadamsowers.github.io/fm1-fimba/, with the latest release's firmware
+#                     https://slothpallas.github.io/mope-1/, with the latest release's firmware
 #                     beside it for the page's installer (firmware/latest.json)
 #   a new VERSION     a push to main whose VERSION has no tag yet is a release: a release build
 #                     (identity FM-1_7XXYYZZ, version on the splash and the Setup page), the commit

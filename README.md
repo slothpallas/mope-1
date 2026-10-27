@@ -10,9 +10,10 @@ classic way, live.
 
 ![the blob, through its parts](docs/img/sheet.png)
 
-MOPE-1 is a fork of [FiMba-1](https://github.com/jadamsowers/fm1-fimba). The boot code, safe mode,
-update loader, installer, plate reverb and browser emulator are FiMba-1's, inherited from FoMni, X0X
-and Felucca. The instrument and the screen are new.
+The instrument, the blob, its room and tears, the maths underneath and the browser player are
+MOPE-1's own. It runs on the open FM-1 platform of [Felucca](https://github.com/hugelton/Felucca) (the
+drivers, the update loader, safe mode, the installer's protocol and the build tools), which reached it
+through X0X, FoMni and FiMba-1, the firmware MOPE-1 started from.
 
 > **Status: beta, tested on a real FM-1.** It installs from M-VAVE's own firmware, plays, records and
 > updates itself on the device. Install it from **https://slothpallas.github.io/mope-1/** (Chrome or Edge, USB)
@@ -136,9 +137,10 @@ CHANGED."). Level 10 gives it a balloon, mostly deflated.
   low-pass (Simper's SVF) with key tracking, an amp ADSR and a mod envelope on the cutoff. A stolen
   voice restarts from its current level, so stealing doesn't click.
 - **One LFO** with 5 shapes and 4 destinations.
-- **Effects:** fry (drive, then bitcrush and sample-rate crush), a three-tap chorus, a ping-pong delay
-  (a half-rate int16 line, its time wobbling with Tape), Dattorro's plate reverb, tape (wow, flutter,
-  saturation, a darker top) and a limiter.
+- **Effects:** fry (drive, then bitcrush and sample-rate crush), a three-tap chorus, the tears (a
+  ping-pong delay: every echo crosses the room darker and thinner, its time wobbling with Tape), the
+  room (a reverb of eight walls handing sound to each other, four of them breathing; Size goes from a
+  one-second closet to a half-minute void), tape (wow, flutter, saturation, a darker top) and a limiter.
 - **Fry is level-matched:** more fry is more grit, not more loud (full fry stays within about 2 dB of clean), and it glides, so a preset change doesn't slam it in.
 - **Drums:** synthesized kick (808 to gabber), snare, clap, closed and open hats, perc (rim, cowbell,
   log drum, squeak), a sliding 808 bass and record crackle. They run sample-accurate with swing.
@@ -155,12 +157,15 @@ It runs the engine tests and writes the demo WAVs, then the app scenario (screen
 `build/scenarios/blob/`), then the browser build if Emscripten is installed. To play it in a browser:
 
 ```bash
-web/emu/build.sh && node tools/serve_emu.mjs
+web/play/build.sh && node tools/serve_play.mjs
 ```
 
-Then open <http://localhost:8137>, or open `build/emu/MOPE-1.html` straight from disk. Computer keys:
-`Q`–`I` and `A`–`K` play the white keys and `1`–`0`, `-` the black ones. `Space` starts the drums,
-`B` the bass and `Enter` hold. `↑` `↓` turn ALGORITHM (the instrument) and `←` `→` SELECT (the drum tape).
+Then open <http://localhost:8137>, or open `build/play/MOPE-1.html` straight from disk. Computer keys:
+`Q`–`I` and `A`–`K` play the white keys and `1`–`0`, `-` the black ones. `Space` is PLAY, `Enter` REC,
+`B` ARP, `Esc` HOME, `Z` `X` the octave. `↑` `↓` turn ALGORITHM (the wavetable) and `←` `→` SELECT (the drum tape).
+To put the player in another page, serve `index.html`, `voice.js` and `mope.wasm` from `build/play/`
+together and frame `index.html`: in a frame it drops its title and installer, and it needs no `data:`
+scripts, only `'wasm-unsafe-eval'` if the page has a content security policy.
 
 ## Installing it
 
@@ -176,5 +181,5 @@ The package identity is `FM-1_6673` ("MOPE" on a phone keypad) followed by the v
 
 ## Licence
 
-GPL-3.0-only, like everything it is built on: see [LICENSING.md](LICENSING.md). Not affiliated with
-M-VAVE.
+GPL-3.0-only, like the platform it runs on: see [LICENSING.md](LICENSING.md) for what is MOPE-1's and
+what comes from where. Not affiliated with M-VAVE.
