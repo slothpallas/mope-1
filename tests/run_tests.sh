@@ -50,13 +50,13 @@ else
 fi
 run host-build sh host/build_host.sh
 if command -v emcc >/dev/null 2>&1; then
-    run emu sh -c "sh web/emu/build.sh >/dev/null 2>&1 && node tests/host/emu_test.mjs build/emu/mope.wasm"
+    run play sh -c "sh web/play/build.sh >/dev/null 2>&1 && node tests/host/play_test.mjs build/play/mope.wasm"
     CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     [ -x "$CHROME" ] || CHROME="$(command -v google-chrome || command -v chromium || true)"
     # the installer as the page ships it, against a simulated FM-1
     run updater node tests/web/updater_test.mjs
     if [ -n "$CHROME" ]; then
-        run standalone node tests/host/standalone_test.mjs "$CHROME"
+        run page node tests/host/page_test.mjs "$CHROME"
         if [ -f build/mope.fwsc ]; then       # the installer's buttons, end to end (needs a firmware build)
             run installer-page node tests/web/installer_page_test.mjs "$CHROME"
         fi

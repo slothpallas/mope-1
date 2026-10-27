@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The installer on the page, end to end in headless Chrome: build/emu/MOPE-1.html served as GitHub
+// The installer on the page, end to end in headless Chrome: build/play/MOPE-1.html served as GitHub
 // Pages serves it (with firmware/latest.json and the package beside it), Web MIDI replaced by a
 // simulated FM-1 (tests/web/fake_fm1.mjs), then the buttons pressed: "Install MOPE-1 <version>" (the
 // latest release), and a chosen .fwsc file. Each must end "Done", with every read answered right.
-//   node tests/web/installer_page_test.mjs CHROME      (after web/emu/build.sh and ./build.sh)
+//   node tests/web/installer_page_test.mjs CHROME      (after web/play/build.sh and ./build.sh)
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { readFileSync, rmSync, mkdtempSync } from "node:fs";
@@ -16,7 +16,7 @@ const pkg = readFileSync("build/mope.fwsc");
 let product = "";
 for (let i = 0; i < 20; i++) { const m = pkg[(i + 1) * 0x2F + i]; if (m !== 0x7D) product += String.fromCharCode((m - i - 1) & 0xFF); }
 const files = {
-  "/": [readFileSync("build/emu/MOPE-1.html"), "text/html"],
+  "/": [readFileSync("build/play/MOPE-1.html"), "text/html"],
   "/firmware/latest.json": [JSON.stringify({ version: "9.9.9", product, file: "mope.fwsc" }), "application/json"],
   "/firmware/mope.fwsc": [pkg, "application/octet-stream"],
 };

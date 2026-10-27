@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The installer as the page ships it: the update protocol inlined in build/emu/MOPE-1.html, taken out
+// The installer as the page ships it: the update protocol inlined in build/play/MOPE-1.html, taken out
 // of the page and run against a simulated FM-1 (tests/web/fake_fm1.mjs; after Felucca's
 // web/test_web.mjs), and the real package read the way the page reads it.
-//   node tests/web/updater_test.mjs        (after web/emu/build.sh; uses build/mope.fwsc if there)
+//   node tests/web/updater_test.mjs        (after web/play/build.sh; uses build/mope.fwsc if there)
 import { existsSync, readFileSync } from "node:fs";
 import { FakeFM1 } from "./fake_fm1.mjs";
 
 let failed = 0;
 const ok = (cond, what) => { console.log(`${what.padEnd(70)} ${cond ? "ok" : "FAIL"}`); if (!cond) failed++; };
 
-const page = readFileSync("build/emu/MOPE-1.html", "utf8");
-const a = page.indexOf("/* ---- web/fm1pkg.js (inlined) ---- */"), b = page.indexOf("const $ = (id) =>", a);
+const page = readFileSync("build/play/MOPE-1.html", "utf8");
+const a = page.indexOf("/* ---- the update protocol: web/fm1pkg.js, web/fm1ota.js ---- */"), b = page.indexOf("/* ---- end of the update protocol ---- */", a);
 ok(a > 0 && b > a, "the page carries the inlined update protocol");
 const lib = page.slice(a, b) + "\nexport { Updater, productOf, logicalImage };";
 const { Updater, productOf, logicalImage } = await import("data:text/javascript;base64," + Buffer.from(lib).toString("base64"));

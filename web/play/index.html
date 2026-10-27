@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MOPE-1</title>
+<meta name="description" content="MOPE-1, a sad wavetable synth for the M-VAVE FM-1, playing in the browser.">
+<style>
+/* MOPE-1's room: near-black, the hardware as thin lines, the screen the only thing that glows */
+:root {
+  --night: #07080a; --panel: #0b0d10; --line: rgba(186, 204, 222, .2); --line-hi: rgba(186, 204, 222, .42);
+  --ink: #d8dee5; --quiet: #7a838e; --sodium: #f28a5a; --sodium-soft: rgba(242, 138, 90, .18); --rain: #5fd0c4;
+  --glass: #9fc4e6; --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--night); color: var(--ink); font: 15px/1.55 var(--sans); }
+main { max-width: 1060px; margin: 0 auto; padding: 28px 16px 56px; }
+.framed main { padding-top: 14px; }
+.framed .standalone-only { display: none; }
+a { color: var(--glass); }
+h1, h2 { font-family: var(--mono); font-weight: 500; letter-spacing: .14em; text-transform: uppercase; margin: 0; }
+h1 { font-size: 1rem; }
+h2 { font-size: .74rem; color: var(--ink); margin-bottom: .55rem; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem 1.1rem; margin-bottom: 1.1rem; }
+header p { margin: 0; color: var(--quiet); font: .82rem var(--mono); }
+header nav { margin-left: auto; display: flex; gap: 1rem; font: .8rem var(--mono); }
+.sideways { display: none; color: var(--quiet); font: .8rem var(--mono); margin: 0 0 .8rem; }
+@media (orientation: portrait) and (max-width: 700px) { .sideways { display: block; } }
+
+/* ---------------------------------------------------------------- the FM-1 */
+.fm1 { position: relative; aspect-ratio: 1000 / 600; border: 1px solid var(--line-hi); border-radius: 4.2% / 7%;
+       background: var(--panel); user-select: none; -webkit-user-select: none; touch-action: manipulation;
+       container-type: inline-size; }
+.tray { position: absolute; border: 1px solid var(--line); border-radius: 14px; pointer-events: none; }
+.ctl { position: absolute; padding: 0; margin: 0; font: 500 1.35cqw/1 var(--mono); letter-spacing: .08em; color: rgba(200, 214, 228, .55);
+       background: transparent; border: 1px solid var(--line-hi); cursor: pointer; touch-action: none;
+       -webkit-tap-highlight-color: transparent; transition: background .08s, border-color .08s, box-shadow .08s, color .08s; }
+.ctl:focus-visible { outline: 2px solid var(--glass); outline-offset: 3px; }
+.btn { border-radius: 9px; display: grid; place-items: center; text-align: center; line-height: 1.15; }
+.key { border-radius: 999px; }
+.knob { border-radius: 50%; cursor: ns-resize; }
+.knob::after { content: ""; position: absolute; left: calc(50% - 1px); top: 10%; width: 2px; height: 26%; border-radius: 2px;
+               background: #e9eef3; transform-origin: 50% 154%; transform: rotate(var(--turn, 0deg)); }
+.knob b { position: absolute; left: 50%; bottom: calc(100% + .9cqw); transform: translateX(-50%); font-weight: 500; white-space: nowrap; }
+.lit { color: #ffb48f; border-color: var(--sodium); background: var(--sodium-soft); box-shadow: 0 0 1.1cqw rgba(242, 138, 90, .5); }
+.key.lit { background: rgba(242, 138, 90, .3); }
+.key.black.lit { color: inherit; border-color: var(--rain); background: rgba(95, 208, 196, .28); box-shadow: 0 0 1.1cqw rgba(95, 208, 196, .5); }
+.key.dim { border-color: rgba(186, 204, 222, .6); background: rgba(186, 204, 222, .06); }
+.down { border-color: var(--sodium); }
+.kept { border-color: var(--glass); box-shadow: inset 0 0 0 1px var(--glass); }
+.screen { position: absolute; left: 30.2%; top: 6.6%; width: 20.6%; height: 34.4%; border: 1px solid var(--line-hi);
+          border-radius: 18px; display: grid; place-items: center; pointer-events: none; }
+.screen canvas { width: 88%; aspect-ratio: 1; image-rendering: pixelated; background: #000; border-radius: 3px;
+                 box-shadow: 0 0 0 1px rgba(150, 190, 225, .35), 0 0 2.8cqw .2cqw rgba(90, 150, 200, .3), 0 0 9cqw 1cqw rgba(70, 120, 170, .16); }
+.power { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(4, 5, 7, .58); border-radius: inherit; }
+.power[hidden] { display: none; }
+.power button { font: 600 1rem var(--mono); letter-spacing: .1em; text-transform: uppercase; padding: .8em 1.7em; border: 0;
+                border-radius: 999px; background: var(--sodium); color: #2a140a; cursor: pointer; box-shadow: 0 0 30px rgba(242, 138, 90, .35); }
+.power button:disabled { opacity: .6; cursor: progress; }
+
+/* ---------------------------------------------------------------- below it */
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1.1rem; margin-top: .9rem; color: var(--quiet); font: .8rem var(--mono); }
+.bar button, .install button { font: .8rem var(--mono); color: var(--ink); background: transparent; border: 1px solid var(--line-hi);
+                               border-radius: 8px; padding: .35em .85em; cursor: pointer; }
+.bar .midi b { color: var(--rain); font-weight: 500; }
+section { margin-top: 2rem; padding-top: 1.2rem; border-top: 1px solid var(--rule, #1b1f25); }
+.guide { display: grid; grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr)); gap: 1.4rem 2.2rem; }
+.guide p, .guide ul { margin: 0; color: var(--quiet); max-width: 62ch; }
+.guide ul { padding-left: 1.05rem; }
+.guide li + li { margin-top: .3rem; }
+.guide b, .install b { color: var(--ink); font-weight: 600; }
+kbd { font: .78rem var(--mono); color: var(--ink); border: 1px solid var(--line-hi); border-radius: 4px; padding: 0 .3em; }
+.install p, .install ol { color: var(--quiet); max-width: 72ch; }
+.install ol { padding-left: 1.2rem; }
+.install .row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .9rem; margin: .7rem 0; }
+.install .go { background: var(--sodium); color: #2a140a; border-color: var(--sodium); font-weight: 600; }
+.install button:disabled { opacity: .4; cursor: not-allowed; }
+.install .careful { border-left: 2px solid var(--sodium); padding: .3rem .8rem; }
+.install progress { width: 100%; max-width: 32rem; height: .5rem; accent-color: var(--sodium); }
+.install .said { color: var(--ink); min-height: 1.5em; font-weight: 600; }
+.install input[type=file] { font: .8rem var(--mono); color: var(--quiet); max-width: 100%; }
+.install details { margin-top: .8rem; }
+.install summary { cursor: pointer; color: var(--quiet); font: .8rem var(--mono); }
+.install pre { max-height: 12rem; overflow: auto; font: .75rem var(--mono); color: var(--quiet); white-space: pre-wrap; }
+</style>
+<script>
+// inside another site's page (an iframe): no title, no installer (a frame has no USB); the page around it has both
+if (window.self !== window.top) document.documentElement.classList.add("framed");
+</script>
+</head>
+<body>
+<main>
+<header class="standalone-only">
+  <h1>MOPE-1</h1>
+  <p>a sad wavetable synth for the M-VAVE FM-1, playing here from the same C code</p>
+  <nav><a href="https://github.com/slothpallas/mope-1">source</a><a href="#install">install</a></nav>
+</header>
+<p class="sideways">Turn your phone sideways for bigger controls.</p>
+
+<div class="fm1" id="fm1" role="application" aria-label="The FM-1">
+  <div class="screen"><canvas id="screen" width="240" height="240" aria-label="The FM-1's screen"></canvas></div>
+  <div class="power" id="power"><button id="on" type="button">Switch on</button></div>
+</div>
+
+<div class="bar">
+  <span id="said">Off. The sound starts when you switch it on.</span>
+  <span id="cpu"></span>
+  <button id="midi" type="button" title="Play it from a MIDI keyboard (Chrome or Edge)">Connect MIDI</button>
+  <span class="midi" id="midisaid"></span>
+  <button id="forget" type="button" title="Forget your sound, your loop and your settings">Factory reset</button>
+</div>
+
+<section class="guide" aria-label="How to play it">
+  <div>
+    <h2>The blob</h2>
+    <ul>
+      <li>The blob is the sound. Its body is the wavetable, its eyes the filter, its mouth the envelope, its tears the delay, the room around it the reverb.</li>
+      <li>Press a part's button: its drawer opens under the blob and the four knobs turn that part. The drawer hides after 3 s, the page stays (its button lit). Press twice: the drawer stays until <b>HOME</b>.</li>
+      <li><b>HOME</b> body · <b>EDIT</b> eyes · <b>ENV</b> mouth · <b>LFO</b> vibe · <b>FX</b> tears · <b>SEL</b> walls · <b>GLO</b> mixer, again setup · <b>ARP</b> held: the arpeggiator · <b>SEQ</b> the loop, again the tape deck.</li>
+    </ul>
+  </div>
+  <div>
+    <h2>Playing</h2>
+    <ul>
+      <li>27 keys, F3 to G5. <b>OCT−</b> / <b>OCT+</b> shift them and light up while they're shifted.</li>
+      <li><b>PRESETS</b> a whole sound (21 of them), <b>ALGORITHM</b> only the wavetable, <b>SELECT</b> the drum tape.</li>
+      <li><b>PLAY</b> the band: thirteen depressing beats, a minor-key bass, your loop. <b>ARP</b> tapped: chords become patterns.</li>
+      <li><b>REC</b> records into a 1, 2 or 4-bar loop (a bar's count-in when stopped). <b>SEQ</b>: the white keys are its steps; press one and turn NOTE, LEN, VEL; tap it to remove it. <b>HOME + REC</b> undo, <b>SAVE + REC</b> clear.</li>
+    </ul>
+  </div>
+  <div>
+    <h2>Here</h2>
+    <ul>
+      <li>Drag a knob up or down, or scroll on it. Several fingers work on a touch screen. <kbd>Shift</kbd>-click or right-click a button to keep it held.</li>
+      <li>White keys <kbd>Q</kbd>–<kbd>I</kbd> and <kbd>A</kbd>–<kbd>K</kbd>, black keys <kbd>1</kbd>–<kbd>0</kbd> <kbd>-</kbd>. <kbd>Space</kbd> play, <kbd>Enter</kbd> rec, <kbd>B</kbd> arp, <kbd>Esc</kbd> home, <kbd>Z</kbd> <kbd>X</kbd> octave, <kbd>↑</kbd> <kbd>↓</kbd> wavetable, <kbd>←</kbd> <kbd>→</kbd> drum tape.</li>
+      <li>MIDI in: notes, bend, the mod wheel (the wavetable's position), program change (a preset), CC 74 cutoff, 71 resonance, 73 attack, 72 release, 91 reverb, 93 chorus, 94 delay, 7 volume.</li>
+    </ul>
+  </div>
+  <div>
+    <h2>What this is</h2>
+    <p>MOPE-1 by slothpallas: the FM-1 firmware's screen and sound, compiled to WebAssembly and running at the FM-1's 44.1 kHz. It sits on the open FM-1 platform of <a href="https://github.com/hugelton/Felucca">Felucca</a>. Free software (GPL-3.0): <a href="https://github.com/slothpallas/mope-1">the source</a>.</p>
+  </div>
+</section>
+
+<section class="install standalone-only" id="install" aria-labelledby="install-h">
+  <h2 id="install-h">Put it on your FM-1</h2>
+  <p class="careful"><b>Beta, at your own risk.</b> First download M-VAVE's own firmware (FM-1 V15, "PC Firmware" at
+    <a href="https://www.m-vave.com/download" target="_blank" rel="noopener">m-vave.com/download</a>), so you can always go back.</p>
+  <ol>
+    <li>Plug the FM-1 straight into this computer with a USB data cable (no hub). Close other apps that use MIDI.</li>
+    <li>Use Chrome or Edge; allow MIDI with SysEx when it asks.</li>
+    <li>Press install and leave the page open while it writes (about a minute). The FM-1 restarts as MOPE-1.</li>
+  </ol>
+  <div class="row">
+    <button id="instLatest" class="go" type="button" disabled>Install MOPE-1</button>
+    <span id="instWhat">Looking for the latest release&hellip;</span>
+  </div>
+  <div class="row">
+    <label for="instFile">Or a firmware file (<code>.fwsc</code>):</label>
+    <input type="file" id="instFile" accept=".fwsc">
+    <button id="instFileGo" type="button" disabled>Install this file</button>
+  </div>
+  <progress id="instBar" max="100" value="0" aria-label="Install progress"></progress>
+  <p class="said" id="instStatus" role="status" aria-live="polite"></p>
+  <details>
+    <summary>Back to M-VAVE's firmware</summary>
+    <p>Choose the V15 file from M-VAVE's page: it is checked before anything is written, then written back over the same cable.
+      If the FM-1 ever won't start, it comes up in safe mode after two tries and this still works.</p>
+    <div class="row">
+      <input type="file" id="stockFile" accept=".fwsc" aria-label="M-VAVE's FM-1 V15 file">
+      <button id="stockGo" type="button" disabled>Install M-VAVE's firmware</button>
+    </div>
+  </details>
+  <details><summary>Log</summary><pre id="instLog"></pre></details>
+</section>
+</main>
+
+<!--MOPE-EMBED-->
+<script>
+"use strict";
+/* ------------------------------------------------------------------------ the FM-1, laid out */
+// Positions are in a 1000 x 600 box. Button and key numbers are the firmware's (app/plat.h); knob
+// numbers are its encoders (SELECT, ALGORITHM, PRESETS, then KNOB1..4), the master volume is apart.
+const BUTTONS = [
+  // row by row, as on the panel
+  ["FX", 0, "Tears: chorus, delay, time, feedback"], ["SEL", 1, "Walls: reverb, size, fry, tape"],
+  ["ENV", 2, "Mouth: attack, decay, sustain, release"], ["LFO", 3, "Vibe: rate, depth, shape, where it goes"],
+  ["EDIT", 4, "Eyes: cutoff, resonance, envelope, mod decay"], ["GLO", 5, "Mixer; again: setup"],
+  ["HOME", 6, "Body: wavetable, position, detune, sub"], ["SAVE", 7, "Save (hold 1.5 s: factory settings)"],
+  ["ARP", 8, "Tap: arpeggiator on / off. Hold: its settings"], ["SEQ", 9, "The loop and its steps; again: the tape deck"],
+  ["PLAY\nSTOP", 10, "The band: drums, bass, your loop"], ["REC", 11, "Record into the loop"],
+];
+const KNOBS = [
+  ["MASTER", -1, 90, 92, "Volume"], ["SELECT", 0, 200, 92, "The drum tape"],
+  ["PRESETS", 2, 90, 190, "A whole sound"], ["ALGORITHM", 1, 200, 190, "The wavetable"],
+  ["KNOB1", 3, 610, 92, ""], ["KNOB2", 4, 705, 92, ""], ["KNOB3", 5, 800, 92, ""], ["KNOB4", 6, 895, 92, ""],
+];
+const WHITE = [0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26];
+const BLACK = [1, 3, 5, 8, 10, 13, 15, 17, 20, 22, 25];
+const BLACK_GAP = [0, 1, 2, 4, 5, 7, 8, 9, 11, 12, 14];        // a black key sits after these white ones
+const NOTE = ["F", "F♯", "G", "G♯", "A", "A♯", "B", "C", "C♯", "D", "D♯", "E"];
+const keyName = (k) => NOTE[k % 12] + (3 + Math.floor((k + 5) / 12));
+
+const fm1 = document.getElementById("fm1");
+const pct = (x, y, w, h) => ({ left: x / 10 + "%", top: y / 6 + "%", width: w / 10 + "%", height: h / 6 + "%" });
+function place(tag, cls, box, label, tip) {
+  const e = document.createElement(tag);
+  e.className = cls;
+  Object.assign(e.style, box);
+  if (label) e.setAttribute("aria-label", label);
+  if (tip) e.title = tip;
+  if (tag === "button") e.type = "button";
+  fm1.insertBefore(e, document.getElementById("power"));
+  return e;
+}
+place("div", "tray", pct(48, 248, 214, 60));                        // the octave buttons' tray
+place("div", "tray", pct(552, 150, 418, 136));                      // the twelve buttons'
+place("div", "tray", pct(28, 322, 944, 256));                       // the keybed
+
+const knobs = KNOBS.map(([name, enc, x, y, tip]) => {
+  const r = name.startsWith("KNOB") ? 22 : 24;
+  const e = place("div", "ctl knob", pct(x - r, y - r, 2 * r, 2 * r), name, tip);
+  e.tabIndex = 0;
+  e.setAttribute("role", "slider");
+  e.innerHTML = `<b>${name}</b>`;
+  return { name, enc, e, turn: 0 };
+});
+const buttons = [];
+BUTTONS.forEach(([name, bit, tip], i) => {
+  const x = 566 + (i % 6) * 66, y = i < 6 ? 162 : 224;
+  const e = place("button", "ctl btn", pct(x, y, 58, 50), name.replace("\n", " / "), tip);
+  e.innerHTML = name.replace("\n", "<br>");
+  buttons[bit] = e;
+});
+buttons[12] = place("button", "ctl btn", pct(62, 258, 86, 40), "OCT−", "Octave down");
+buttons[12].textContent = "OCT−";
+buttons[13] = place("button", "ctl btn", pct(162, 258, 86, 40), "OCT+", "Octave up");
+buttons[13].textContent = "OCT+";
+const keys = [];
+const pitch = (944 - 24) / 16, kw = pitch * 0.76;
+WHITE.forEach((k, i) => { keys[k] = place("button", "ctl key white", pct(40 + i * pitch + (pitch - kw) / 2, 434, kw, 132), keyName(k)); });
+BLACK.forEach((k, i) => { keys[k] = place("button", "ctl key black", pct(40 + (BLACK_GAP[i] + 1) * pitch - kw / 2, 336, kw, 88), keyName(k)); });
+
+/* ------------------------------------------------------------------------ input */
+let voice = null, volume = 2800;
+const send = (m) => voice && voice.port.postMessage(m);
+const holding = { buttons: new Map(), keys: new Map() };            // who holds what: a pointer or a key -> its bit
+let kept = 0;                                                        // buttons held by shift- or right-click
+let sent = { buttons: -1, keys: -1 };
+function sync() {
+  let b = kept, k = 0;
+  for (const bit of holding.buttons.values()) b |= 1 << bit;
+  for (const bit of holding.keys.values()) k |= 1 << bit;
+  if (b !== sent.buttons || k !== sent.keys) { sent = { buttons: b, keys: k }; send({ is: "hold", buttons: b, keys: k }); }
+  buttons.forEach((e, i) => { e.classList.toggle("down", !!(b >> i & 1)); e.classList.toggle("kept", !!(kept >> i & 1)); e.setAttribute("aria-pressed", String(!!(b >> i & 1))); });
+  keys.forEach((e, i) => e.classList.toggle("down", !!(k >> i & 1)));
+}
+function press(part, e, bit) {
+  e.addEventListener("pointerdown", (ev) => {
+    ev.preventDefault();
+    if (part === "buttons" && (ev.shiftKey || ev.button === 2)) { kept ^= 1 << bit; sync(); return; }
+    if (part === "buttons" && kept >> bit & 1) { kept &= ~(1 << bit); sync(); return; }
+    e.setPointerCapture(ev.pointerId);
+    holding[part].set("p" + ev.pointerId, bit);
+    sync();
+  });
+  e.addEventListener("contextmenu", (ev) => ev.preventDefault());
+}
+buttons.forEach((e, bit) => press("buttons", e, bit));
+keys.forEach((e, bit) => press("keys", e, bit));
+const letGo = (ev) => { const id = "p" + ev.pointerId; if (holding.buttons.delete(id) | holding.keys.delete(id)) sync(); };
+for (const t of ["pointerup", "pointercancel", "lostpointercapture"]) fm1.addEventListener(t, letGo);
+
+function turn(knob, by) {
+  if (!by) return;
+  if (knob.enc < 0) {
+    volume = Math.max(0, Math.min(4096, volume + by * 64));
+    send({ is: "volume", to: volume });
+  } else {
+    knob.turn += by;
+    send({ is: "turn", knob: knob.enc, by });
+  }
+  show(knob);
+}
+function show(knob) {
+  const deg = knob.enc < 0 ? -135 + 270 * volume / 4096 : knob.turn * 18;
+  knob.e.style.setProperty("--turn", deg + "deg");
+  if (knob.enc < 0) knob.e.setAttribute("aria-valuenow", String(Math.round(volume / 40.96)));
+}
+for (const knob of knobs) {
+  const e = knob.e;
+  let drag = null, scroll = 0;
+  show(knob);
+  e.addEventListener("pointerdown", (ev) => { ev.preventDefault(); e.setPointerCapture(ev.pointerId); drag = { y: ev.clientY, left: 0 }; });
+  e.addEventListener("pointermove", (ev) => {
+    if (!drag) return;
+    const per = knob.enc < 0 ? 3 : 7;                                // pixels a detent
+    drag.left += drag.y - ev.clientY;
+    drag.y = ev.clientY;
+    const n = Math.trunc(drag.left / per);
+    if (n) { drag.left -= n * per; turn(knob, n); }
+  });
+  for (const t of ["pointerup", "pointercancel"]) e.addEventListener(t, () => { drag = null; });
+  e.addEventListener("wheel", (ev) => {
+    ev.preventDefault();
+    const dy = ev.deltaMode === 1 ? ev.deltaY * 33 : ev.deltaY;
+    if (Math.abs(dy) >= 50) { turn(knob, dy < 0 ? 1 : -1); return; }   // a wheel's notch: one detent
+    scroll -= dy;                                                       // a trackpad: by distance
+    const n = Math.trunc(scroll / 25);
+    if (n) { scroll -= n * 25; turn(knob, n); }
+  }, { passive: false });
+  e.addEventListener("keydown", (ev) => {
+    const by = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[ev.key];
+    if (by) { turn(knob, by); ev.preventDefault(); ev.stopPropagation(); }
+  });
+}
+
+// the computer's keyboard
+const LETTERS = {};
+"QWERTYUIASDFGHJK".split("").forEach((c, i) => { LETTERS["Key" + c] = ["keys", WHITE[i]]; });
+"1234567890".split("").forEach((c, i) => { LETTERS["Digit" + c] = ["keys", BLACK[i]]; });
+LETTERS.Minus = ["keys", BLACK[10]];
+Object.assign(LETTERS, { Space: ["buttons", 10], Enter: ["buttons", 11], KeyB: ["buttons", 8], Escape: ["buttons", 6],
+                         KeyZ: ["buttons", 12], KeyX: ["buttons", 13] });
+const byName = (n) => knobs.find((k) => k.name === n);
+addEventListener("keydown", (ev) => {
+  if (!voice || ev.metaKey || ev.ctrlKey || ev.altKey || ev.target.closest?.("input, .knob")) return;
+  const arrow = { ArrowUp: ["ALGORITHM", 1], ArrowDown: ["ALGORITHM", -1], ArrowRight: ["SELECT", 1], ArrowLeft: ["SELECT", -1] }[ev.code];
+  if (arrow) { turn(byName(arrow[0]), arrow[1]); ev.preventDefault(); return; }
+  const what = LETTERS[ev.code];
+  if (!what) return;
+  ev.preventDefault();
+  if (!ev.repeat) { holding[what[0]].set("k" + ev.code, what[1]); sync(); }
+});
+addEventListener("keyup", (ev) => { const id = "k" + ev.code; if (holding.buttons.delete(id) | holding.keys.delete(id)) sync(); });
+addEventListener("blur", () => {
+  for (const part of ["buttons", "keys"]) for (const id of [...holding[part].keys()]) if (id[0] === "k") holding[part].delete(id);
+  sync();
+});
+
+/* ------------------------------------------------------------------------ what it shows */
+const paint = document.getElementById("screen").getContext("2d");
+const picture = paint.createImageData(240, 240);
+function showScreen(px) {                                           // RGB565, byte-swapped as the panel takes it
+  const d = picture.data;
+  for (let i = 0, j = 0; i < px.length; i++, j += 4) {
+    const v = ((px[i] & 0xFF) << 8) | (px[i] >> 8);
+    d[j] = (v >> 11) * 255 / 31; d[j + 1] = (v >> 5 & 63) * 255 / 63; d[j + 2] = (v & 31) * 255 / 31; d[j + 3] = 255;
+  }
+  paint.putImageData(picture, 0, 0);
+}
+function showLights(b, k, dim) {
+  buttons.forEach((e, i) => e.classList.toggle("lit", !!(b >> i & 1)));
+  keys.forEach((e, i) => { e.classList.toggle("lit", !!(k >> i & 1)); e.classList.toggle("dim", !(k >> i & 1) && !!(dim >> i & 1)); });
+}
+
+/* ------------------------------------------------------------------------ what it keeps (this browser only) */
+const SAVES = "mope1-saves", OLD_SAVES = "mope-emu-store";
+function readSaves() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SAVES) || localStorage.getItem(OLD_SAVES) || "{}"), out = {};
+    for (const [obj, b64] of Object.entries(raw)) out[obj] = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)).buffer;
+    return out;
+  } catch { return {}; }
+}
+function keepSaves(saves) {
+  try {
+    const raw = {};
+    for (const [obj, bytes] of Object.entries(saves)) { let t = ""; for (const c of bytes) t += String.fromCharCode(c); raw[obj] = btoa(t); }
+    localStorage.setItem(SAVES, JSON.stringify(raw));
+  } catch { /* no storage here: this visit only */ }
+}
+
+/* ------------------------------------------------------------------------ switching it on */
+// Its two files: mope.wasm (the app) and voice.js (its AudioWorklet). Next to the page when it is
+// served; inside it (MOPE_EMBED, put there by web/play/pack.py) when it is opened from disk. A site
+// with a strict content policy (no data: scripts) still works: the file next to the page comes first.
+const fromBase64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0)).buffer;
+const embedded = typeof MOPE_EMBED !== "undefined" ? MOPE_EMBED : null;
+async function theApp() {
+  if (embedded) return fromBase64(embedded.wasm);
+  const r = await fetch("mope.wasm");
+  if (!r.ok) throw new Error(`mope.wasm: ${r.status}`);
+  return r.arrayBuffer();
+}
+async function theVoice(ac) {
+  if (location.protocol !== "file:") {
+    try { await ac.audioWorklet.addModule("voice.js"); return; } catch (e) { if (!embedded) throw e; }
+  }
+  await ac.audioWorklet.addModule("data:text/javascript;base64," + embedded.voice);
+}
+const said = document.getElementById("said"), cpu = document.getElementById("cpu");
+document.getElementById("on").addEventListener("click", async (ev) => {
+  const on = ev.currentTarget;
+  on.disabled = true;
+  on.textContent = "Waking up…";
+  try {
+    const ac = new AudioContext({ sampleRate: 44100, latencyHint: "interactive" });
+    const [wasm] = await Promise.all([theApp(), theVoice(ac)]);
+    const node = new AudioWorkletNode(ac, "mope-voice", { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
+    node.connect(ac.destination);
+    const awake = new Promise((resolve) => {
+      node.port.onmessage = ({ data: m }) => {
+        if (m.is === "on") resolve();
+        if (m.is !== "frame") return;
+        if (m.screen) showScreen(m.screen);
+        showLights(m.buttons, m.keys, m.dim);
+        if (m.cpu !== undefined) cpu.textContent = `It takes ${m.cpu}% of this computer's time.`;
+        if (m.saves) keepSaves(m.saves);
+      };
+    });
+    node.port.postMessage({ is: "start", wasm, saves: readSaves(), volume }, [wasm]);
+    await awake;
+    await ac.resume();
+    voice = node;
+    document.getElementById("power").hidden = true;
+    said.textContent = ac.sampleRate === 44100 ? "On." : `On (this browser runs audio at ${ac.sampleRate} Hz).`;
+    sent = { buttons: -1, keys: -1 };
+    sync();
+  } catch (err) {
+    on.disabled = false;
+    on.textContent = "Switch on";
+    said.textContent = `It wouldn't start: ${err && err.message || err}.`;
+  }
+});
+
+/* ------------------------------------------------------------------------ MIDI in, factory reset */
+const midiSaid = document.getElementById("midisaid");
+let midi = null;
+function hear(ev) {
+  const d = ev.data;
+  if (d && d.length && d[0] >= 0x80 && d[0] < 0xF0) send({ is: "midi", bytes: [d[0], d[1] || 0, d[2] || 0] });   // channel messages
+}
+function listen() {
+  const names = [];
+  for (const input of midi.inputs.values()) { input.onmidimessage = hear; names.push(input.name); }
+  midiSaid.innerHTML = names.length ? "MIDI from <b></b>" : "No MIDI inputs yet: plug one in.";
+  if (names.length) midiSaid.querySelector("b").textContent = names.join(", ");
+}
+document.getElementById("midi").addEventListener("click", async () => {
+  if (!navigator.requestMIDIAccess) { midiSaid.textContent = "This browser has no Web MIDI: try Chrome or Edge."; return; }
+  try { midi = await navigator.requestMIDIAccess(); midi.onstatechange = listen; listen(); }
+  catch (err) { midiSaid.textContent = `MIDI was refused here (${err && err.name || "blocked"}).`; }
+});
+document.getElementById("forget").addEventListener("click", (ev) => {
+  const b = ev.currentTarget;
+  if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "Again to forget everything"; return; }
+  try { localStorage.removeItem(SAVES); localStorage.removeItem(OLD_SAVES); } catch {}
+  location.reload();
+});
+</script>
+
+<script type="module">
+/* ------------------------------------------------------------------------ the installer */
+// The FM-1's update protocol is Felucca's (web/fm1pkg.js, web/fm1ota.js: put in here by web/play/pack.py),
+// over Web MIDI with SysEx. The latest release's package sits beside the page (firmware/latest.json).
+/*FM1LIB*/
+if (!document.documentElement.classList.contains("framed")) {
+  const $ = (id) => document.getElementById(id);
+  const V15 = "db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a";   // M-VAVE's FM-1 V15, SHA-256
+  const WHY = {
+    denied: "MIDI with SysEx wasn't allowed. Allow it in the site settings (left of the address) and try again.",
+    notfound: "No FM-1 found. Check the cable (a data cable), close other MIDI apps, and try again.",
+    model: "That device isn't an FM-1.",
+    lost: "The USB connection dropped. Plug it back in and try again: it carries on where it stopped.",
+    stopped: "It stopped part-way. Plug it back in and try again: it carries on where it stopped.",
+    noloader: "The FM-1 in update mode wasn't found. Plug it back in and try again (it stays in update mode until done).",
+    noreturn: "The FM-1 didn't come back. Switch it off and on.",
+    mismatch: "Written, but the FM-1 now reports another version: ",
+    badreq: "The FM-1 asked for something the file doesn't have. Is it the right file? ",
+  };
+  const pick = { latest: null, file: null, stock: null };
+  let writing = false;
+  const say = (t) => { $("instStatus").textContent = t; };
+  const note = (t) => { $("instLog").textContent += t + "\n"; };
+  const ready = () => {
+    const can = !writing && !!navigator.requestMIDIAccess;
+    $("instLatest").disabled = !can || !pick.latest;
+    $("instFileGo").disabled = !can || !pick.file;
+    $("stockGo").disabled = !can || !pick.stock;
+  };
+  addEventListener("beforeunload", (e) => { if (writing) { e.preventDefault(); e.returnValue = ""; } });
+  const unpack = (raw, name) => {                                    // a .fwsc: its identity, and the image the FM-1 reads
+    const product = productOf(raw);
+    if (!/^FM-1_\d+$/.test(product)) throw new Error(`${name} isn't an FM-1 firmware file`);
+    return { image: logicalImage(raw), product };
+  };
+
+  (async () => {
+    if (!navigator.requestMIDIAccess) { $("instWhat").textContent = ""; say("Installing needs Web MIDI: open this page in Chrome or Edge."); return; }
+    try {
+      const about = await (await fetch("firmware/latest.json", { cache: "no-cache" })).json();
+      const raw = new Uint8Array(await (await fetch("firmware/" + about.file, { cache: "no-cache" })).arrayBuffer());
+      pick.latest = { ...unpack(raw, about.file), version: about.version };
+      if (pick.latest.product !== about.product) throw new Error("the file isn't the release it says it is");
+      $("instLatest").textContent = `Install MOPE-1 ${about.version}`;
+      $("instWhat").textContent = `the latest release (${about.product})`;
+    } catch { $("instWhat").textContent = "No release beside this page: choose a file below."; }
+    ready();
+  })();
+
+  $("instFile").addEventListener("change", async (e) => {
+    pick.file = null;
+    const f = e.target.files && e.target.files[0];
+    if (f) try { pick.file = unpack(new Uint8Array(await f.arrayBuffer()), f.name); say(`${f.name}: ${pick.file.product}. Ready to install.`); }
+           catch (err) { say(err.message); }
+    ready();
+  });
+  $("stockFile").addEventListener("change", async (e) => {
+    pick.stock = null;
+    const f = e.target.files && e.target.files[0];
+    if (f) try {
+      const raw = new Uint8Array(await f.arrayBuffer());
+      const sum = [...new Uint8Array(await crypto.subtle.digest("SHA-256", raw))].map((b) => b.toString(16).padStart(2, "0")).join("");
+      if (sum !== V15) say("That isn't M-VAVE's FM-1 V15 file. Use the one from M-VAVE's download page.");
+      else { pick.stock = unpack(raw, f.name); say("That's M-VAVE's FM-1 V15. Ready to put it back."); }
+    } catch (err) { say(err.message); }
+    ready();
+  });
+
+  async function install(pkg, what, isStock) {
+    let access;
+    try { access = await navigator.requestMIDIAccess({ sysex: true }); } catch { say(WHY.denied); return; }
+    writing = true;
+    ready();
+    $("instBar").value = 0;
+    const total = 80 + Math.ceil(pkg.image.length / 512);
+    const progress = (stage, n) => {
+      note(`${stage} ${n ?? ""}`);
+      if (stage === "start") say(`Starting: ${n ?? ""}`);
+      if (stage === "verify") { say("Checking the file (nothing written yet)"); $("instBar").value = Math.min(n, 80) / total * 100; }
+      if (stage === "loader") say("Switching the FM-1 to update mode");
+      if (stage === "write") { say(`Writing ${what}: leave it plugged in`); $("instBar").value = (80 + n) / total * 100; }
+      if (stage === "reboot") say("Restarting");
+      if (stage === "done") { $("instBar").value = 100; say(isStock ? "Done: the FM-1 is back on M-VAVE's firmware." : `Done: the FM-1 restarted with ${what} (${n}).`); }
+    };
+    try {
+      const updater = new Updater(access, note);
+      const midway = await updater.find((id) => /^ota-/i.test(id.model));
+      if (midway) {                                                    // already in update mode: finish that write
+        midway.link.close();
+        if (await updater.resume(pkg.image, progress)) progress("done", pkg.product);
+        else say(WHY.stopped);
+      } else await updater.install(pkg.image, pkg.product, progress);
+    } catch (e) {
+      if (isStock && e && e.code === "mismatch") { $("instBar").value = 100; say("Done: the FM-1 is back on M-VAVE's firmware."); }
+      else say(e && e.code && WHY[e.code] ? WHY[e.code] + (e.detail || "") : `Error: ${e && e.message}`);
+      note(String((e && e.stack) || e));
+    }
+    writing = false;
+    ready();
+  }
+  $("instLatest").addEventListener("click", () => pick.latest && install(pick.latest, `MOPE-1 ${pick.latest.version}`, false));
+  $("instFileGo").addEventListener("click", () => pick.file && install(pick.file, pick.file.product, false));
+  $("stockGo").addEventListener("click", () => pick.stock && install(pick.stock, "M-VAVE's firmware", true));
+}
+</script>
+</body>
+</html>

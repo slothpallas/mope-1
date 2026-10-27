@@ -78,16 +78,17 @@ jobs:
           RELEASE: ${{ needs.version.outputs.release }}
         run: |
           [ -n "$RELEASE" ] && export OM_VERSION="$RELEASE"
-          sh web/emu/build.sh
+          sh web/play/build.sh
           mkdir -p site
-          cp build/emu/MOPE-1.html site/index.html
+          cp build/play/MOPE-1.html site/index.html
+          cp build/play/voice.js build/play/mope.wasm site/
           touch site/.nojekyll
 
       - name: Keep the web app with the run
         uses: actions/upload-artifact@v7
         with:
           name: MOPE-1-web
-          path: build/emu/MOPE-1.html
+          path: build/play/MOPE-1.html
 
       - name: Keep the scenario screenshots and audio
         if: always()

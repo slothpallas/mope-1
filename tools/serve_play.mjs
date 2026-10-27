@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The emulator (build/emu) on http://localhost:8137 for local testing: node tools/serve_emu.mjs
+// MOPE-1 to play (build/play) on http://localhost:8137 for local testing: node tools/serve_play.mjs
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT = fileURLToPath(new URL("../build/emu/", import.meta.url));
+const ROOT = fileURLToPath(new URL("../build/play/", import.meta.url));
 const PORT = Number(process.env.PORT || 8137);
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".wasm": "application/wasm",
                 ".json": "application/json", ".png": "image/png" };

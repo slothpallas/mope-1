@@ -292,7 +292,7 @@ static void run_ms(uint32_t ms)
             double t0 = now_ns(), dt;
             sy_render(blk, 256, master);
 #ifdef OM_WEB
-            web_audio(blk, 256);
+            play_audio(blk, 256);
 #endif
             dt = now_ns() - t0;
             render_ns_total += dt;
