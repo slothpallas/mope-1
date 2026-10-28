@@ -19,13 +19,25 @@ static int project_valid(int bytes)
 {
     int i, have = (bytes - 8) / 2;               /* the values the saved project holds */
     if (proj.magic == PROJ_MAGIC && proj.format >= 1u && proj.format < PROJ_FORMAT) {
-        /* an older format: its XP sat right after its fewer values (4-aligned), and it had no loop */
-        const int at = (8 + 2 * PROJ_NPAR_OF(proj.format) + 3) & ~3;
+        /* an older format: its XP sat right after its fewer values (4-aligned), 28 spare bytes after it,
+         * then (format 3) the loop. Everything after the values moves up to where it is now. */
+        static uint16_t loop_n;
+        static sy_ev_t loop[SY_LOOP_MAX];
+        const int at = (8 + 2 * PROJ_NPAR_OF(proj.format) + 3) & ~3, at_loop = at + 4 + 28;
         uint32_t xp = 0;
+        loop_n = 0;
         if (bytes >= at + 4)
             memcpy(&xp, (const uint8_t *)&proj + at, 4);
+        if (proj.format == 3u && bytes >= at_loop + 2) {
+            memcpy(&loop_n, (const uint8_t *)&proj + at_loop, 2);
+            if (loop_n > SY_LOOP_MAX || bytes < at_loop + 2 + (int)(loop_n * sizeof(sy_ev_t)))
+                loop_n = 0;
+            memcpy(loop, (const uint8_t *)&proj + at_loop + 2, loop_n * sizeof(sy_ev_t));
+        }
         memset((uint8_t *)&proj + at, 0, sizeof proj - (uint32_t)at);
         proj.xp = xp;
+        proj.loop_n = loop_n;
+        memcpy(proj.loop, loop, loop_n * sizeof(sy_ev_t));
     } else if (bytes < (int)sizeof proj) {           /* (shorter than this one: no loop) */
         proj.loop_n = 0;
     }

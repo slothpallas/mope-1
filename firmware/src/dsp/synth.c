@@ -25,6 +25,11 @@ static const sy_param_t PARAMS[P_NPARAMS] = {
     {"Voice", 0, 100, 80}, {"Gunk", 0, 100, 30}, {"Swing", 0, 100, 0}, {"Human", 0, 100, 15},
     {"Arp mode", 0, ARP_NMODE - 1, ARP_UP}, {"Arp rate", 0, ARP_NRATE - 1, 3}, {"Arp oct", 1, 3, 1},
     {"Arp gate", 5, 100, 55}, {"Loop bars", 0, 2, 1},
+    {"B table", 0, SY_NTABLE - 1, 0}, {"B tune", -24, 24, -12}, {"B meets", 0, MEET_N - 1, MEET_MIX}, {"B level", 0, 100, 0},
+    {"Filter", 0, FT_N - 1, FT_LOW}, {"Drive", 0, 100, 0},
+    {"Mod attack", 0, 100, 0}, {"Env wave", -100, 100, 0},
+    {"LFO2 rate", 0, 100, 55}, {"LFO2 depth", 0, 100, 0}, {"LFO2 shape", 0, LFO_NSHAPE - 1, LFO_TRI},
+    {"LFO2 dest", 0, LD_N - 1, LD_PITCH},
 };
 const sy_param_t *sy_param_info(int i) { return &PARAMS[i < 0 ? 0 : i >= P_NPARAMS ? P_NPARAMS - 1 : i]; }
 
@@ -312,13 +317,18 @@ enum { ST_OFF, ST_ATT, ST_DEC, ST_SUS, ST_REL };
 typedef struct {
     uint8_t stage, gate, note;
     float env, menv, vel;
-    float ph[2], phsub;
+    uint8_t mrise;                                     /* the mod envelope still on its way up */
+    uint16_t comb_w;                                   /* the comb's write place (FT_COMB) */
+    float comb_dull;                                   /* ...and its low-pass, in the loop */
+    float ph[2], phsub, phb;                           /* (phb: oscillator B, the shadow) */
     float cents, cents_to;                             /* now, and where the glide goes */
     float drift, drift_to;
     float s1[2], s2[2];                                /* the filter, per oscillator (they pan apart) */
     uint32_t age;
 } voice_t;
 static voice_t vc[SY_NVOICE];
+#define COMB_N 512u                                    /* a comb down to 86 Hz */
+static float comb_line[SY_NVOICE][COMB_N] SY_POOL;
 static uint32_t age_n;
 static float bend_c, mod_amt;
 
@@ -357,7 +367,14 @@ static void note_on(int note, int vel)
         v->ph[0] = rndf();
         v->ph[1] = rndf();
         v->phsub = 0.0f;
+        v->phb = v->ph[0];                             /* (B starts with A: no extra dice, the old sounds stay) */
         v->s1[0] = v->s1[1] = v->s2[0] = v->s2[1] = 0.0f;
+        v->comb_dull = 0.0f;
+        {
+            int j;
+            for (j = 0; j < (int)COMB_N; j++)
+                comb_line[i][j] = 0.0f;
+        }
         v->drift = v->drift_to = 0.0f;
     } else if (par[P_GLIDE] == 0) {
         v->cents = c;
@@ -369,6 +386,7 @@ static void note_on(int note, int vel)
     v->gate = 1;
     v->stage = ST_ATT;
     v->menv = v->menv > 0.0f ? v->menv : 0.0f;
+    v->mrise = 1;
     v->age = ++age_n;
     sy_tel.notes++;
     sy_tel.last_note = (int16_t)note;
@@ -579,7 +597,11 @@ static inline void gunk(float *l, float *r, float *peak)
 }
 
 /* ---------------------------------------------------------------- LFO --- */
-static float lfo_ph, lfo_val, lfo_rand, lfo_rand_to, lfo_from;
+typedef struct {
+    float ph, val, rnd, rnd_to, from;
+    uint32_t dice;                                      /* its own random numbers (0: the shared ones) */
+} lfo_t;
+static lfo_t lfo1, lfo2 = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0x2545F491u};   /* (the second keeps out of the first's dice) */
 /* a heartbeat's pulse: up fast, down slower, centred on c */
 static inline float lfo_beat(float ph, float c)
 {
@@ -603,50 +625,95 @@ float sy_lfo_shape(int shape, float ph, float from, float to)
     default: return mm_sin_turns(ph);
     }
 }
-static float lfo_tick(uint32_t n)
+static float lfo_tick(lfo_t *l, int rate, int shape, uint32_t n)
 {
-    const float hz = 0.05f * mm_exp2f(pf(P_LFORATE) * 9.0f);
+    const float hz = 0.05f * mm_exp2f(pf(rate) * 9.0f);
     float v;
-    lfo_ph += hz * (float)n / SY_SR;
-    if (lfo_ph >= 1.0f) {
-        lfo_ph -= mm_floorf(lfo_ph);
-        lfo_from = lfo_rand_to;
-        lfo_rand_to = rnds();
+    l->ph += hz * (float)n / SY_SR;
+    if (l->ph >= 1.0f) {
+        l->ph -= mm_floorf(l->ph);
+        l->from = l->rnd_to;
+        if (l->dice) {
+            l->dice = l->dice * 1664525u + 1013904223u;
+            l->rnd_to = (float)(int32_t)l->dice * (1.0f / 2147483648.0f);
+        } else
+            l->rnd_to = rnds();
     }
-    if (par[P_LFOSHAPE] == LFO_RANDOM) {                /* (a twitch: there in a few steps) */
-        lfo_rand += 0.3f * (lfo_rand_to - lfo_rand);
-        v = lfo_rand;
+    if (par[shape] == LFO_RANDOM) {                     /* (a twitch: there in a few steps) */
+        l->rnd += 0.3f * (l->rnd_to - l->rnd);
+        v = l->rnd;
     } else
-        v = sy_lfo_shape(par[P_LFOSHAPE], lfo_ph, lfo_from, lfo_rand_to);
-    lfo_val += 0.5f * (v - lfo_val);                   /* a square's edges, not quite a click */
-    return lfo_val;
+        v = sy_lfo_shape(par[shape], l->ph, l->from, l->rnd_to);
+    l->val += 0.5f * (v - l->val);                     /* a square's edges, not quite a click */
+    return l->val;
 }
 
 /* ------------------------------------------------------------ render: voices --- */
 #define SUB 16                                         /* control rate: every 16 frames */
 static float vbl[SUB], vbr[SUB];
 
-static void render_voices(float *ol, float *or_, uint32_t n, float lfo)
+/* what the two LFOs do, summed by destination */
+typedef struct {
+    float pos, cut, pitch, vol, shadow;
+} mods_t;
+static void lfo_into(mods_t *m, float lfo, int depth_p, int dest_p)
 {
-    const float depth = pf(P_LFODEPTH), dest_pos = par[P_LFODEST] == LD_POS ? lfo * depth * 0.5f : 0.0f;
-    const float dest_cut = par[P_LFODEST] == LD_CUTOFF ? lfo * depth * 4.0f : 0.0f;
-    const float dest_pitch = par[P_LFODEST] == LD_PITCH ? lfo * depth * 100.0f : 0.0f;
-    const float dest_vol = par[P_LFODEST] == LD_VOLUME ? 1.0f - depth * 0.5f * (1.0f + lfo) : 1.0f;
+    const float depth = pf(depth_p);
+    switch (par[dest_p]) {
+    case LD_POS: m->pos += lfo * depth * 0.5f; break;
+    case LD_CUTOFF: m->cut += lfo * depth * 4.0f; break;
+    case LD_PITCH: m->pitch += lfo * depth * 100.0f; break;
+    case LD_VOLUME: m->vol *= 1.0f - depth * 0.5f * (1.0f + lfo); break;
+    default: m->shadow += lfo * depth * 0.5f; break;
+    }
+}
+
+/* a table read at a position (0..1) and a pitch: the two frames around it, the mip for the pitch */
+typedef struct {
+    const int16_t *a, *b;
+    float fr;
+    uint32_t len;
+} wtsel_t;
+static inline wtsel_t wt_pick(int table, float pos, float hz_top)
+{
+    wtsel_t w;
+    float p = mm_clampf(pos, 0.0f, 1.0f) * (float)(SY_NFRAME - 1);
+    int f = (int)p;
+    uint32_t m;
+    if (f >= SY_NFRAME - 1)
+        f = SY_NFRAME - 2;
+    for (m = 0; m < NMIP - 1u && (float)MIP_H[m] * hz_top > 21000.0f; m++)
+        ;
+    w.a = wt[table][f] + MIP_OFF[m];
+    w.b = wt[table][f + 1] + MIP_OFF[m];
+    w.fr = p - (float)f;
+    w.len = MIP_LEN[m];
+    return w;
+}
+
+static void render_voices(float *ol, float *or_, uint32_t n, float lfo, float lfo_b)
+{
+    mods_t md = {0.0f, 0.0f, 0.0f, 1.0f, 0.0f};
     const float att = 1.0f / (knob_s(P_ATTACK) * SY_SR), dec = coef_s(knob_s(P_DECAY) * 0.3f);
     const float rel = coef_s(knob_s(P_RELEASE) * 0.3f), sus = pf(P_SUSTAIN);
     const float mdec = coef_s(knob_s(P_MODDEC) * 0.3f);
+    const float matt = par[P_MATTACK] ? 1.0f / (knob_s(P_MATTACK) * SY_SR) : att;   /* (0: with the mouth) */
     const float det = pf(P_DETUNE) * pf(P_DETUNE) * 40.0f + 2.0f;   /* cents apart, each way */
     const float spread = 0.15f + 0.35f * pf(P_DETUNE), sub = pf(P_SUB) * 0.8f;
     const float k = 2.0f - 1.94f * pf(P_RESO);          /* the SVF's damping: 1/Q */
     const float glide = par[P_GLIDE] ? 1.0f - mm_expf(-(float)SUB / (0.002f * mm_exp2f(pf(P_GLIDE) * 9.0f) * SY_SR)) : 1.0f;
-    const int tbl = par[P_TABLE];
-    float pos = mm_clampf(pf(P_POS) + dest_pos + mod_amt, 0.0f, 1.0f) * (float)(SY_NFRAME - 1);
-    int f0 = (int)pos, i;
-    float fr, amp_max = 0.0f, menv_max = 0.0f;
+    const int tbl = par[P_TABLE], tblb = par[P_BTABLE], meet = par[P_BMEET], ftype = par[P_FTYPE];
+    const float b_ratio = mm_exp2f((float)par[P_BTUNE] * (1.0f / 12.0f)), sweep = pf(P_MWAVE);
+    const float drive = pf(P_DRIVE), drv_g = 1.0f + 7.0f * drive * drive, drv_back = 1.0f / (1.0f + 1.6f * drive);
+    const float band_g = k > 0.35f ? k : 0.35f;         /* (a band-pass's peak at unity, but never silent) */
+    float lvl, base_pos, amp_max = 0.0f, menv_max = 0.0f, wave_env = 0.0f, wave_pos = 0.0f;
+    int i;
     uint8_t nv = 0, ng = 0, stage = ST_OFF;
-    if (f0 >= SY_NFRAME - 1)
-        f0 = SY_NFRAME - 2;
-    fr = pos - (float)f0;
+    lfo_into(&md, lfo, P_LFODEPTH, P_LFODEST);
+    lfo_into(&md, lfo_b, P_LFO2DEPTH, P_LFO2DEST);
+    lvl = mm_clampf(pf(P_BLEVEL) + md.shadow, 0.0f, 1.0f);
+    const int shadow_on = lvl > 0.0f;
+    base_pos = pf(P_POS) + md.pos + mod_amt;
     for (i = 0; i < SY_NVOICE; i++) {
         voice_t *v = &vc[i];
         uint32_t j0;
@@ -655,34 +722,41 @@ static void render_voices(float *ol, float *or_, uint32_t n, float lfo)
         nv++;
         ng += v->gate;
         for (j0 = 0; j0 < n; j0 += SUB) {
-            float c, hz, inc[2], incs, cut, g, a1, a2, a3;
-            uint32_t j, m, len;
-            const int16_t *ta, *tb;
-            /* pitch: the glide, a slow drift (an old synth's), the bend, the LFO */
+            float c, hz, inc[2], incs, incb, cut, g, a1, a2, a3, pos, comb_d = 0.0f, comb_fb = 0.0f;
+            uint32_t j;
+            wtsel_t wa, wb;
+            /* pitch: the glide, a slow drift (an old synth's), the bend, the LFOs */
             v->cents += (v->cents_to - v->cents) * glide;
             if ((rnd() & 255u) == 0u)
                 v->drift_to = rnds() * 4.0f;
             v->drift += 0.002f * (v->drift_to - v->drift);
-            c = v->cents + v->drift + bend_c + dest_pitch + (float)par[P_TUNE];
+            c = v->cents + v->drift + bend_c + md.pitch + (float)par[P_TUNE];
             hz = 8.1757989f * mm_exp2f(c * (1.0f / 1200.0f));
-            for (m = 0; m < NMIP - 1u && (float)MIP_H[m] * hz * mm_exp2f(det / 1200.0f) > 21000.0f; m++)
-                ;
-            len = MIP_LEN[m];
-            ta = wt[tbl][f0] + MIP_OFF[m];
-            tb = wt[tbl][f0 + 1] + MIP_OFF[m];
+            /* where in the table: the knob, the LFOs, the wheel, and this note's sweep (SIGH) */
+            pos = mm_clampf(base_pos + v->menv * sweep, 0.0f, 1.0f);
+            wa = wt_pick(tbl, pos, hz * mm_exp2f(det / 1200.0f));
+            if (shadow_on)
+                wb = wt_pick(tblb, pos, hz * b_ratio);
+            else
+                wb = wa;
             inc[0] = hz * mm_exp2f(-det / 1200.0f) / SY_SR;
             inc[1] = hz * mm_exp2f(det / 1200.0f) / SY_SR;
             incs = hz * 0.5f / SY_SR;
-            /* the cutoff: the knob, the mod envelope, the LFO, a little of the key */
-            cut = 30.0f * mm_exp2f(pf(P_CUTOFF) * 9.3f + pf(P_ENVAMT) * 6.0f * v->menv + dest_cut +
+            incb = hz * b_ratio / SY_SR;
+            /* the cutoff: the knob, the mod envelope, the LFOs, a little of the key */
+            cut = 30.0f * mm_exp2f(pf(P_CUTOFF) * 9.3f + pf(P_ENVAMT) * 6.0f * v->menv + md.cut +
                                    0.5f * (v->cents - 6000.0f) / 1200.0f);
             cut = mm_clampf(cut, 20.0f, 18000.0f);
             g = mm_tanf(MM_PI * cut / SY_SR);
             a1 = 1.0f / (1.0f + g * (g + k));
             a2 = g * a1;
             a3 = g * a2;
+            if (ftype == FT_COMB) {                     /* the comb rings at the cutoff; Reso is how long */
+                comb_d = mm_clampf(SY_SR / cut, 2.0f, (float)(COMB_N - 2u));
+                comb_fb = 0.35f + 0.6f * pf(P_RESO);
+            }
             for (j = 0; j < SUB; j++) {
-                float e = v->env, o0, o1, s, y[2];
+                float e = v->env, o0, o1, ob, s, y[2], in[2];
                 int q;
                 switch (v->stage) {                     /* the amp envelope, a sample at a time */
                 case ST_ATT:
@@ -705,25 +779,85 @@ static void render_voices(float *ol, float *or_, uint32_t n, float lfo)
                     break;
                 }
                 v->env = e;
-                o0 = wt_read(ta, tb, fr, len, v->ph[0]);
-                o1 = wt_read(ta, tb, fr, len, v->ph[1]);
+                /* the shadow first: FM and sync need it before A */
+                ob = 0.0f;
+                if (shadow_on) {
+                    ob = wt_read(wb.a, wb.b, wb.fr, wb.len, v->phb);
+                    v->phb += incb;
+                    v->phb -= (float)(int)v->phb;
+                }
+                if (shadow_on && meet == MEET_FM) {     /* B bends A's phase */
+                    const float pm = ob * lvl * 0.8f;
+                    float p0 = v->ph[0] + pm, p1 = v->ph[1] + pm;
+                    p0 -= mm_floorf(p0);
+                    p1 -= mm_floorf(p1);
+                    o0 = wt_read(wa.a, wa.b, wa.fr, wa.len, p0);
+                    o1 = wt_read(wa.a, wa.b, wa.fr, wa.len, p1);
+                } else {
+                    o0 = wt_read(wa.a, wa.b, wa.fr, wa.len, v->ph[0]);
+                    o1 = wt_read(wa.a, wa.b, wa.fr, wa.len, v->ph[1]);
+                }
                 v->ph[0] += inc[0];
                 v->ph[1] += inc[1];
+                if (v->ph[0] >= 1.0f && meet == MEET_SYNC)
+                    v->phb = 0.0f;                      /* (sync: A starts B again each cycle) */
                 v->ph[0] -= (float)(int)v->ph[0];
                 v->ph[1] -= (float)(int)v->ph[1];
+                if (shadow_on)
+                    switch (meet) {
+                case MEET_RING:
+                    o0 = o0 * (1.0f - lvl) + o0 * ob * lvl * 1.5f;
+                    o1 = o1 * (1.0f - lvl) + o1 * ob * lvl * 1.5f;
+                    break;
+                case MEET_SYNC:
+                    o0 = o0 * (1.0f - lvl) + ob * lvl;
+                    o1 = o1 * (1.0f - lvl) + ob * lvl;
+                    break;
+                case MEET_MIX:
+                    o0 += ob * lvl * 0.8f;
+                    o1 += ob * lvl * 0.8f;
+                    break;
+                default: break;                         /* (FM: B is heard in A) */
+                }
                 v->phsub += incs;
                 v->phsub -= (float)(int)v->phsub;
                 s = mm_sin_turns(v->phsub) * sub;
-                {
-                    const float in[2] = {o0 + s, o1 + s};
-                    for (q = 0; q < 2; q++) {           /* Simper's SVF, low-pass */
+                in[0] = o0 + s;
+                in[1] = o1 + s;
+                if (drive > 0.0f) {                     /* the push into the filter, level matched */
+                    in[0] = mm_tanhf(in[0] * drv_g) * drv_back * 1.6f;
+                    in[1] = mm_tanhf(in[1] * drv_g) * drv_back * 1.6f;
+                }
+                if (ftype == FT_COMB) {                 /* both sides through one comb (stereo stays) */
+                    const float at = (float)v->comb_w - comb_d;
+                    const float pos_r = at < 0.0f ? at + (float)COMB_N : at;
+                    const uint32_t r0 = (uint32_t)pos_r, r1 = (r0 + 1u) & (COMB_N - 1u);
+                    const float fr = pos_r - (float)r0, back = comb_line[i][r0] + (comb_line[i][r1] - comb_line[i][r0]) * fr;
+                    v->comb_dull += 0.6f * (back - v->comb_dull);
+                    comb_line[i][v->comb_w] = mm_flush(0.5f * (in[0] + in[1]) + comb_fb * v->comb_dull);
+                    v->comb_w = (uint16_t)((v->comb_w + 1u) & (COMB_N - 1u));
+                    y[0] = (in[0] + v->comb_dull) * 0.6f;
+                    y[1] = (in[1] + v->comb_dull) * 0.6f;
+                } else if (ftype == FT_LOW)
+                    for (q = 0; q < 2; q++) {           /* Simper's SVF, low-pass (the usual: its own loop) */
                         float v3 = in[q] - v->s2[q], v1 = a1 * v->s1[q] + a2 * v3, v2 = v->s2[q] + a2 * v->s1[q] + a3 * v3;
                         v->s1[q] = 2.0f * v1 - v->s1[q];
                         v->s2[q] = 2.0f * v2 - v->s2[q];
                         y[q] = v2;
                     }
-                }
-                e = e * e * v->vel * dest_vol * 0.32f;  /* (squared: the envelope's end is soft) */
+                else
+                    for (q = 0; q < 2; q++) {           /* Simper's SVF: its low, band and high at once */
+                        float v3 = in[q] - v->s2[q], v1 = a1 * v->s1[q] + a2 * v3, v2 = v->s2[q] + a2 * v->s1[q] + a3 * v3;
+                        v->s1[q] = 2.0f * v1 - v->s1[q];
+                        v->s2[q] = 2.0f * v2 - v->s2[q];
+                        switch (ftype) {
+                        case FT_BAND: y[q] = v1 * band_g; break;
+                        case FT_HIGH: y[q] = in[q] - k * v1 - v2; break;
+                        case FT_NOTCH: y[q] = in[q] - k * v1; break;
+                        default: y[q] = v2; break;
+                        }
+                    }
+                e = e * e * v->vel * md.vol * 0.32f;    /* (squared: the envelope's end is soft) */
                 vbl[j] = (y[0] * (0.5f + spread) + y[1] * (0.5f - spread)) * e;
                 vbr[j] = (y[1] * (0.5f + spread) + y[0] * (0.5f - spread)) * e;
             }
@@ -731,15 +865,21 @@ static void render_voices(float *ol, float *or_, uint32_t n, float lfo)
                 ol[j0 + j] += vbl[j];
                 or_[j0 + j] += vbr[j];
             }
-            /* the mod envelope: up with the attack, down with Mod decay */
-            if (v->stage == ST_ATT)
-                v->menv += (1.0f - v->menv) * mm_clampf(att * (float)SUB, 0.0f, 1.0f);
-            else
+            /* the mod envelope: up with Mod attack (0: with the amp's), down with Mod decay */
+            if (v->mrise) {
+                v->menv += (1.0f - v->menv) * mm_clampf(matt * (float)SUB, 0.0f, 1.0f);
+                if (v->menv > 0.995f || (par[P_MATTACK] == 0 && v->stage != ST_ATT))
+                    v->mrise = 0;
+            } else
                 v->menv -= v->menv * mm_clampf(mdec * (float)SUB, 0.0f, 1.0f);
             v->s1[0] = mm_flush(v->s1[0]);
             v->s1[1] = mm_flush(v->s1[1]);
             v->s2[0] = mm_flush(v->s2[0]);
             v->s2[1] = mm_flush(v->s2[1]);
+            if (v->env >= amp_max) {
+                wave_env = v->menv * sweep;
+                wave_pos = pos;
+            }
         }
         if (v->stage == ST_REL && v->env < 0.0005f) {
             v->stage = ST_OFF;
@@ -757,6 +897,9 @@ static void render_voices(float *ol, float *or_, uint32_t n, float lfo)
     sy_tel.mod_env = menv_max;
     sy_tel.voices = nv;
     sy_tel.gates = ng;
+    sy_tel.shadow = lvl;
+    sy_tel.wave_env = wave_env;
+    sy_tel.wave_pos = nv ? wave_pos : mm_clampf(base_pos, 0.0f, 1.0f);
 }
 
 /* ---------------------------------------------------------------- fry --- */
@@ -905,7 +1048,7 @@ static int room_odd;
 #ifdef OM_HOST
 /* the device's .pool is 0x54000 bytes and the build keeps 8 KiB spare; the screen takes 120 x 120 +
  * 240 x 24 x 2 (blob.c, gfx.c). Checked here because the device build cannot run where the tests do. */
-_Static_assert(sizeof room_wall + sizeof room_smear + sizeof room_pre + sizeof tear_l + sizeof tear_r + sizeof wt +
+_Static_assert(sizeof room_wall + sizeof room_smear + sizeof room_pre + sizeof tear_l + sizeof tear_r + sizeof wt + sizeof comb_line +
                    sizeof sintab + sizeof src + sizeof ch_buf + 2u * 512u * 4u + 120u * 120u + 240u * 24u * 2u <=
                    0x54000u - 8192u,
                "the .pool would overflow");
@@ -1839,7 +1982,7 @@ static float lim_g = 1.0f;
 void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
 {
     uint32_t j0, j;
-    float lfo, peak = 0.0f, gr_min = 1.0f, busy = 0.0f, lv[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    float lfo, lfo_b, peak = 0.0f, gr_min = 1.0f, busy = 0.0f, lv[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     const float synth_g = pf(P_SYNTH) * 1.25f;
     const float chorus_amt = pf(P_CHORUS), dsend = pf(P_DELAY) * 0.8f, rsend = pf(P_REVERB) * 0.6f;
     const float tape = pf(P_TAPE), drum_g = pf(P_DRUMS) * 0.5f, bass_g = pf(P_BASS) * 0.55f;
@@ -1848,12 +1991,15 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
     drain();
     if (n > BLK)
         n = BLK;
-    lfo = lfo_tick(n);
+    lfo = lfo_tick(&lfo1, P_LFORATE, P_LFOSHAPE, n);
+    lfo_b = lfo_tick(&lfo2, P_LFO2RATE, P_LFO2SHAPE, n);
     sy_tel.lfo = lfo;
-    sy_tel.lfo_phase = lfo_ph;
+    sy_tel.lfo_phase = lfo1.ph;
+    sy_tel.lfo2 = lfo_b;
+    sy_tel.lfo2_phase = lfo2.ph;
     for (j = 0; j < n; j++)
         bl[j] = br[j] = 0.0f;
-    render_voices(bl, br, n, lfo);
+    render_voices(bl, br, n, lfo, lfo_b);
     for (j = 0; j < SY_SCOPE; j++) {                    /* the voices alone: the blob's outline */
         uint32_t s = j * n / SY_SCOPE;
         sy_tel.scope[j] = (bl[s] + br[s]) * 1.5f;

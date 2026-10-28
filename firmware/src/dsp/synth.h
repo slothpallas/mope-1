@@ -40,6 +40,10 @@ enum {
     P_SYNTH, P_GUNK, P_SWING, P_HUMAN,               /* MIX: the voices' level, the texture; DECK: feel */
     P_ARPMODE, P_ARPRATE, P_ARPOCT, P_ARPGATE,       /* ARP */
     P_LOOPBARS,                                      /* LOOP: 1, 2 or 4 bars */
+    P_BTABLE, P_BTUNE, P_BMEET, P_BLEVEL,            /* SHADOW: oscillator B (its table, semitones, how it meets A) */
+    P_FTYPE, P_DRIVE,                                /* EYES: the filter's kind, a push into it */
+    P_MATTACK, P_MWAVE,                              /* SIGH: the mod envelope's attack (0: the mouth's), its sweep of the table */
+    P_LFO2RATE, P_LFO2DEPTH, P_LFO2SHAPE, P_LFO2DEST, /* TREMBLE: the second LFO */
     P_NPARAMS
 };
 typedef struct {
@@ -58,7 +62,9 @@ enum { LFO_SINE, LFO_TRI, LFO_SQUARE, LFO_SAW, LFO_RANDOM,
 float sy_lfo_shape(int shape, float phase, float from, float to);
 enum { ARP_UP, ARP_DOWN, ARP_UPDOWN, ARP_WANDER, ARP_STAB, ARP_NMODE };
 #define ARP_NRATE 6                                 /* 1/4 1/8 1/8T 1/16 1/16T 1/32 */
-enum { LD_POS, LD_CUTOFF, LD_PITCH, LD_VOLUME, LD_N };
+enum { LD_POS, LD_CUTOFF, LD_PITCH, LD_VOLUME, LD_SHADOW, LD_N };   /* where an LFO goes */
+enum { MEET_MIX, MEET_FM, MEET_RING, MEET_SYNC, MEET_N };             /* how oscillator B meets A */
+enum { FT_LOW, FT_BAND, FT_HIGH, FT_NOTCH, FT_COMB, FT_N };           /* the filter's kinds */
 
 /* drum styles: each named after its genre, sadly (Grief drill, Empty city pop, Gloom gabber, Missed phonk
  * call, Jersey cry club, Heartbreakcore, Amapia-no, Cold footwork, Dembow out, Vaporweep, Hyperflop,
@@ -125,6 +131,10 @@ typedef struct {
     float mod_env;                /* its mod envelope, 0..1 */
     float lfo;                    /* -1..1 */
     float lfo_phase;              /* 0..1 */
+    float lfo2, lfo2_phase;       /* the second LFO (TREMBLE), the same way */
+    float shadow;                 /* oscillator B's level now (with the LFOs), 0..1 */
+    float wave_env;               /* the loudest voice's sweep of the table (SIGH), -1..1 */
+    float wave_pos;               /* where in the table it is now, with every modulation, 0..1 */
     uint8_t amp_stage;            /* the loudest voice's envelope: 0 off, 1 attack, 2 decay, 3 sustain, 4 release */
     float out_peak;               /* the output's peak over the last block, before the limiter */
     float echo;                   /* what the delay is sending back, 0..~1 */

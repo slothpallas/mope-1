@@ -12,14 +12,15 @@
 #endif
 #define PROJ_MAGIC 0x45504F4Du           /* "MOPE": never a FiMba-1 or FoMni project */
 /* Add a setting at the end of P_*, bump the format, and add its count here. */
-#define PROJ_FORMAT 3u                    /* 3: the loop; 2: the mixer, the gunk, swing, human, the arpeggiator */
-#define PROJ_NPAR_OF(f) ((f) == 1u ? P_VOLUME + 1 : (f) == 2u ? P_ARPGATE + 1 : P_NPARAMS)
+#define PROJ_FORMAT 4u                    /* 4: the shadow, the filter kinds, the sigh, the tremble; 3: the loop; 2: the mixer, ... */
+#define PROJ_NPAR_OF(f) ((f) == 1u ? P_VOLUME + 1 : (f) == 2u ? P_ARPGATE + 1 : (f) == 3u ? P_LOOPBARS + 1 : P_NPARAMS)
 
 typedef struct {
     uint32_t magic, format;
     int16_t par[P_NPARAMS];              /* synth.h P_* */
     uint32_t xp;                         /* notes played, ever (the blob's levels) */
-    uint8_t rsv[28];                     /* room to grow */
+    uint8_t seen;                        /* second pages found (SHADOW 1, SIGH 2, TREMBLE 4, SETUP 8, DECK 16): no more nudges */
+    uint8_t rsv[27];                     /* room to grow */
     uint16_t loop_n;                     /* the loop's notes (format 3 on) */
     sy_ev_t loop[SY_LOOP_MAX];
 } project_t;

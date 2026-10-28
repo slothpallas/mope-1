@@ -28,6 +28,7 @@ run trs sh -c "$CC -O2 -w -Ifirmware/src -Ifirmware/hal -o $OUT/trs_test tests/h
 # no -lm: a libm call that crept into the engine fails to link here, as it would on the device
 run synth sh -c "$CC -O2 -ffp-contract=off -std=c99 -Wall -Wextra -Wdouble-promotion -Werror -DOM_HOST -Ifirmware/src/dsp \
     -o $OUT/synth_test tests/host/synth_test.c firmware/src/dsp/synth.c && $OUT/synth_test $OUT/synth"
+run project sh -c "$CC -O2 -ffp-contract=off -std=c99 -Wall -Wextra -Werror -DOM_HOST -Ifirmware/src -Ifirmware/src/dsp -o $OUT/project_test tests/host/project_test.c firmware/src/dsp/synth.c && $OUT/project_test"
 run storage sh -c "$CC -O2 -o $OUT/storage_test tests/storage_test.c && $OUT/storage_test"
 # the update path, against the firmware package (Felucca's tests; needs ./build.sh)
 if [ -f build/mope.fwsc ]; then

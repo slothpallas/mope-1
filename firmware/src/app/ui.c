@@ -29,23 +29,32 @@
  *   OCT- / OCT+  the octave          SAVE  saves (held: back to the defaults?)
  *   The 27 keys play F3..G5. The lowest and the highest together: it gives up. */
 
-enum { PG_BODY, PG_EYES, PG_MOUTH, PG_VIBE, PG_TEARS, PG_WALLS, PG_DECK, PG_SETUP, PG_MIX, PG_ARP, PG_LOOP, NPAGES };
+enum { PG_BODY, PG_EYES, PG_MOUTH, PG_VIBE, PG_TEARS, PG_WALLS, PG_DECK, PG_SETUP, PG_MIX, PG_ARP, PG_LOOP,
+       PG_SHADOW, PG_SIGH, PG_TREMBLE, NPAGES };
 static const char *const PAGE_NAME[NPAGES] = {"BODY", "EYES", "MOUTH", "VIBE", "TEARS", "WALLS", "TAPE DECK", "SETUP",
-                                              "MIXER", "ARP", "LOOP"};
-static const uint8_t PAGE_BTN[NPAGES] = {B_HOME, B_EDIT, B_ENV, B_LFO, B_FX, B_SEL, B_SEQ, B_GLO, B_GLO, B_ARP, B_SEQ};
+                                              "MIXER", "ARP", "LOOP", "SHADOW", "SIGH", "TREMBLE"};
+static const uint8_t PAGE_BTN[NPAGES] = {B_HOME, B_EDIT, B_ENV, B_LFO, B_FX, B_SEL, B_SEQ, B_GLO, B_GLO, B_ARP, B_SEQ,
+                                         B_HOME, B_ENV, B_LFO};
+/* a button's second page (pressed again, its first page open), and back: -1 none */
+static const int8_t PAGE_AGAIN[NPAGES] = {PG_SHADOW, -1, PG_SIGH, PG_TREMBLE, -1, -1, PG_LOOP, PG_MIX, PG_SETUP, -1, PG_DECK,
+                                          PG_BODY, PG_MOUTH, PG_VIBE};
+/* which of its button's pages it is (0 first, 1 second; the dots in the drawer), and its bit in proj.seen */
+static const uint8_t PAGE_SECOND[NPAGES] = {0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1};
+static const uint8_t PAGE_SEEN_BIT[NPAGES] = {0, 0, 0, 0, 0, 0, 16, 8, 0, 0, 0, 1, 2, 4};
 /* the knobs' names, under their meters in the schematic */
 static const char *const PAGE_LABEL[NPAGES][4] = {
-    {"WAVE", "POS", "DTUN", "SUB"}, {"CUT", "RES", "ENV", "MDEC"}, {"ATK", "DEC", "SUS", "REL"},
+    {"WAVE", "POS", "DTUN", "SUB"}, {"CUT", "RES", "TYPE", "DRIV"}, {"ATK", "DEC", "SUS", "REL"},
     {"RATE", "DPTH", "SHPE", "DEST"}, {"CHOR", "DLY", "TIME", "FDBK"}, {"VERB", "SIZE", "FRY", "TAPE"},
     {"STYL", "BPM", "SWNG", "HUMN"}, {"GLID", "CH", "OUT", "TUNE"}, {"VOX", "DRUM", "BASS", "GUNK"},
-    {"MODE", "RATE", "OCT", "GATE"}, {"NOTE", "LEN", "VEL", "BARS"}};
+    {"MODE", "RATE", "OCT", "GATE"}, {"NOTE", "LEN", "VEL", "BARS"},
+    {"WAVE", "TUNE", "MEET", "LVL"}, {"ATK", "DEC", "WAVE", "EYES"}, {"RATE", "DPTH", "SHPE", "DEST"}};
 #define STAY_MS 3000u                  /* a drawer stays this long after the last touch (a press, a turn) */
 #define DOUBLE_MS 350u                 /* a part's button pressed twice this fast: its page stays until HOME */
 #define TAP_MS 300u                    /* ARP let go sooner: a tap (on / off), not a look at its page */
 #define K_NONE 255
 static const uint8_t PAGE_KNOB[NPAGES][4] = {
     {P_TABLE, P_POS, P_DETUNE, P_SUB},
-    {P_CUTOFF, P_RESO, P_ENVAMT, P_MODDEC},
+    {P_CUTOFF, P_RESO, P_FTYPE, P_DRIVE},
     {P_ATTACK, P_DECAY, P_SUSTAIN, P_RELEASE},
     {P_LFORATE, P_LFODEPTH, P_LFOSHAPE, P_LFODEST},
     {P_CHORUS, P_DELAY, P_TIME, P_FEEDBACK},
@@ -55,6 +64,9 @@ static const uint8_t PAGE_KNOB[NPAGES][4] = {
     {P_SYNTH, P_DRUMS, P_BASS, P_GUNK},
     {P_ARPMODE, P_ARPRATE, P_ARPOCT, P_ARPGATE},
     {K_NONE, K_NONE, K_NONE, P_LOOPBARS},            /* the loop: the stepped step's note, length, velocity */
+    {P_BTABLE, P_BTUNE, P_BMEET, P_BLEVEL},          /* the shadow: oscillator B */
+    {P_MATTACK, P_MODDEC, P_MWAVE, P_ENVAMT},        /* the sigh: the mod envelope, to the table and the eyes */
+    {P_LFO2RATE, P_LFO2DEPTH, P_LFO2SHAPE, P_LFO2DEST},   /* the tremble: the second LFO */
 };
 #define SAVE_HOLD_MS 1500u
 #define RESET_ASK_MS 5000u
@@ -117,7 +129,10 @@ static const mood_t MOODS[] = {
 /* what a level-up feels like */
 static const char *const LEVEL_UP[] = {"OK.", "COOL. I GUESS.", "LEVEL UP. NOTHING CHANGED.", "+1 SADNESS",
                                        "ACHIEVEMENT: STILL HERE", "GG", "IT LISTENED.", "NEW SKILL: NONE"};
-static const char *const LFO_DEST_NAME[LD_N] = {"TO: SHAPE", "TO: EYES", "TO: VOICE", "TO: VOLUME"};
+static const char *const LFO_DEST_NAME[LD_N] = {"TO: SHAPE", "TO: EYES", "TO: VOICE", "TO: VOLUME", "TO: SHADOW"};
+static const char *const MEET_NAME[MEET_N] = {"MIX: BESIDE IT", "FM: INSIDE IT", "RING: AROUND IT", "SYNC: TIED TO IT"};
+static const char *const FTYPE_NAME[FT_N] = {"LOW-PASS", "BAND-PASS: A SQUINT", "HIGH-PASS: WIDE AWAKE", "NOTCH: A WINK",
+                                             "COMB: THE BLINDS"};
 static const char *const LFO_SHAPE_NAME[LFO_NSHAPE] = {"SWAY", "BOB", "BOUNCE", "NOD", "TWITCH", "HEAVE", "WANDER", "STAGGER",
                                                           "THROB"};
 static const char *const ARP_MODE_NAME[ARP_NMODE] = {"UP", "DOWN", "UP AND DOWN", "WANDER", "STAB"};
@@ -198,12 +213,39 @@ static int32_t accel(int role, int32_t s, int range)
 {
     uint32_t now = plat_ms(), dt = now - ui.enc_t[role], a = (uint32_t)(s < 0 ? -s : s), m;
     ui.enc_t[role] = now;
-    if (range <= 24 || !a || accel_off)
+    if (range <= 48 || !a || accel_off)
         return s;
     if (a > 1)
         dt /= a;
     m = dt < 15u ? 6u : dt < 30u ? 4u : dt < 60u ? 2u : 1u;
     return s * (int32_t)m;
+}
+
+/* oscillator B's tuning, in words: no numbers here either */
+static void say_interval(int st)
+{
+    static const char *const IN[12] = {"", "A SEMITONE", "A TONE", "A MINOR THIRD", "A MAJOR THIRD", "A FOURTH",
+                                       "A TRITONE", "A FIFTH", "A MINOR SIXTH", "A SIXTH", "A MINOR SEVENTH", "A MAJOR SEVENTH"};
+    static char b[32];
+    const int a = st < 0 ? -st : st, oct = a / 12, rest = a % 12;
+    int i = 0;
+    const char *p;
+    if (!a) {
+        ui_caption("UNISON", 1100u);
+        return;
+    }
+    p = oct == 2 ? "TWO OCTAVES" : oct == 1 ? "AN OCTAVE" : "";
+    for (; *p && i < 30; p++)
+        b[i++] = *p;
+    if (oct && rest)
+        for (p = " AND "; *p && i < 30; p++)
+            b[i++] = *p;
+    for (p = IN[rest]; *p && i < 30; p++)
+        b[i++] = *p;
+    for (p = st < 0 ? " DOWN" : " UP"; *p && i < 31; p++)
+        b[i++] = *p;
+    b[i] = 0;
+    ui_caption(b, 1300u);
 }
 
 /* the few words it says, for values that are choices */
@@ -223,7 +265,24 @@ static void say_choice(int k)
     }
     case P_STYLE: ui_caption(sy_style_name(proj.par[k]), 1500u); break;
     case P_LFODEST: ui_caption(LFO_DEST_NAME[proj.par[k]], 1200u); break;
-    case P_LFOSHAPE: ui_caption(LFO_SHAPE_NAME[proj.par[k]], 1200u); break;
+    case P_LFOSHAPE: case P_LFO2SHAPE: ui_caption(LFO_SHAPE_NAME[proj.par[k]], 1200u); break;
+    case P_LFO2DEST: ui_caption(LFO_DEST_NAME[proj.par[k]], 1200u); break;
+    case P_BMEET: ui_caption(MEET_NAME[proj.par[k]], 1200u); break;
+    case P_FTYPE: ui_caption(FTYPE_NAME[proj.par[k]], 1200u); break;
+    case P_MATTACK: if (!proj.par[k]) ui_caption("WITH THE MOUTH", 1000u); break;
+    case P_BTUNE: say_interval(proj.par[k]); break;
+    case P_BTABLE: {
+        static char b[20];
+        const char *n = SY_TABLE_NAME[proj.par[k]];
+        int i = 0;
+        for (; "SHADOW: "[i]; i++)
+            b[i] = "SHADOW: "[i];
+        for (; *n && i < 19; n++, i++)
+            b[i] = *n;
+        b[i] = 0;
+        ui_caption(b, 1300u);
+        break;
+    }
     case P_MIDIOUT: ui_caption(proj.par[k] ? "MIDI OUT: YES" : "MIDI OUT: NO", 1200u); break;
     case P_ARPMODE: ui_caption(ARP_MODE_NAME[proj.par[k]], 1200u); break;
     case P_ARPRATE: ui_caption(ARP_RATE_NAME[proj.par[k]], 1200u); break;
@@ -409,20 +468,36 @@ static void button(int b)
         const uint32_t now = plat_ms();
         const int dbl = b != B_ARP && b == ui.last_up_btn && now - ui.last_up_t < DOUBLE_MS;
         int pg = -1;
-        /* GLO: the mixer, pressed again the setup; SEQ: the loop, pressed again the tape deck. "Again" is
-         * when it was the last page button too (REC opening the loop's drawer doesn't count) */
-        if (b == B_GLO)
-            pg = dbl ? ui.page : ui.panel && ui.page == PG_MIX && ui.last_up_btn == B_GLO ? PG_SETUP : PG_MIX;
-        if (b == B_SEQ) {
-            pg = dbl ? ui.page : ui.panel && ui.page == PG_LOOP && ui.last_up_btn == B_SEQ ? PG_DECK : PG_LOOP;
-            if (pg == PG_LOOP && !(ui.panel && ui.page == PG_LOOP))
-                sy_loop_select(-1);                      /* (a fresh look: the knobs edit the whole loop) */
-        }
-        for (i = 0; pg < 0 && i < NPAGES; i++)
-            if (PAGE_BTN[i] == b)
-                pg = i;
+        /* A part's button opens its first page; pressed again (its page open, and the last page button let
+         * go: REC opening the loop's drawer doesn't count) its second page, and back. Twice fast: it stays. */
+        if (dbl)
+            pg = ui.page;
+        else if (ui.panel && PAGE_BTN[ui.page] == b && ui.last_up_btn == b && PAGE_AGAIN[ui.page] >= 0)
+            pg = PAGE_AGAIN[ui.page];
+        else
+            for (i = 0; pg < 0 && i < NPAGES; i++)
+                if (PAGE_BTN[i] == b && !PAGE_SECOND[i])
+                    pg = i;
+        if (pg == PG_LOOP && !(ui.panel && ui.page == PG_LOOP))
+            sy_loop_select(-1);                          /* (a fresh look: the knobs edit the whole loop) */
         if (pg >= 0) {                                   /* a part's button: its page while held, and 3 s on */
+            const int again = PAGE_AGAIN[pg];
             set_page(pg);
+            if (PAGE_SECOND[pg] && !(proj.seen & PAGE_SEEN_BIT[pg])) {
+                proj.seen |= PAGE_SEEN_BIT[pg];          /* found: no more nudging */
+                mark_dirty();
+            } else if (!dbl && again >= 0 && PAGE_SECOND[again] && !(proj.seen & PAGE_SEEN_BIT[again])) {
+                static char nudge[32];                  /* not found yet: a nudge, in its voice */
+                const char *p = PAGE_NAME[again];
+                int n = 0;
+                for (const char *q = "AGAIN: "; *q; q++)
+                    nudge[n++] = *q;
+                for (; *p && n < 30; p++)
+                    nudge[n++] = *p;
+                nudge[n++] = '.';
+                nudge[n] = 0;
+                ui_caption(nudge, 1600u);
+            }
             ui.held_btn = (int8_t)b;
             ui.held_t = now;
             if (dbl && !ui.latch) {
