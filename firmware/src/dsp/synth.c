@@ -28,7 +28,8 @@ static const sy_param_t PARAMS[P_NPARAMS] = {
 };
 const sy_param_t *sy_param_info(int i) { return &PARAMS[i < 0 ? 0 : i >= P_NPARAMS ? P_NPARAMS - 1 : i]; }
 
-const char *const SY_TABLE_NAME[SY_NTABLE] = {"SIGH", "MOAN", "PULSE", "CRUSH", "WARBLE", "FOLD", "CHURCH", "SYNC"};
+const char *const SY_TABLE_NAME[SY_NTABLE] = {"SIGH", "MOAN", "PULSE", "CRUSH", "WARBLE", "FOLD", "CHURCH", "SYNC",
+                                                 "GLASS", "BREATH", "CRY", "HOLLOW", "BEND", "TOY", "ICE", "SAG"};
 
 volatile sy_tel_t sy_tel;
 
@@ -173,9 +174,59 @@ static float recipe(int t, float m, float x)
             y += (A0[i] + (A1[i] - A0[i]) * m) * mm_sin_turns(x * H[i]);
         return y;
     }
-    default: {                                          /* SYNC: a saw hard-synced, the ratio rising */
+    case 7: {                                           /* SYNC: a saw hard-synced, the ratio rising */
         float r = 1.0f + 5.0f * m, p = x * r;
         return saw(p) * (1.0f - 0.5f * x);
+    }
+    case 8: {                                           /* GLASS: a few far-apart partials, the high ones ringing out */
+        static const float H[6] = {1.0f, 3.0f, 7.0f, 11.0f, 17.0f, 23.0f};
+        int i;
+        for (y = 0.0f, i = 0; i < 6; i++) {
+            const float k = (float)i / 5.0f, a = i == 0 ? 1.0f - 0.5f * m : (0.5f - 0.35f * k) * (0.15f + m * (0.6f + k));
+            y += a * mm_sin_turns(x * H[i]);
+        }
+        return y;
+    }
+    case 9: {                                           /* BREATH: a sine, and air rising round it */
+        int h;
+        for (y = s, h = 9; h <= 60; h++) {
+            const uint32_t r = (uint32_t)h * 2654435761u;   /* each harmonic its own phase and weight */
+            const float ph = (float)(r >> 20 & 1023u) / 1024.0f, a = (0.4f + (float)(r >> 10 & 255u) / 425.0f) / (float)h;
+            y += m * 2.2f * a * mm_sin_turns(x * (float)h + ph);
+        }
+        return y;
+    }
+    case 10: {                                          /* CRY: a saw through a peak that climbs the harmonics */
+        const float peak = 2.0f + 22.0f * m;
+        int h;
+        for (y = 0.0f, h = 1; h <= 40; h++) {
+            const float d = ((float)h - peak) / 1.6f;
+            y += (0.35f + 2.6f * mm_expf(-d * d)) / (float)h * mm_sin_turns(x * (float)h);
+        }
+        return y;
+    }
+    case 11: {                                          /* HOLLOW: odd harmonics only, a clarinet's softness to a square */
+        int h;
+        for (y = 0.0f, h = 1; h <= 31; h += 2)
+            y += mm_powf((float)h, -(2.0f - m)) * mm_sin_turns(x * (float)h);
+        return y;
+    }
+    case 12: {                                          /* BEND: a sine with its phase bent, sharper and sharper */
+        const float d = 0.5f - 0.44f * m, p = x < d ? x * 0.5f / d : 0.5f + (x - d) * 0.5f / (1.0f - d);
+        return mm_sin_turns(p + 0.25f) * (1.0f - 0.3f * m);
+    }
+    case 13: {                                          /* TOY: a four-bit triangle, then thinner and thinner pulses */
+        const float tq = mm_floorf((tri(x) + 1.0f) * 7.5f + 0.5f) / 7.5f - 1.0f, w = 0.5f - 0.38f * m;
+        const float pulse = x < w ? 1.0f : -1.0f;
+        return tq * (1.0f - m) + pulse * m * 0.7f;
+    }
+    case 14: {                                          /* ICE: a sine modulating its octave, harder and harder */
+        const float index = 5.0f * m * m + 0.4f * m;
+        return mm_sin_turns(x + index * (1.0f / MM_TWO_PI) * mm_sin_turns(2.0f * x));
+    }
+    default: {                                          /* SAG: a sine that can't hold itself up: its top flattens, it droops */
+        y = s > 0.0f ? s * (1.0f - 0.55f * m * s) : s * (1.0f + 0.25f * m);
+        return mm_tanhf(y * (1.0f + 1.5f * m) + 0.12f * m * mm_sin_turns(2.0f * x + 0.25f));
     }
     }
 }
@@ -528,7 +579,30 @@ static inline void gunk(float *l, float *r, float *peak)
 }
 
 /* ---------------------------------------------------------------- LFO --- */
-static float lfo_ph, lfo_val, lfo_rand, lfo_rand_to;
+static float lfo_ph, lfo_val, lfo_rand, lfo_rand_to, lfo_from;
+/* a heartbeat's pulse: up fast, down slower, centred on c */
+static inline float lfo_beat(float ph, float c)
+{
+    const float d = ph - c;
+    return d < -0.04f || d > 0.12f ? 0.0f : d < 0.0f ? 1.0f + d * 25.0f : 1.0f - d * (1.0f / 0.12f);
+}
+float sy_lfo_shape(int shape, float ph, float from, float to)
+{
+    switch (shape) {
+    case LFO_TRI: return tri(ph + 0.25f);
+    case LFO_SQUARE: return ph < 0.5f ? 1.0f : -1.0f;
+    case LFO_SAW: return 1.0f - 2.0f * ph;
+    case LFO_RANDOM: return to;
+    case LFO_RISE: return 2.0f * ph - 1.0f;
+    case LFO_DRIFT: return from + (to - from) * (0.5f - 0.5f * mm_sin_turns(ph * 0.5f + 0.25f));
+    case LFO_STEPS: return -1.0f + (2.0f / 3.0f) * mm_floorf(ph * 4.0f);
+    case LFO_THROB: {
+        const float a = lfo_beat(ph, 0.06f), b = 0.75f * lfo_beat(ph, 0.3f);
+        return 2.0f * (a > b ? a : b) - 1.0f;
+    }
+    default: return mm_sin_turns(ph);
+    }
+}
 static float lfo_tick(uint32_t n)
 {
     const float hz = 0.05f * mm_exp2f(pf(P_LFORATE) * 9.0f);
@@ -536,18 +610,14 @@ static float lfo_tick(uint32_t n)
     lfo_ph += hz * (float)n / SY_SR;
     if (lfo_ph >= 1.0f) {
         lfo_ph -= mm_floorf(lfo_ph);
+        lfo_from = lfo_rand_to;
         lfo_rand_to = rnds();
     }
-    switch (par[P_LFOSHAPE]) {
-    case LFO_TRI: v = tri(lfo_ph + 0.25f); break;
-    case LFO_SQUARE: v = lfo_ph < 0.5f ? 1.0f : -1.0f; break;
-    case LFO_SAW: v = 1.0f - 2.0f * lfo_ph; break;
-    case LFO_RANDOM:
+    if (par[P_LFOSHAPE] == LFO_RANDOM) {                /* (a twitch: there in a few steps) */
         lfo_rand += 0.3f * (lfo_rand_to - lfo_rand);
         v = lfo_rand;
-        break;
-    default: v = mm_sin_turns(lfo_ph); break;
-    }
+    } else
+        v = sy_lfo_shape(par[P_LFOSHAPE], lfo_ph, lfo_from, lfo_rand_to);
     lfo_val += 0.5f * (v - lfo_val);                   /* a square's edges, not quite a click */
     return lfo_val;
 }
@@ -812,21 +882,25 @@ static inline void delay(float in, float *l, float *r)
 /* The room: eight walls (delay lines) that hand what they hear to each other through a Householder
  * mix, each wall a little duller than the air (a low-pass per line), four of them breathing (slowly
  * moving lengths) so the tail never rings. In front, a short pre-delay and four smearing all-passes.
- * Size is the room: a closet is short and dull, the void long and bright. The walls share one write
- * position in power-of-two rings, so a read is a mask. */
+ * Size is the room: a closet is short and dull, the void long and bright. It runs at half rate
+ * (22.05 kHz: a room has no air up there anyway), the walls in power-of-two rings sharing one write
+ * position, so a read is a mask; between two steps the output is halfway. */
 #define ROOM_N 8
-#define ROOM_RING 4096u
-#define ROOM_PRE 530u                                 /* 12 ms */
-#define ROOM_SWAY 9.0f                                /* how far a breathing wall moves, samples */
-static const uint32_t ROOM_LEN[ROOM_N] = {1427, 1777, 2111, 2393, 2689, 3001, 3271, 3583};
-static const uint32_t SMEAR_LEN[4] = {113, 167, 241, 337};
-#define SMEAR_RING 512u
+#define ROOM_RATE (SY_SR * 0.5f)
+#define ROOM_RING 2048u
+#define ROOM_PRE 265u                                 /* 12 ms */
+#define ROOM_SWAY 4.5f                                /* how far a breathing wall moves, samples */
+static const uint32_t ROOM_LEN[ROOM_N] = {709, 887, 1051, 1193, 1361, 1499, 1637, 1789};
+static const uint32_t SMEAR_LEN[4] = {57, 83, 121, 167};
+#define SMEAR_RING 256u
 static float room_wall[ROOM_N][ROOM_RING] SY_POOL;
 static float room_smear[4][SMEAR_RING] SY_POOL;
-static float room_pre[1024] SY_POOL;
+static float room_pre[512] SY_POOL;
 static uint32_t room_w;
 static float wall_keep[ROOM_N], wall_dull[ROOM_N];   /* each wall's feedback gain (from the room's T60), its low-pass */
 static float room_bright = 0.6f, room_out = 0.3f, room_s, room_c = 1.0f, room_peak;
+static float room_last_in, room_l, room_r, room_was_l, room_was_r;
+static int room_odd;
 
 #ifdef OM_HOST
 /* the device's .pool is 0x54000 bytes and the build keeps 8 KiB spare; the screen takes 120 x 120 +
@@ -840,11 +914,11 @@ _Static_assert(sizeof room_wall + sizeof room_smear + sizeof room_pre + sizeof t
 /* the room for a Size 0..1: T60 from about a second (closet) to half a minute (the void) */
 static void room_size(float size)
 {
-    const float s2 = size * size, t60 = mm_expf(1.25f * size + 2.15f * s2 * s2);
+    const float s2 = size * size, t60 = mm_expf(1.25f * size + 2.15f * s2 * s2), at_full = 0.25f + 0.6f * size;
     int i;
     for (i = 0; i < ROOM_N; i++)                        /* -60 dB over t60, whatever each wall's length */
-        wall_keep[i] = mm_exp2f(-9.965784f * (float)ROOM_LEN[i] / (t60 * SY_SR));
-    room_bright = 0.25f + 0.6f * size;
+        wall_keep[i] = mm_exp2f(-9.965784f * (float)ROOM_LEN[i] / (t60 * ROOM_RATE));
+    room_bright = 1.0f - (1.0f - at_full) * (1.0f - at_full);   /* (the same low-pass, at half the rate) */
     room_out = 0.34f * (1.0f - 0.3f * size * mm_sqrtf(size));   /* (a long tail piles up: as loud as a short one) */
 }
 static inline float wall_breath(int i, float sway)     /* a breathing wall, read between two samples */
@@ -854,19 +928,19 @@ static inline float wall_breath(int i, float sway)     /* a breathing wall, read
     const float a = room_wall[i][(room_w - k) & (ROOM_RING - 1u)], b = room_wall[i][(room_w - k - 1u) & (ROOM_RING - 1u)];
     return a + (b - a) * (back - (float)k);
 }
-static inline void reverb(float in, float *ol, float *or_)
+static void room_step(float in)                        /* one half-rate step */
 {
     float x, h[ROOM_N], sum;
     uint32_t i;
-    room_pre[room_w & 1023u] = in;
-    x = room_pre[(room_w - ROOM_PRE) & 1023u];
+    room_pre[room_w & 511u] = in;
+    x = room_pre[(room_w - ROOM_PRE) & 511u];
     for (i = 0; i < 4; i++) {                           /* smearing all-passes, gain 0.6 */
         const float back = room_smear[i][(room_w - SMEAR_LEN[i]) & (SMEAR_RING - 1u)], v = x + 0.6f * back;
         room_smear[i][room_w & (SMEAR_RING - 1u)] = mm_flush(v);
         x = back - 0.6f * v;
     }
     {                                                   /* the breath: a slow quadrature pair */
-        const float s = room_s + 0.00011f * room_c, c = room_c - 0.00011f * s;
+        const float s = room_s + 0.00022f * room_c, c = room_c - 0.00022f * s;
         room_s = s;
         room_c = c;
     }
@@ -890,9 +964,20 @@ static inline void reverb(float in, float *ol, float *or_)
     room_w++;
     {
         const float *d = wall_dull;
-        *ol = room_out * (d[0] - d[1] + d[2] + d[3] - d[4] - d[5] + d[6] - d[7]);
-        *or_ = room_out * (d[0] + d[1] - d[2] + d[3] + d[4] - d[5] - d[6] - d[7]);
+        room_was_l = room_l;
+        room_was_r = room_r;
+        room_l = room_out * (d[0] - d[1] + d[2] + d[3] - d[4] - d[5] + d[6] - d[7]);
+        room_r = room_out * (d[0] + d[1] - d[2] + d[3] + d[4] - d[5] - d[6] - d[7]);
     }
+}
+static inline void reverb(float in, float *ol, float *or_)
+{
+    if (!room_odd)
+        room_step(0.5f * (in + room_last_in));          /* (two samples in one: no fold-back from the top) */
+    room_last_in = in;
+    room_odd ^= 1;
+    *ol = room_odd ? (room_was_l + room_l) * 0.5f : room_l;
+    *or_ = room_odd ? (room_was_r + room_r) * 0.5f : room_r;
 }
 static void room_init(void)
 {
@@ -905,7 +990,7 @@ static void room_init(void)
     for (i = 0; i < 4; i++)
         for (j = 0; j < SMEAR_RING; j++)
             room_smear[i][j] = 0.0f;
-    for (j = 0; j < 1024u; j++)
+    for (j = 0; j < 512u; j++)
         room_pre[j] = 0.0f;
     room_w = 0;
 }

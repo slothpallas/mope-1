@@ -877,20 +877,20 @@ static void curve(const drawer_t *p, const float *v, int n, uint8_t line, uint8_
     }
 }
 
-static float tri_wave(float ph) { return ph < 0.5f ? 4.0f * ph - 1.0f : 3.0f - 4.0f * ph; }
+/* the LFO's shape for the drawing: the engine's own (synth.c), random places from a hash of the cycle */
+static float lfo_hash(int32_t k) { const uint32_t h = (uint32_t)k * 2654435761u; return (float)((h >> 8) & 255u) / 127.5f - 1.0f; }
 static float lfo_shape_at(int shape, float ph)
 {
-    ph -= mm_floorf(ph);
-    switch (shape) {
-    case LFO_TRI: return tri_wave(ph + 0.25f - mm_floorf(ph + 0.25f));
-    case LFO_SQUARE: return ph < 0.5f ? 1.0f : -1.0f;
-    case LFO_SAW: return 1.0f - 2.0f * ph;
-    case LFO_RANDOM: {
-        const uint32_t k = (uint32_t)(ph * 4.0f) * 2654435761u;
-        return (float)((k >> 8) & 255u) / 127.5f - 1.0f;
+    const float whole = mm_floorf(ph);
+    const int32_t k = (int32_t)whole;
+    ph -= whole;
+    if (shape == LFO_RANDOM)                             /* (drawn as four twitches a cycle) */
+        return lfo_hash(k * 4 + (int32_t)(ph * 4.0f));
+    if (shape == LFO_DRIFT) {                            /* (and a wander as two drifts a cycle) */
+        const int32_t j = k * 2 + (ph >= 0.5f);
+        return sy_lfo_shape(shape, ph * 2.0f - (float)(ph >= 0.5f), lfo_hash(j), lfo_hash(j + 1));
     }
-    default: return mm_sin_turns(ph);
-    }
+    return sy_lfo_shape(shape, ph, lfo_hash(k), lfo_hash(k + 1));
 }
 
 static void schem_body(const drawer_t *p)                /* the wavetable: its frames, stacked */
@@ -1709,6 +1709,27 @@ static void blob_draw(void)
         boby = lfo * depth * 4.0f;
         bs.lean = lfo * depth * 0.15f;
         break;
+    case LFO_RISE:                                       /* a heave: it fills up slowly, then lets it all out */
+        sqx *= 1.0f + lfo * depth * 0.1f;
+        sqy *= 1.0f + lfo * depth * 0.14f;
+        boby = -lfo * depth * 5.0f;
+        break;
+    case LFO_DRIFT:                                      /* a wander: off somewhere, slowly, and back */
+        bobx = lfo * depth * 15.0f;
+        boby = depth * 5.0f * mm_sin_turns(bs.t * 0.11f + lfo * 0.15f);
+        bs.lean = lfo * depth * 0.2f;
+        break;
+    case LFO_STEPS:                                      /* a stagger: sideways in four lurches */
+        bobx = lfo * depth * 12.0f;
+        boby = -mm_fabsf(lfo) * depth * 3.0f;
+        bs.lean = lfo * depth * 0.3f;
+        break;
+    case LFO_THROB: {                                    /* a throb: two swells, then still, like a heart */
+        const float swell = (lfo + 1.0f) * 0.5f;
+        sqx *= 1.0f + swell * depth * 0.16f;
+        sqy *= 1.0f + swell * depth * 0.12f;
+        break;
+    }
     default:                                             /* a twitch: sudden, all over */
         bobx = lfo * depth * 8.0f;
         boby = -mm_fabsf(lfo) * depth * 6.0f;

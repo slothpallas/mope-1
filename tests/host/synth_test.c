@@ -200,21 +200,25 @@ int main(int argc, char **argv)
     sy_set(P_SUSTAIN, 100);
     sy_set(P_LFODEPTH, 0);
     sy_set(P_GUNK, 0);                                  /* (no room noise in a measurement) */
-    sy_note_on(96, 100);                                /* C7, 2093 Hz */
-    run(300);
-    capture();
-    {
-        float f0 = 2093.0f, sig = goertzel(f0), worst = 0.0f;
+    for (t = 0; t < SY_NTABLE; t++) {                   /* every table, at its brightest frame */
+        float f0 = 2093.0f, sig, worst = 0.0f;
         int h;
+        sy_set(P_TABLE, t);
+        run(20);
+        sy_note_on(96, 100);                            /* C7, 2093 Hz */
+        run(300);
+        capture();
+        sig = goertzel(f0);
         for (h = 1; h < 10; h++) {                      /* between the harmonics: where aliases would land */
             float a = goertzel(f0 * (float)h + f0 * 0.37f), b = goertzel(f0 * (float)h + f0 * 0.71f);
             worst = a > worst ? a : worst;
             worst = b > worst ? b : worst;
         }
-        CHECK(worst < sig * 1e-5f, "C7 on SYNC: aliases %.1f dB under the fundamental",
+        CHECK(worst < sig * 1e-5f, "C7 on %s: aliases %.1f dB under the fundamental", SY_TABLE_NAME[t],
               (double)(10.0f * mm_log2f(worst / sig + 1e-20f) * 0.30103f));
+        sy_note_off(96);
+        quiet();
     }
-    quiet();
 
     printf("envelope\n");
     sy_set(P_ATTACK, 80);                               /* ~1.4 s */

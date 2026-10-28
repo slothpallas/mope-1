@@ -18,6 +18,18 @@ MOPE-1's own sound and its own player: the last parts that came from FiMba-1 are
   only thing that glows; real buttons you can tab to; the right hints when you hover (the old page
   still described a kalimba). In another site's page it drops its title and installer, and it works
   on sites with a strict security policy.
+- **Eight new wavetables** (16 in all): Glass (a few far-apart partials ringing), Breath (air rising
+  round a sine), Cry (a peak climbing the harmonics), Hollow (a clarinet's softness to a square),
+  Bend (a phase-bent sine), Toy (a four-bit triangle to a thin pulse), Ice (a sine modulating its
+  octave) and Sag (a sine that can't hold itself up).
+- **Four new LFO shapes** (9 in all), each with its own dance: heave (a slow rise and a drop: the blob
+  fills up and lets it out), wander (smooth random: it drifts off and back), stagger (four steps: it
+  lurches sideways) and throb (a heartbeat: two swells and a rest).
+- **Seventeen new presets** (38 in all), in their kinds: Seen 2:14, Weighted blanket, The void stares,
+  Slow heart; Music box, Glass office, Elevator; Typing..., Icicle; Cry on the floor, Bent out of
+  shape, Drama; Hollow inside, Underslept; Heavy breathing, Broken record, Phantom vibrate.
+- The reverb runs at half rate now, the same tail in half the memory: room for the new wavetables.
+  They are built when it switches on, so it takes a little longer to wake.
 - The help, the README and the licence notes say what is MOPE-1's and what it runs on.
 
 ## 0.1.0

@@ -23,7 +23,7 @@
 
 #define SY_SR 44100.0f
 #define SY_NVOICE 6                    /* raise once the FM-1's budget is measured */
-#define SY_NTABLE 8
+#define SY_NTABLE 16
 #define SY_NFRAME 8
 
 /* parameters. All saved; ranges in sy_param_info(). New ones go at the end (old saves keep loading). */
@@ -48,7 +48,14 @@ typedef struct {
 } sy_param_t;
 const sy_param_t *sy_param_info(int i);
 
-enum { LFO_SINE, LFO_TRI, LFO_SQUARE, LFO_SAW, LFO_RANDOM, LFO_NSHAPE };
+enum { LFO_SINE, LFO_TRI, LFO_SQUARE, LFO_SAW, LFO_RANDOM,
+       LFO_RISE,                                         /* a slow rise, then a drop */
+       LFO_DRIFT,                                        /* random, but smooth: a new place every cycle, glided to */
+       LFO_STEPS,                                        /* four steps up */
+       LFO_THROB,                                        /* two quick pulses, then rest: a heartbeat */
+       LFO_NSHAPE };
+/* the LFO's value for a shape at a phase 0..1 (DRIFT and RANDOM: from the two random places given) */
+float sy_lfo_shape(int shape, float phase, float from, float to);
 enum { ARP_UP, ARP_DOWN, ARP_UPDOWN, ARP_WANDER, ARP_STAB, ARP_NMODE };
 #define ARP_NRATE 6                                 /* 1/4 1/8 1/8T 1/16 1/16T 1/32 */
 enum { LD_POS, LD_CUTOFF, LD_PITCH, LD_VOLUME, LD_N };

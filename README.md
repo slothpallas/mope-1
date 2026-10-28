@@ -31,7 +31,7 @@ through X0X, FoMni and FiMba-1, the firmware MOPE-1 started from.
 | **Resonance** | Its pupils shrink to pinpoints and start to glow, and at the top they become laser eyes. |
 | **Env amount / Mod decay** | Its eyebrows rise with every note. |
 | **Attack / Decay / Sustain / Release** | Its big mouth opens wide with the note, stays open at the sustain and closes with the release. A long release is a yawn. |
-| **LFO** | Its whole body dances at the rate, as far as the depth: a sway (side to side, leaning into it), a bob (stretching as it rises), a bounce (squashed when it lands), a nod, or a twitch; its lumps wobble along. It dances big while notes sound (riding their envelope), shows you a preview while you turn the Vibe knobs, and only murmurs when idle. |
+| **LFO** | Its whole body dances at the rate, as far as the depth: a sway (side to side, leaning into it), a bob (stretching as it rises), a bounce (squashed when it lands), a nod, a twitch, a heave (filling up slowly, then letting it all out), a wander (off somewhere and back), a stagger (sideways in four lurches) or a throb (two swells and a rest, like a heart); its lumps wobble along. It dances big while notes sound (riding their envelope), shows you a preview while you turn the Vibe knobs, and only murmurs when idle. |
 | **Chorus** | See-through copies of itself peek out from behind it, a beat out of step: one a side, then more, further out and fainter. |
 | **Delay** | It cries one tear per echo. Each tear is smaller than the one before, and they fall as far apart as the echoes. They pool on the ground. |
 | **Reverb, Size** | The walls throw cold light back onto its edges as the reverb rings. A bigger room pushes the walls out and the blob gets smaller in it. Past the walls is the void, with stars. |
@@ -78,7 +78,7 @@ Press or hold a part's button: its schematic opens in a dark glass drawer over t
 | HOME | Body | Table | Position | Detune | Sub |
 | EDIT | Eyes | Cutoff | Resonance | Env amount | Mod decay |
 | ENV | Mouth | Attack | Decay | Sustain | Release |
-| LFO | Vibe | Rate | Depth | Shape (sway, bob, bounce, nod, twitch) | Destination (shape, eyes, voice, volume) |
+| LFO | Vibe | Rate | Depth | Shape (sway, bob, bounce, nod, twitch, heave, wander, stagger, throb) | Destination (shape, eyes, voice, volume) |
 | FX | Tears | Chorus | Delay | Time | Feedback |
 | SEL | Walls | Reverb | Size | Fry | Tape |
 | SEQ | Loop | Note | Length | Velocity (of the chosen step, or the whole loop) | Bars (1, 2, 4) |
@@ -88,7 +88,7 @@ Press or hold a part's button: its schematic opens in a dark glass drawer over t
 | ARP | Arp | Mode (up, down, up and down, wander, stab) | Rate (1/4 .. 1/32, triplets) | Octaves (1-3) | Gate |
 
 - **ALGORITHM** changes only the instrument's sound source, its wavetable (the blob's body shape). The caption says which ("WAVE: SIGH"); everything else stays.
-- **PRESETS** loads a whole saved sound at once: wave, filter, envelope, LFO and effects. Its card opens in the drawer: the name, which of the eight it is, and thumbnails of the wave, filter and envelope it brought.
+- **PRESETS** loads a whole saved sound at once: wave, filter, envelope, LFO and effects. Its card opens in the drawer: the name, where it sits in its kind, and thumbnails of the wave, filter and envelope it brought.
 - **SELECT**: the drum tape (the blob swaps the cassette and shrugs).
 - **Close-ups:** while you hold EDIT (Eyes) the view moves in on its eyes; while you hold ENV (Mouth), on its mouth.
 - **PLAY**: the band on and off: drums, bass and your loop. **ARP**: tap for the arpeggiator on or off; hold for its page: the keys you hold become its pattern, at the tempo, starting each bar with the drums.
@@ -107,13 +107,13 @@ As on X0X, Melodee and JIANT FM: **PLAY**, **REC** and **SEQ** do what they say.
 - **SAVE**: saves (it also saves by itself when quiet). Hold for 1.5 s, then press SAVE again, to reset everything. The blob keeps its level.
 - The lowest and highest keys together: it gives up.
 
-**Presets** (21, in six kinds; the card shows the kind):
-- **Pad:** Monday, 3AM, Rain again, Church of nothing, Sunday scaries
-- **Keys:** Left on read, Hold music, Open plan
-- **Pluck:** NPC, Read receipt, Bubble wrap
-- **Lead:** Main character, Low battery, Deep fried
-- **Bass** (an octave down): Sub-par, Bottom text, Doomscroll, Basement
-- **FX:** Tinnitus, Dial tone, Ghosted
+**Presets** (38, in six kinds; the card shows the kind):
+- **Pad:** Monday, 3AM, Rain again, Church of nothing, Sunday scaries, Seen 2:14, Weighted blanket, The void stares, Slow heart
+- **Keys:** Left on read, Hold music, Open plan, Music box, Glass office, Elevator
+- **Pluck:** NPC, Read receipt, Bubble wrap, Typing..., Icicle
+- **Lead:** Main character, Low battery, Deep fried, Cry on the floor, Bent out of shape, Drama
+- **Bass** (an octave down): Sub-par, Bottom text, Doomscroll, Basement, Hollow inside, Underslept
+- **FX:** Tinnitus, Dial tone, Ghosted, Heavy breathing, Broken record, Phantom vibrate
 
 **Drum styles:** each named after its genre, sadly: Grief drill, Empty city pop, Gloom gabber, Missed phonk call, Jersey cry club, Heartbreakcore, Amapia-no, Cold footwork, Dembow out, Vaporweep, Hyperflop, Funeral bossa, Office ambivalent. Each style has a main bar, a fill every fourth bar, its own tempo and swing, and a synthesized kit (no samples). In Amapia-no the bass is a log drum.
 
@@ -130,13 +130,15 @@ CHANGED."). Level 10 gives it a balloon, mostly deflated.
 
 ## The sound
 
-- **8 wavetables:** Sigh, Moan, Pulse, Crush, Warble, Fold, Church, Sync. Each has 8 frames, built at
+- **16 wavetables:** Sigh, Moan, Pulse, Crush, Warble, Fold, Church, Sync, Glass, Breath, Cry, Hollow,
+  Bend, Toy, Ice, Sag. Each has 8 frames, built at
   boot from harmonic recipes, so they take no flash space. Each frame is mipmapped at five sizes, so
   high notes don't alias (the test checks C7 on Sync: aliases at −68 dB).
 - **6 voices:** two detuned oscillators panned apart, a sine sub, slow analog drift, a resonant
   low-pass (Simper's SVF) with key tracking, an amp ADSR and a mod envelope on the cutoff. A stolen
   voice restarts from its current level, so stealing doesn't click.
-- **One LFO** with 5 shapes and 4 destinations.
+- **One LFO** with 9 shapes (sine, triangle, square, saw down, random, saw up, smooth random, four steps,
+  a heartbeat) and 4 destinations.
 - **Effects:** fry (drive, then bitcrush and sample-rate crush), a three-tap chorus, the tears (a
   ping-pong delay: every echo crosses the room darker and thinner, its time wobbling with Tape), the
   room (a reverb of eight walls handing sound to each other, four of them breathing; Size goes from a

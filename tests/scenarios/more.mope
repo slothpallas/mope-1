@@ -1,0 +1,68 @@
+# The new wavetables, the new LFO shapes and a long preset name, on the screen: each one reached
+# with the encoders, held to its value, and photographed with a chord sounding.
+wait 300
+expect par0 0
+# ALGORITHM: past SYNC into the eight new tables
+turn ALGO 8 120
+key 12 down
+key 16 down
+wait 400
+expect par0 8
+shot 00_glass.png
+turn ALGO 1
+wait 300
+shot 01_breath.png
+turn ALGO 1
+wait 300
+shot 02_cry.png
+turn ALGO 1
+wait 300
+shot 03_hollow.png
+turn ALGO 1
+wait 300
+shot 04_bend.png
+turn ALGO 1
+wait 300
+shot 05_toy.png
+turn ALGO 1
+wait 300
+shot 06_ice.png
+turn ALGO 1
+wait 300
+expect par0 15
+shot 07_sag.png
+turn ALGO 1
+wait 200
+expect par0 0
+# VIBE: the four new shapes, deep, while the chord sounds
+tap LFO
+spin K2 70
+spin K3 5
+wait 600
+expect par14 5
+shot 10_heave.png
+spin K3 1
+wait 600
+expect par14 6
+shot 11_wander.png
+spin K3 1
+wait 600
+expect par14 7
+shot 12_stagger.png
+spin K3 1
+wait 600
+expect par14 8
+shot 13_throb.png
+spin K3 1
+wait 200
+expect par14 8
+key 12 up
+key 16 up
+tap HOME
+wait 3500
+# PRESETS: the longest new name on its card
+turn PRESET 23
+wait 300
+shot 20_long_name.png
+expect par0 10
+expect dropped 0
