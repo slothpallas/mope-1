@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MOPE-1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap">
 <meta name="description" content="MOPE-1, a sad wavetable synth for the M-VAVE FM-1, playing in the browser.">
 <style>
 /* MOPE-1's room: near-black, the hardware as thin lines, the screen the only thing that glows */
@@ -11,20 +14,20 @@
   --night: #07080a; --panel: #0b0d10; --line: rgba(186, 204, 222, .2); --line-hi: rgba(186, 204, 222, .42);
   --ink: #d8dee5; --quiet: #7a838e; --sodium: #f28a5a; --sodium-soft: rgba(242, 138, 90, .18); --rain: #5fd0c4;
   --glass: #9fc4e6; --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --serif: "Instrument Serif", Georgia, "Times New Roman", serif;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--night); color: var(--ink); font: 15px/1.55 var(--sans); }
+body { margin: 0; background: var(--night); color: var(--ink); font: 18px/1.45 var(--serif); }
 main { max-width: 1060px; margin: 0 auto; padding: 28px 16px 56px; }
 .framed main { padding-top: 14px; }
 .framed .standalone-only { display: none; }
 a { color: var(--glass); }
-h1, h2 { font-family: var(--mono); font-weight: 500; letter-spacing: .14em; text-transform: uppercase; margin: 0; }
-h1 { font-size: 1rem; }
-h2 { font-size: .74rem; color: var(--ink); margin-bottom: .55rem; }
+h1, h2 { font-family: var(--serif); font-weight: 400; margin: 0; }
+h1 { font-size: 2.4rem; line-height: 1; }
+h2 { font-size: 1.55rem; line-height: 1.1; color: var(--ink); margin-bottom: .45rem; }
 header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem 1.1rem; margin-bottom: 1.1rem; }
-header p { margin: 0; color: var(--quiet); font: .82rem var(--mono); }
+header p { margin: 0; color: var(--quiet); font: italic 1.15rem var(--serif); }
 header nav { margin-left: auto; display: flex; gap: 1rem; font: .8rem var(--mono); }
 .sideways { display: none; color: var(--quiet); font: .8rem var(--mono); margin: 0 0 .8rem; }
 @media (orientation: portrait) and (max-width: 700px) { .sideways { display: block; } }
@@ -70,7 +73,8 @@ section { margin-top: 2rem; padding-top: 1.2rem; border-top: 1px solid var(--rul
 .guide p, .guide ul { margin: 0; color: var(--quiet); max-width: 62ch; }
 .guide ul { padding-left: 1.05rem; }
 .guide li + li { margin-top: .3rem; }
-.guide b, .install b { color: var(--ink); font-weight: 600; }
+.guide b { font: 500 .74em var(--mono); letter-spacing: .04em; color: var(--ink); }   /* (the FM-1's own names, as on its panel) */
+.install b { font-weight: 400; font-style: italic; color: var(--ink); }
 kbd { font: .78rem var(--mono); color: var(--ink); border: 1px solid var(--line-hi); border-radius: 4px; padding: 0 .3em; }
 .install p, .install ol { color: var(--quiet); max-width: 72ch; }
 .install ol { padding-left: 1.2rem; }

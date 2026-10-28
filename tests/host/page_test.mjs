@@ -36,7 +36,8 @@ const PROBE = `(async () => {
 
 const chrome = process.argv[2], profile = resolve("build/play/chrome_profile");
 rmSync(profile, { recursive: true, force: true });
-const CSP = "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self'";
+const CSP = "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' " +
+            "https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'";
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm" };
 const server = createServer((q, r) => {
   const f = q.url === "/" ? "index.html" : q.url.slice(1).split("?")[0];
