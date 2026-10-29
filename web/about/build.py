@@ -19,23 +19,23 @@ ROOT = HERE.parent.parent
 
 # the states: name, caption (what it is, flatly), the control that does it, what the picture shows
 STATES = [
-    ("awake", "Filter open. Regrettably alert.", "EDIT · knob 1 up",
+    ("awake", "Filter open. It is regrettably alert.", "EDIT · knob 1 up",
      "The blob with its eyes wide open and its mouth open on a chord, in its rainy room."),
-    ("stoned", "Filter down. Don't talk to it.", "EDIT · knob 1 down",
+    ("stoned", "Filter down. Best not to talk to it.", "EDIT · knob 1 down",
      "The blob with half-closed, heavy eyelids."),
-    ("lasers", "Resonance. It has seen something.", "EDIT · knob 2 up",
+    ("lasers", "Resonance up. It has seen something.", "EDIT · knob 2 up",
      "Red laser beams coming out of the blob's eyes."),
-    ("dance", "LFO. It dances. It isn't happy about it.", "LFO · knobs 2 and 3",
+    ("dance", "The LFO makes it dance, not that it enjoys it.", "LFO · knobs 2 and 3",
      "The blob bouncing, squashed as it lands."),
-    ("yawn", "Long release. It takes a while to stop.", "ENV · knob 4 up",
+    ("yawn", "With a long release it takes a while to stop.", "ENV · knob 4 up",
      "The blob's mouth slowly closing after the note has ended."),
-    ("cry", "Delay. One tear per echo. They collect.", "FX · knobs 2 and 4",
+    ("cry", "Delay: one tear per echo, and they collect on the floor.", "FX · knobs 2 and 4",
      "Tears falling from the blob into a dark puddle on the floor that mirrors it."),
-    ("void", "Reverb. The room got bigger. It did not.", "SEL · knobs 1 and 2 up",
+    ("void", "Reverb. The room got bigger and it didn't.", "SEL · knobs 1 and 2 up",
      "The walls gone: a small blob floating in the dark, among stars."),
-    ("fire", "Too loud. It's on fire. This is fine.", "everything up at once",
+    ("fire", "Too loud, so it catches fire. It's fine.", "everything up at once",
      "Embers flying off the blob, which looks calm."),
-    ("asleep", "Nothing for a while. It sleeps.", "leave it",
+    ("asleep", "Leave it alone for a while and it falls asleep.", "leave it",
      "The blob asleep, eyes shut."),
     ("stare", "Later it wakes up and looks at you.", "leave it longer",
      "The blob awake again, staring straight out of the screen."),
@@ -46,22 +46,22 @@ PARTS = [
     ("HOME", "Body", "page_body", "Its outline is the wavetable. Position reshapes it, detune gives it a ghost that drifts "
      "apart, sub makes it heavier.", ("Shadow", "page_shadow", "a second oscillator in every voice, a few semitones or two "
                                       "octaves away; mixed in, or modulating the first.")),
-    ("EDIT", "Eyes", "page_eyes", "Its eyes are the filter. Open: wide awake. Shut: half-lidded, then closed. Resonance "
-     "shrinks the pupils, then lasers.", None),
+    ("EDIT", "Eyes", "page_eyes", "Its eyes are the filter: wide awake when it's open, half-lidded and then shut as you close "
+     "it. Resonance shrinks the pupils until they turn into lasers.", None),
     ("ENV", "Mouth", "page_mouth", "Its mouth opens with the note, stays open at the sustain and closes with the release. A "
-     "long release is a yawn.", ("Sigh", "page_sigh", "a second envelope. It can sweep the wavetable on every note, either "
-                                 "way, and open the eyes.")),
+     "long release is a yawn.", ("Sigh", "page_sigh", "a second envelope that can sweep the wavetable up or down on every "
+                                 "note, and open the eyes.")),
     ("LFO", "Vibe", "page_vibe", "It dances at the rate, as far as the depth: sway, bob, bounce, nod, twitch, heave, "
      "wander, stagger, throb.", ("Tremble", "page_tremble", "a second LFO, for the things the first one is busy with.")),
     ("FX", "Tears", "page_tears", "One tear per echo, each smaller than the last. Chorus: see-through copies of it peek "
      "out from behind.", None),
-    ("SEL", "Walls", "page_walls", "The reverb is the room. A bigger room, a smaller blob; past the walls, the void. Fry "
-     "deep-fries it. Tape makes everything wobble a little.", None),
-    ("GLO", "Mixer", "page_mixer", "How loud each of them is: the blob, the drums, the bass, the rain.",
+    ("SEL", "Walls", "page_walls", "The reverb is the room: the bigger it gets, the smaller the blob looks, and past the "
+     "walls there's only the void. Fry deep-fries it, and Tape makes everything wobble a little.", None),
+    ("GLO", "Mixer", "page_mixer", "How loud each part is: the blob, the drums, the bass and the rain.",
      ("Setup", None, "glide, MIDI channel, MIDI out, tuning.")),
     ("SEQ", "Loop", None, "Record what you play (REC), then fix it one step at a time.",
      ("Tape deck", "page_deck", "the backing band: a cassette in the corner. Kicks squash it, snares make it blink.")),
-    ("ARP", "Arp", None, "Tap: the arpeggiator on or off. Hold: its page. The keys you hold become its pattern.", None),
+    ("ARP", "Arp", None, "Tap it to turn the arpeggiator on or off, or hold it for its page. The keys you hold become its pattern.", None),
 ]
 
 
@@ -119,7 +119,7 @@ def manual(rows):
         pic = (f'<img class=px src="img/{img}.png" width=120 height=120 loading=lazy alt="The {part} page: its '
                f'drawer under the blob, the four knobs named.">' if img else '<div class="px none" aria-hidden=true></div>')
         block = [f'<article class=part id="{part.lower()}">', pic, '<div>',
-                 f'<h3><span class=btn>{btn}</span> The {part.lower()}.</h3>', f'<p>{esc(blob)}</p>',
+                 f'<h3><span class=btn>{btn}</span> The {part.lower()}</h3>', f'<p>{esc(blob)}</p>',
                  knob_table(rows[part][1])]
         if again:
             name, aimg, what = again
@@ -140,8 +140,7 @@ def states():
     for name, cap, how, alt in STATES:
         wake = ' data-wake="stare"' if name == "asleep" else ""
         out.append(f'''<figure class=state id="{name}"{wake}>
-<picture><source srcset="img/{name}.png" media="(prefers-reduced-motion: reduce)">
-<img class=px src="img/{name}.apng" width=120 height=120 loading=lazy alt="{esc(alt)}"></picture>
+<img class=px src="img/{name}.png" data-film="img/{name}.apng" width=120 height=120 loading=lazy alt="{esc(alt)}">
 <figcaption>{esc(cap)}<span>{esc(how)}</span></figcaption>
 </figure>''')
     return "\n".join(out)

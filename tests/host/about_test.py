@@ -23,6 +23,8 @@ class Page(HTMLParser):
             self.ids.add(a["id"])
         if tag == "img":
             self.imgs.append(a)
+            if "data-film" in a:
+                self.srcsets.append(a["data-film"])
         elif tag == "source" and "srcset" in a:
             self.srcsets.append(a["srcset"])
         elif tag == "a" and "href" in a:
@@ -55,7 +57,7 @@ def main():
         if p.is_file():
             check(png_size(p) == (120, 120), f"picture {a['src']} is the screen's 120 x 120")
     for s in page.srcsets:
-        check((about / s).is_file(), f"still {s} is there")
+        check((about / s).is_file(), f"loop or still {s} is there")
     for href in page.links:
         u = urlsplit(href)
         if u.scheme in ("http", "https"):
