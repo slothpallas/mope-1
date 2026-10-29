@@ -116,6 +116,7 @@ int sy_loop_copy(sy_ev_t *dst, int max);            /* into a project, to save *
 const sy_ev_t *sy_loop_events(int *n);              /* for the screen: read-only, may change under you */             /* the notes it is cycling, low to high (for the screen) */
 int sy_arp_note(int held_n, int seq);               /* the note it plays at step seq over held_n notes (-1: a rest; STAB: the lowest) */
 void sy_panic(void);
+void sy_load(int pct);                              /* the last block's time, % of its budget (the device's): over 88, a voice goes */
 
 /* the render (audio ISR): n stereo frames, 24-bit in int32; gain Q12 (the MASTER pot) */
 void sy_render(int32_t *out_lr, uint32_t n, uint32_t gain_q12);

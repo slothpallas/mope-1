@@ -572,9 +572,16 @@ static void button_up(int b)
     }
 }
 
+static int cc_param;                                    /* CC 102 picks a parameter, CC 103 sets it (0..127 over its range) */
 static void midi_cc(uint32_t cc, uint32_t v)
 {
     switch (cc) {
+    case 102: cc_param = (int)v < P_NPARAMS ? (int)v : P_NPARAMS - 1; break;
+    case 103: {
+        const sy_param_t *pi = sy_param_info(cc_param);
+        knob_set(cc_param, pi->lo + (int)(((int32_t)v * (pi->hi - pi->lo) + 63) / 127));
+        break;
+    }
     case 1: sy_mod((int)v); break;
     case 7: knob_set(P_VOLUME, (int)(v * 100u / 127u)); break;
     case 71: knob_set(P_RESO, (int)(v * 100u / 127u)); break;

@@ -82,6 +82,7 @@ static int st_prog(uint32_t off, const void *src, uint32_t n)
 
 struct bootguard_s { uint32_t magic, failed, pending; };
 extern struct bootguard_s bootguard;
+#define OTA_HAS_STATS 1                  /* main_fm1.c answers cmd 0x12 with its audio load */
 #include "ota.c"
 static uint32_t ota_now_ms(void) { return fm1_ms; }
 static void ota_idle(void) { fm1_wdt_feed(); }

@@ -325,6 +325,7 @@ typedef struct {
     float drift, drift_to;
     float s1[2], s2[2];                                /* the filter, per oscillator (they pan apart) */
     uint32_t age;
+    float shed;                                        /* let go fast: the load was too much (0: no) */
 } voice_t;
 static voice_t vc[SY_NVOICE];
 #define COMB_N 512u                                    /* a comb down to 86 Hz */
@@ -332,18 +333,65 @@ static float comb_line[SY_NVOICE][COMB_N] SY_POOL;
 static uint32_t age_n;
 static float bend_c, mod_amt;
 
-static int voice_find(int note)
+/* the load guard: when a block takes too long (sy_load, from the device), fewer voices may sound
+ * until it has been calm for a while. The FM-1 crackles otherwise. */
+static int vcap = SY_NVOICE;
+static uint32_t load_hot, load_calm;
+static int voice_oldest(int released_only)
 {
     int i, best = -1;
     uint32_t oldest = 0xFFFFFFFFu;
+    for (i = 0; i < SY_NVOICE; i++)
+        if (vc[i].stage != ST_OFF && vc[i].shed == 0.0f && (!released_only || !vc[i].gate) && vc[i].age < oldest) {
+            oldest = vc[i].age;
+            best = i;
+        }
+    return best;
+}
+void sy_load(int pct)
+{
+    int i, sounding = 0;
+    for (i = 0; i < SY_NVOICE; i++)
+        sounding += vc[i].stage != ST_OFF && vc[i].shed == 0.0f;
+    if (pct >= 88) {
+        load_calm = 0;
+        if (++load_hot >= 2u && sounding > 2) {       /* two in a row: one voice goes, quickly */
+            int v = voice_oldest(1);
+            if (v < 0)
+                v = voice_oldest(0);
+            if (v >= 0) {
+                vc[v].shed = 0.004f;
+                vc[v].stage = ST_REL;
+                vc[v].gate = 0;
+            }
+            vcap = sounding - 1;
+            load_hot = 0;
+            sy_tel.steals++;
+        }
+    } else {
+        load_hot = 0;
+        if (pct < 65 && vcap < SY_NVOICE && ++load_calm >= 344u) {   /* calm for two seconds: one more */
+            vcap++;
+            load_calm = 0;
+        }
+    }
+}
+
+static int voice_find(int note)
+{
+    int i, best = -1, sounding = 0;
+    uint32_t oldest = 0xFFFFFFFFu;
     for (i = 0; i < SY_NVOICE; i++)                    /* the same note again: its voice */
-        if (vc[i].stage != ST_OFF && vc[i].note == note)
+        if (vc[i].stage != ST_OFF && vc[i].note == note && vc[i].shed == 0.0f)
             return i;
     for (i = 0; i < SY_NVOICE; i++)
-        if (vc[i].stage == ST_OFF)
-            return i;
+        sounding += vc[i].stage != ST_OFF;
+    if (sounding < vcap)
+        for (i = 0; i < SY_NVOICE; i++)
+            if (vc[i].stage == ST_OFF)
+                return i;
     for (i = 0; i < SY_NVOICE; i++)                    /* the oldest one let go */
-        if (!vc[i].gate && vc[i].age < oldest) {
+        if (!vc[i].gate && vc[i].stage != ST_OFF && vc[i].age < oldest) {
             oldest = vc[i].age;
             best = i;
         }
@@ -362,7 +410,9 @@ static void note_on(int note, int vel)
     int i = voice_find(note);
     voice_t *v = &vc[i];
     float c = (float)note * 100.0f;
-    if (v->stage == ST_OFF) {                          /* a fresh voice: from silence, no glide */
+    if (v->stage == ST_OFF || v->shed > 0.0f) {         /* a fresh voice: from silence, no glide */
+        v->shed = 0.0f;
+        v->env = 0.0f;
         v->cents = c;
         v->ph[0] = rndf();
         v->ph[1] = rndf();
@@ -691,6 +741,34 @@ static inline wtsel_t wt_pick(int table, float pos, float hz_top)
     return w;
 }
 
+/* the amp envelope, a sample at a time */
+static inline float amp_step(voice_t *v, float att, float dec, float sus, float rel)
+{
+    float e = v->env;
+    switch (v->stage) {
+    case ST_ATT:
+        e += att;
+        if (e >= 1.0f) {
+            e = 1.0f;
+            v->stage = ST_DEC;
+        }
+        break;
+    case ST_DEC:
+        e += (sus - e) * dec;
+        if (e - sus < 0.001f)
+            v->stage = ST_SUS;
+        break;
+    case ST_SUS:
+        e += (sus - e) * 0.001f;
+        break;
+    case ST_REL:
+        e -= e * (rel > v->shed ? rel : v->shed);
+        break;
+    }
+    v->env = e;
+    return e;
+}
+
 static void render_voices(float *ol, float *or_, uint32_t n, float lfo, float lfo_b)
 {
     mods_t md = {0.0f, 0.0f, 0.0f, 1.0f, 0.0f};
@@ -712,7 +790,7 @@ static void render_voices(float *ol, float *or_, uint32_t n, float lfo, float lf
     lfo_into(&md, lfo, P_LFODEPTH, P_LFODEST);
     lfo_into(&md, lfo_b, P_LFO2DEPTH, P_LFO2DEST);
     lvl = mm_clampf(pf(P_BLEVEL) + md.shadow, 0.0f, 1.0f);
-    const int shadow_on = lvl > 0.0f;
+    const int shadow_on = lvl > 0.0f, plain = !shadow_on && ftype == FT_LOW && drive <= 0.0f;
     base_pos = pf(P_POS) + md.pos + mod_amt;
     for (i = 0; i < SY_NVOICE; i++) {
         voice_t *v = &vc[i];
@@ -755,30 +833,36 @@ static void render_voices(float *ol, float *or_, uint32_t n, float lfo, float lf
                 comb_d = mm_clampf(SY_SR / cut, 2.0f, (float)(COMB_N - 2u));
                 comb_fb = 0.35f + 0.6f * pf(P_RESO);
             }
-            for (j = 0; j < SUB; j++) {
-                float e = v->env, o0, o1, ob, s, y[2], in[2];
-                int q;
-                switch (v->stage) {                     /* the amp envelope, a sample at a time */
-                case ST_ATT:
-                    e += att;
-                    if (e >= 1.0f) {
-                        e = 1.0f;
-                        v->stage = ST_DEC;
+            if (plain) {                                /* the usual sound: one table, low-pass, no drive */
+                for (j = 0; j < SUB; j++) {
+                    float e = amp_step(v, att, dec, sus, rel), o0, o1, s, y[2];
+                    int q;
+                    o0 = wt_read(wa.a, wa.b, wa.fr, wa.len, v->ph[0]);
+                    o1 = wt_read(wa.a, wa.b, wa.fr, wa.len, v->ph[1]);
+                    v->ph[0] += inc[0];
+                    v->ph[1] += inc[1];
+                    v->ph[0] -= (float)(int)v->ph[0];
+                    v->ph[1] -= (float)(int)v->ph[1];
+                    v->phsub += incs;
+                    v->phsub -= (float)(int)v->phsub;
+                    s = mm_sin_turns(v->phsub) * sub;
+                    {
+                        const float in[2] = {o0 + s, o1 + s};
+                        for (q = 0; q < 2; q++) {
+                            float v3 = in[q] - v->s2[q], v1 = a1 * v->s1[q] + a2 * v3, v2 = v->s2[q] + a2 * v->s1[q] + a3 * v3;
+                            v->s1[q] = 2.0f * v1 - v->s1[q];
+                            v->s2[q] = 2.0f * v2 - v->s2[q];
+                            y[q] = v2;
+                        }
                     }
-                    break;
-                case ST_DEC:
-                    e += (sus - e) * dec;
-                    if (e - sus < 0.001f)
-                        v->stage = ST_SUS;
-                    break;
-                case ST_SUS:
-                    e += (sus - e) * 0.001f;
-                    break;
-                case ST_REL:
-                    e -= e * rel;
-                    break;
+                    e = e * e * v->vel * md.vol * 0.32f;
+                    vbl[j] = (y[0] * (0.5f + spread) + y[1] * (0.5f - spread)) * e;
+                    vbr[j] = (y[1] * (0.5f + spread) + y[0] * (0.5f - spread)) * e;
                 }
-                v->env = e;
+            } else
+            for (j = 0; j < SUB; j++) {
+                float e = amp_step(v, att, dec, sus, rel), o0, o1, ob, s, y[2], in[2];
+                int q;
                 /* the shadow first: FM and sync need it before A */
                 ob = 0.0f;
                 if (shadow_on) {
@@ -884,6 +968,7 @@ static void render_voices(float *ol, float *or_, uint32_t n, float lfo, float lf
         if (v->stage == ST_REL && v->env < 0.0005f) {
             v->stage = ST_OFF;
             v->env = 0.0f;
+            v->shed = 0.0f;
         }
         if (v->env >= amp_max) {
             amp_max = v->env;
