@@ -389,11 +389,20 @@ async function theApp() {
   if (!r.ok) throw new Error(`mope.wasm: ${r.status}`);
   return r.arrayBuffer();
 }
+// Browsers differ in what a worklet may load from: Chrome takes data: but no blob: from a file:// page,
+// Safari the other way round. So each way in turn, the file beside the page first.
 async function theVoice(ac) {
-  if (location.protocol !== "file:") {
-    try { await ac.audioWorklet.addModule("voice.js"); return; } catch (e) { if (!embedded) throw e; }
+  const ways = [];
+  if (location.protocol !== "file:") ways.push(() => "voice.js");
+  if (embedded) {
+    ways.push(() => "data:text/javascript;base64," + embedded.voice);
+    ways.push(() => URL.createObjectURL(new Blob([atob(embedded.voice)], { type: "text/javascript" })));
   }
-  await ac.audioWorklet.addModule("data:text/javascript;base64," + embedded.voice);
+  const why = [];
+  for (const way of ways) {
+    try { await ac.audioWorklet.addModule(way()); return; } catch (e) { why.push(e && e.message || String(e)); }
+  }
+  throw new Error("the sound engine wouldn't load here (" + why.join("; ") + "). Try Chrome, or the page online");
 }
 const said = document.getElementById("said"), cpu = document.getElementById("cpu");
 document.getElementById("on").addEventListener("click", async (ev) => {
