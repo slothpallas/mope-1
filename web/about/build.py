@@ -44,8 +44,8 @@ STATES = [
 # the manual: each button's part, what it does to the blob, its drawer's picture (README has the knobs)
 PARTS = [
     ("HOME", "Body", "page_body", "Its outline is the wavetable. Position reshapes it, detune gives it a ghost that drifts "
-     "apart, sub makes it heavier.", ("Shadow", "page_shadow", "a second oscillator in every voice, a few semitones or two "
-                                      "octaves away; mixed in, or modulating the first.")),
+     "apart, sub makes it heavier.", ("Shadow", "page_shadow", "a second oscillator in every voice. It can sit a few semitones "
+                                      "or two octaves away, mixed in or modulating the first.")),
     ("EDIT", "Eyes", "page_eyes", "Its eyes are the filter: wide awake when it's open, half-lidded and then shut as you close "
      "it. Resonance shrinks the pupils until they turn into lasers.", None),
     ("ENV", "Mouth", "page_mouth", "Its mouth opens with the note, stays open at the sustain and closes with the release. A "
@@ -58,7 +58,7 @@ PARTS = [
     ("SEL", "Walls", "page_walls", "The reverb is the room: the bigger it gets, the smaller the blob looks, and past the "
      "walls there's only the void. Fry deep-fries it, and Tape makes everything wobble a little.", None),
     ("GLO", "Mixer", "page_mixer", "How loud each part is: the blob, the drums, the bass and the rain.",
-     ("Setup", None, "glide, MIDI channel, MIDI out, tuning.")),
+     ("Setup", None, "glide, the MIDI channel, MIDI out and the tuning.")),
     ("SEQ", "Loop", None, "Record what you play (REC), then fix it one step at a time.",
      ("Tape deck", "page_deck", "the backing band: a cassette in the corner. Kicks squash it, snares make it blink.")),
     ("ARP", "Arp", None, "Tap it to turn the arpeggiator on or off, or hold it for its page. The keys you hold become its pattern.", None),
@@ -107,31 +107,38 @@ def esc(s):
 
 
 def knob_table(knobs):
-    cells = "".join(f"<td><span class=k>{i + 1}</span>{esc(k)}</td>" for i, k in enumerate(knobs))
+    cells = "".join(f"<td><span class=k>Knob {i + 1}</span>{esc(k)}</td>" for i, k in enumerate(knobs))
     return f'<table class=knobs><tr>{cells}</tr></table>'
 
 
+def screen(img, part, cls=""):
+    if not img:
+        return '<div class="px none" aria-hidden=true></div>'
+    return (f'<img class="px{cls}" src="img/{img}.png" width=120 height=120 loading=lazy alt="The {part} page: its '
+            f'drawer under the blob, the four knobs named.">')
+
+
 def manual(rows):
+    """each button's part, then (when it has one) its second page as a block of its own"""
     out = []
     for btn, part, img, blob, again in PARTS:
         if part not in rows or rows[part][0] != btn:
             raise SystemExit(f"README.md's Button table has no '{btn} | {part}' row")
-        pic = (f'<img class=px src="img/{img}.png" width=120 height=120 loading=lazy alt="The {part} page: its '
-               f'drawer under the blob, the four knobs named.">' if img else '<div class="px none" aria-hidden=true></div>')
-        block = [f'<article class=part id="{part.lower()}">', pic, '<div>',
-                 f'<h3><span class=btn>{btn}</span> The {part.lower()}</h3>', f'<p>{esc(blob)}</p>',
-                 knob_table(rows[part][1])]
+        out.append("\n".join([
+            f'<article class=part id="{part.lower()}">', screen(img, part), '<div>',
+            f'<h3>The {part.lower()}</h3>',
+            f'<p class=press>Press <span class=btn>{btn}</span></p>',
+            f'<p>{esc(blob)}</p>', knob_table(rows[part][1]), '</div>', '</article>']))
         if again:
             name, aimg, what = again
             if name not in rows or rows[name][0] != btn + " again":
                 raise SystemExit(f"README.md's Button table has no '{btn} again | {name}' row")
-            block.append(f'<p class=again><span class=btn>{btn}</span> again: <b>{name.lower()}</b>, {esc(what)}</p>')
-            block.append(knob_table(rows[name][1]))
-            if aimg:
-                block.append(f'<img class="px small" src="img/{aimg}.png" width=120 height=120 loading=lazy '
-                             f'alt="The {name} page.">')
-        block += ['</div>', '</article>']
-        out.append("\n".join(block))
+            out.append("\n".join([
+                f'<article class="part second" id="{name.lower().replace(" ", "-")}">', screen(aimg, name), '<div>',
+                f'<p class=eyebrow>The {part.lower()}\'s second page</p>',
+                f'<h3>The {name.lower()}</h3>',
+                f'<p class=press>Press <span class=btn>{btn}</span> again while the {part.lower()} is showing</p>',
+                f'<p>{esc(what[0].upper() + what[1:])}</p>', knob_table(rows[name][1]), '</div>', '</article>']))
     return "\n".join(out)
 
 
