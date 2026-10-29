@@ -821,7 +821,7 @@ static void render_voices(float *ol, float *or_, uint32_t n, float lfo, float lf
     base_pos = pf(P_POS) + md.pos + mod_amt;
     {   /* what a voice of this sound costs on the FM-1 (measured: % of a block): a heavy one, fewer voices */
         const float cost = 6.6f + (shadow_on ? 2.2f : 0.0f) + (drive > 0.0f ? 1.5f : 0.0f) + (ftype != FT_LOW ? 2.0f : 0.0f);
-        vcap_sound = (int)(58.0f / cost);
+        vcap_sound = (int)(52.0f / cost);                 /* (room left for the drums and the bass) */
         vcap_sound = vcap_sound < 3 ? 3 : vcap_sound > SY_NVOICE ? SY_NVOICE : vcap_sound;
         if (voices_kept() > vcap_sound)
             voice_shed();
