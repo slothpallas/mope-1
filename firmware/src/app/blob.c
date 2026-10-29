@@ -35,7 +35,7 @@ static struct {
     uint8_t gates;
     float fire, blink, blink_due, shrug, tape_anim, pancake, sleep, stare, reel;
     int8_t tape_shown, tape_dir;
-    float puddle, panel, wall_flash, echo_flash;
+    float puddle, ripple, panel, wall_flash, echo_flash;
     struct { float x, y, vy, vx, s; uint8_t on; } tear[24];
     struct { float due, s; uint8_t on, side; } echo[10];
     struct { float r, a, dir; uint8_t on; } wave[6];
@@ -100,6 +100,29 @@ static const uint8_t GLASS[PC_N] = {
     [PC_COOLW] = PC_BG0, [PC_WARMW] = PC_BG0, [PC_WARMW2] = PC_BG1,
 };
 
+/* a colour seen in the puddle: much darker, a little bluer (the nearest of the palette; built at start) */
+static uint8_t WET[PC_N];
+static void wet_init(void)
+{
+    int i, j;
+    for (i = 0; i < PC_N; i++) {
+        const uint16_t v = PX_PAL[i];
+        const int r = (int)((v >> 11) << 3) * 50 / 100, g = (int)(((v >> 5) & 63u) << 2) * 54 / 100 + 3,
+                  b = (int)((v & 31u) << 3) * 60 / 100 + 8;
+        int best = PC_BG0, bd = 1 << 30;
+        for (j = 0; j < PC_N; j++) {
+            const uint16_t w = PX_PAL[j];
+            const int dr = (int)((w >> 11) << 3) - r, dg = (int)(((w >> 5) & 63u) << 2) - g, db = (int)((w & 31u) << 3) - b;
+            const int d = 3 * dr * dr + 4 * dg * dg + 2 * db * db;
+            if (d < bd) {
+                bd = d;
+                best = j;
+            }
+        }
+        WET[i] = (uint8_t)best;
+    }
+}
+
 static int tape_up(void) { return sy_tel.drums_on || sy_tel.rec || ui.page == PG_DECK || ui.page == PG_LOOP || bs.tape_anim > 0.0f; }
 
 static void blob_init(void)
@@ -107,6 +130,7 @@ static void blob_init(void)
     int i;
     memset(&bs, 0, sizeof bs);
     bs.rng = 0x1234567u;
+    wet_init();
     for (i = 0; i < 30; i++) {
         bs.rain_x[i] = b_rf();
         bs.rain_y[i] = b_rf();
@@ -828,29 +852,32 @@ static void draw_tears(const geo_t *g)
     }
 }
 
-/* where the tears end up: a pool on the floor, under it (drawn before the body: it sits in it). Flat, seen
- * from above like its shadow; wider as it fills; its front rim catches the light, a glint drifts across */
+/* where the tears end up: a pool on the floor, a little in front of it. Dark, nearly black, and a
+ * mirror: the blob and the room above it, upside down, darker and bluer, rippling when a tear lands
+ * (drawn after the body: it reflects what is there) */
 static void draw_puddle(const geo_t *g)
 {
-    const float w = g->r * (0.7f + 0.5f * bs.puddle), h = mm_clampf(w * 0.2f, 3.0f, 5.0f);
-    const float glint = g->cx + w * 0.8f * mm_sin_turns(bs.t * 0.07f);
+    const float w = g->r * (0.7f + 0.45f * bs.puddle), h = mm_clampf(w * 0.2f, 3.0f, 7.0f);
+    const float k = 2.3f * g->r / (2.0f * h), top = g->pool - h;   /* (seen from above: the whole blob, squeezed) */
+    const float glint = g->cx + w * 0.7f * mm_sin_turns(bs.t * 0.05f), rip = 0.6f + 1.6f * bs.ripple;
     int32_t x, y;
     if (bs.puddle < 0.02f || g->pool > (float)PX_H)
         return;
-    for (y = (int32_t)(g->pool - h); y <= (int32_t)(g->pool + h); y++)
+    for (y = (int32_t)(g->pool - h); y <= (int32_t)(g->pool + h); y++) {
+        const int32_t sy = (int32_t)(g->cy + g->r * 1.05f - ((float)y - top) * k);   /* its feet at the far edge */
+        const int32_t sx = (int32_t)(rip * mm_sin_turns((float)y * 0.31f + bs.t * 0.5f));
         for (x = (int32_t)(g->cx - w); x <= (int32_t)(g->cx + w); x++) {
             const float dx = ((float)x - g->cx) / w, dy = ((float)y - g->pool) / h, d = dx * dx + dy * dy;
             if (d >= 1.0f)
                 continue;
-            if (dy > 0.2f && d > 0.7f)                   /* the near rim, catching the light */
-                px_pset(x, y, PC_TEAR2);
-            else if (y == (int32_t)g->pool && mm_fabsf((float)x - glint) < 1.0f)
-                px_pset(x, y, PC_TEAR2);
-            else if (dy < -0.4f && px_dith4(x, y) + 0.5f < 0.5f)   /* the far side: the room in it, dim */
-                px_pset(x, y, PC_BG0);
-            else if (px_dith4(x, y) + 0.5f < 0.55f + 0.35f * bs.puddle)
-                px_pset(x, y, PC_TEAR);
+            if (d > 0.8f && dy < 0.0f)                   /* the far edge: a dark lip */
+                px_pset(x, y, PC_BLACK);
+            else if (y == (int32_t)g->pool + 1 && mm_fabsf((float)x - glint) < 0.6f)
+                px_pset(x, y, PC_SHEEN);
+            else
+                px_pset(x, y, WET[px_get(x + sx, sy) < PC_N ? px_get(x + sx, sy) : 0]);
         }
+    }
 }
 
 /* ------------------------------------------------------------ the schematic --- */
@@ -1584,11 +1611,13 @@ static void animate(const geo_t *g)
             if (bs.tear[i].y >= g->pool) {
                 bs.tear[i].on = 0;
                 bs.puddle += bs.tear[i].s * 0.03f;
+                bs.ripple = 1.0f;                        /* (the mirror shakes) */
                 spawn(PK_SPLASH, bs.tear[i].x, g->pool - 1.0f, -12.0f, -18.0f, 0.25f);
                 spawn(PK_SPLASH, bs.tear[i].x, g->pool - 1.0f, 12.0f, -18.0f, 0.25f);
             }
         }
     bs.puddle = mm_clampf(bs.puddle - dt * 0.012f, 0.0f, 1.0f);
+    bs.ripple = mm_maxf(bs.ripple - dt * 1.5f, 0.0f);
     /* waves: out to the walls (they flare), back, weaker each time (Size: how much comes back) */
     for (i = 0; i < 6; i++)
         if (bs.wave[i].on) {
@@ -1780,7 +1809,7 @@ static void blob_draw(void)
     g.floor = mm_minf(g.cy + g.r * 0.8f + 6.0f + 3.0f * size, g.ab - 3.0f);   /* (from above: right under it) */
     if (g.floor < g.cy + g.r * 0.9f)                     /* (close up: the floor is out of the picture) */
         g.floor = (float)PX_H + 40.0f;
-    g.pool = mm_minf(g.cy + g.r * 0.9f, g.floor);
+    g.pool = mm_minf(g.floor + 5.0f + g.r * 0.2f, g.ab - 4.0f);   /* (in front of it, on the floor) */
 
     animate(&g);
     drips_move();
@@ -1793,10 +1822,10 @@ static void blob_draw(void)
     light_frame();
     draw_room(&g);
     draw_shadow(&g);
-    draw_puddle(&g);
     draw_copies(&g, sqx, sqy);
     draw_body(&g, sqx, sqy);
     draw_face(&g);
+    draw_puddle(&g);
     draw_tears(&g);
     draw_unlocks(&g);
     draw_voices(&g);
