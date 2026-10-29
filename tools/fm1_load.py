@@ -48,10 +48,10 @@ def main():
     a.add_argument("--set", nargs="*", default=[])
     a.add_argument("--port")
     o_ = a.parse_args()
-    name = o_.port or next((n for n in mido.get_output_names() if "FM-1" in n), None)
+    name = o_.port or next((n for n in mido.get_output_names() if "FM-1" in n or "Felucca" in n), None)
     if not name:
         sys.exit("fm1_load: no FM-1 MIDI port")
-    iname = next((n for n in mido.get_input_names() if "FM-1" in n), name)
+    iname = next((n for n in mido.get_input_names() if "FM-1" in n or "Felucca" in n), name)
     chord = [48, 55, 60, 63, 67, 70, 72, 75][:o_.notes]
     with mido.open_input(iname) as i, mido.open_output(name) as o:
         if ask(i, o) is None:

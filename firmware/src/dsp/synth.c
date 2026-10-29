@@ -30,6 +30,7 @@ static const sy_param_t PARAMS[P_NPARAMS] = {
     {"Mod attack", 0, 100, 0}, {"Env wave", -100, 100, 0},
     {"LFO2 rate", 0, 100, 55}, {"LFO2 depth", 0, 100, 0}, {"LFO2 shape", 0, LFO_NSHAPE - 1, LFO_TRI},
     {"LFO2 dest", 0, LD_N - 1, LD_PITCH},
+    {"Level", -50, 50, 0},
 };
 const sy_param_t *sy_param_info(int i) { return &PARAMS[i < 0 ? 0 : i >= P_NPARAMS ? P_NPARAMS - 1 : i]; }
 
@@ -286,6 +287,22 @@ static void tables_build(void)
 }
 
 /* one table read: frames f0 and f0+1 mixed by fr, at phase ph, mip m */
+/* one frame only: the shadow's (half the reads; its position moves in frame steps) */
+static inline float wt_read1(const int16_t *a, uint32_t len, float ph)
+{
+    float x = ph * (float)len, k;
+    uint32_t i = (uint32_t)x, j;
+    k = x - (float)i;
+    i &= len - 1u;
+    j = (i + 1u) & (len - 1u);
+    return ((float)a[i] + ((float)a[j] - (float)a[i]) * k) * WT_S;
+}
+/* a soft clip with no divide: the drive's (a cubic, flat from 1.5) */
+static inline float soft_clip(float x)
+{
+    const float c = x < -1.5f ? -1.5f : x > 1.5f ? 1.5f : x;
+    return c - 0.148148148f * c * c * c;
+}
 static inline float wt_read(const int16_t *a, const int16_t *b, float fr, uint32_t len, float ph)
 {
     float x = ph * (float)len, k;
@@ -335,7 +352,7 @@ static float bend_c, mod_amt;
 
 /* the load guard: when a block takes too long (sy_load, from the device), fewer voices may sound
  * until it has been calm for a while. The FM-1 crackles otherwise. */
-static int vcap = SY_NVOICE;
+static int vcap = SY_NVOICE, vcap_sound = SY_NVOICE;   /* (the guard's; what this sound allows) */
 static uint32_t load_hot, load_calm;
 static int voice_oldest(int released_only)
 {
@@ -348,25 +365,34 @@ static int voice_oldest(int released_only)
         }
     return best;
 }
+static int voices_kept(void)
+{
+    int i, n = 0;
+    for (i = 0; i < SY_NVOICE; i++)
+        n += vc[i].stage != ST_OFF && vc[i].shed == 0.0f;
+    return n;
+}
+static void voice_shed(void)                           /* the oldest let go (or the oldest) fades in ~5 ms */
+{
+    int v = voice_oldest(1);
+    if (v < 0)
+        v = voice_oldest(0);
+    if (v >= 0) {
+        vc[v].shed = 0.004f;
+        vc[v].stage = ST_REL;
+        vc[v].gate = 0;
+        sy_tel.steals++;
+    }
+}
 void sy_load(int pct)
 {
-    int i, sounding = 0;
-    for (i = 0; i < SY_NVOICE; i++)
-        sounding += vc[i].stage != ST_OFF && vc[i].shed == 0.0f;
+    const int sounding = voices_kept();
     if (pct >= 88) {
         load_calm = 0;
         if (++load_hot >= 2u && sounding > 2) {       /* two in a row: one voice goes, quickly */
-            int v = voice_oldest(1);
-            if (v < 0)
-                v = voice_oldest(0);
-            if (v >= 0) {
-                vc[v].shed = 0.004f;
-                vc[v].stage = ST_REL;
-                vc[v].gate = 0;
-            }
+            voice_shed();
             vcap = sounding - 1;
             load_hot = 0;
-            sy_tel.steals++;
         }
     } else {
         load_hot = 0;
@@ -386,7 +412,7 @@ static int voice_find(int note)
             return i;
     for (i = 0; i < SY_NVOICE; i++)
         sounding += vc[i].stage != ST_OFF;
-    if (sounding < vcap)
+    if (sounding < (vcap < vcap_sound ? vcap : vcap_sound))
         for (i = 0; i < SY_NVOICE; i++)
             if (vc[i].stage == ST_OFF)
                 return i;
@@ -397,7 +423,7 @@ static int voice_find(int note)
         }
     if (best < 0)
         for (i = 0; i < SY_NVOICE; i++)                /* the oldest of all */
-            if (vc[i].age < oldest) {
+            if (vc[i].stage != ST_OFF && vc[i].age < oldest) {
                 oldest = vc[i].age;
                 best = i;
             }
@@ -789,9 +815,17 @@ static void render_voices(float *ol, float *or_, uint32_t n, float lfo, float lf
     uint8_t nv = 0, ng = 0, stage = ST_OFF;
     lfo_into(&md, lfo, P_LFODEPTH, P_LFODEST);
     lfo_into(&md, lfo_b, P_LFO2DEPTH, P_LFO2DEST);
+    md.vol *= mm_exp2f((float)par[P_LEVEL] * 0.04f);   /* the preset's own level */
     lvl = mm_clampf(pf(P_BLEVEL) + md.shadow, 0.0f, 1.0f);
     const int shadow_on = lvl > 0.0f, plain = !shadow_on && ftype == FT_LOW && drive <= 0.0f;
     base_pos = pf(P_POS) + md.pos + mod_amt;
+    {   /* what a voice of this sound costs on the FM-1 (measured: % of a block): a heavy one, fewer voices */
+        const float cost = 6.6f + (shadow_on ? 2.2f : 0.0f) + (drive > 0.0f ? 1.5f : 0.0f) + (ftype != FT_LOW ? 2.0f : 0.0f);
+        vcap_sound = (int)(58.0f / cost);
+        vcap_sound = vcap_sound < 3 ? 3 : vcap_sound > SY_NVOICE ? SY_NVOICE : vcap_sound;
+        if (voices_kept() > vcap_sound)
+            voice_shed();
+    }
     for (i = 0; i < SY_NVOICE; i++) {
         voice_t *v = &vc[i];
         uint32_t j0;
@@ -803,6 +837,7 @@ static void render_voices(float *ol, float *or_, uint32_t n, float lfo, float lf
             float c, hz, inc[2], incs, incb, cut, g, a1, a2, a3, pos, comb_d = 0.0f, comb_fb = 0.0f;
             uint32_t j;
             wtsel_t wa, wb;
+            const int16_t *wb_t;
             /* pitch: the glide, a slow drift (an old synth's), the bend, the LFOs */
             v->cents += (v->cents_to - v->cents) * glide;
             if ((rnd() & 255u) == 0u)
@@ -817,6 +852,7 @@ static void render_voices(float *ol, float *or_, uint32_t n, float lfo, float lf
                 wb = wt_pick(tblb, pos, hz * b_ratio);
             else
                 wb = wa;
+            wb_t = wb.fr < 0.5f ? wb.a : wb.b;
             inc[0] = hz * mm_exp2f(-det / 1200.0f) / SY_SR;
             inc[1] = hz * mm_exp2f(det / 1200.0f) / SY_SR;
             incs = hz * 0.5f / SY_SR;
@@ -866,7 +902,7 @@ static void render_voices(float *ol, float *or_, uint32_t n, float lfo, float lf
                 /* the shadow first: FM and sync need it before A */
                 ob = 0.0f;
                 if (shadow_on) {
-                    ob = wt_read(wb.a, wb.b, wb.fr, wb.len, v->phb);
+                    ob = wt_read1(wb_t, wb.len, v->phb);
                     v->phb += incb;
                     v->phb -= (float)(int)v->phb;
                 }
@@ -909,8 +945,8 @@ static void render_voices(float *ol, float *or_, uint32_t n, float lfo, float lf
                 in[0] = o0 + s;
                 in[1] = o1 + s;
                 if (drive > 0.0f) {                     /* the push into the filter, level matched */
-                    in[0] = mm_tanhf(in[0] * drv_g) * drv_back * 1.6f;
-                    in[1] = mm_tanhf(in[1] * drv_g) * drv_back * 1.6f;
+                    in[0] = soft_clip(in[0] * drv_g) * drv_back * 1.6f;
+                    in[1] = soft_clip(in[1] * drv_g) * drv_back * 1.6f;
                 }
                 if (ftype == FT_COMB) {                 /* both sides through one comb (stereo stays) */
                     const float at = (float)v->comb_w - comb_d;

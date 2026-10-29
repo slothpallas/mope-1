@@ -44,6 +44,7 @@ enum {
     P_FTYPE, P_DRIVE,                                /* EYES: the filter's kind, a push into it */
     P_MATTACK, P_MWAVE,                              /* SIGH: the mod envelope's attack (0: the mouth's), its sweep of the table */
     P_LFO2RATE, P_LFO2DEPTH, P_LFO2SHAPE, P_LFO2DEST, /* TREMBLE: the second LFO */
+    P_LEVEL,                                         /* each preset's loudness (+-50: +-12 dB), set by the presets */
     P_NPARAMS
 };
 typedef struct {

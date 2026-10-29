@@ -68,6 +68,13 @@ spin K1 70
 tapkey 14
 wait 700
 shot 05_tears_chorus.png
+# the tears pool on the floor, under it (the drawer away: the whole room)
+tapkey 14
+tapkey 17
+tap HOME
+wait 3500
+shot 05b_puddle.png
+tap FX
 # WALLS: a big room, the blob gets small; then the void
 tap SEL
 spin K1 50

@@ -249,6 +249,67 @@ int main(int argc, char **argv)
         CHECK(sy_tel.gates == 0, "all let go");
     }
     quiet();
+    {   /* the load guard: two late blocks, a voice goes; calm again, it comes back */
+        int k;
+        for (i = 0; i < SY_NVOICE; i++)
+            sy_note_on(48 + i, 100);
+        run(30);
+        sy_load(95);
+        sy_load(95);
+        run(80);                                        /* (it fades out in ~45 ms) */
+        CHECK(sy_tel.voices == SY_NVOICE - 1, "two blocks over the budget: one voice fewer (%d)", sy_tel.voices);
+        sy_note_on(80, 100);
+        run(80);
+        CHECK(sy_tel.voices == SY_NVOICE - 1, "...and a new note takes a sounding one's place (%d)", sy_tel.voices);
+        for (k = 0; k < 400; k++)
+            sy_load(40);
+        sy_note_on(81, 100);
+        run(30);
+        CHECK(sy_tel.voices == SY_NVOICE, "calm for two seconds: all of them again (%d)", sy_tel.voices);
+        for (i = 0; i < SY_NVOICE; i++)
+            sy_note_off(48 + i);
+        sy_note_off(80);
+        sy_note_off(81);
+        quiet();
+    }
+    {   /* a heavy sound (the shadow, drive, a band-pass) sounds fewer voices: the FM-1 keeps up */
+        sy_set(P_BLEVEL, 60);
+        sy_set(P_DRIVE, 50);
+        sy_set(P_FTYPE, FT_BAND);
+        for (i = 0; i < SY_NVOICE; i++)
+            sy_note_on(48 + i, 100);
+        run(60);
+        CHECK(sy_tel.voices >= 3 && sy_tel.voices < SY_NVOICE, "a heavy sound: %d voices of %d", sy_tel.voices, SY_NVOICE);
+        for (i = 0; i < SY_NVOICE; i++)
+            sy_note_off(48 + i);
+        sy_set(P_BLEVEL, 0);
+        sy_set(P_DRIVE, 0);
+        sy_set(P_FTYPE, FT_LOW);
+        quiet();
+    }
+    {   /* Level: +-50 is +-12 dB */
+        float l0, l1;
+        for (i = 0; i < P_NPARAMS; i++)                 /* a plain, steady note: no effects (Tape saturates) */
+            sy_set(i, sy_param_info(i)->def);
+        sy_set(P_GUNK, 0);
+        sy_set(P_SUSTAIN, 100);
+        sy_set(P_LFODEPTH, 0);
+        sy_set(P_REVERB, 0);
+        sy_set(P_DELAY, 0);
+        sy_set(P_CHORUS, 0);
+        sy_set(P_TAPE, 0);
+        run(1500);
+        sy_note_on(60, 100);
+        run(600);
+        l0 = level(300);
+        sy_set(P_LEVEL, 25);
+        run(300);
+        l1 = level(300);
+        sy_set(P_LEVEL, 0);
+        sy_note_off(60);
+        quiet();
+        CHECK(l1 > l0 * 1.6f && l1 < l0 * 2.5f, "Level +25: twice as loud (x%.2f)", (double)(l1 / l0));
+    }
 
     printf("demos\n");
     for (i = 0; i < P_NPARAMS; i++)

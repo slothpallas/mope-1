@@ -136,6 +136,7 @@ typedef struct {
     float vy;                                           /* the back wall's middle: above it (we look down into the room) */
     float bw, bh;                                       /* the back wall's half width, half height */
     float floor;                                        /* the floor under the blob */
+    float pool;                                         /* where its tears land: at its feet */
 } geo_t;
 
 /* ------------------------------------------------------------ the room --- */
@@ -825,16 +826,31 @@ static void draw_tears(const geo_t *g)
         if (bs.tear[i].s > 1.2f)
             px_pset((int32_t)(bs.tear[i].x - 0.5f), (int32_t)(bs.tear[i].y - bs.tear[i].s * 0.4f), PC_TEAR2);
     }
-    if (bs.puddle > 0.02f) {                             /* where the tears end up */
-        const float w = 6.0f + bs.puddle * 30.0f;
-        int32_t x, y;
-        for (y = (int32_t)g->floor - 1; y < (int32_t)g->floor + 3; y++)
-            for (x = (int32_t)(g->cx - w); x < (int32_t)(g->cx + w); x++) {
-                float dx = ((float)x - g->cx) / w, dy = ((float)y - g->floor - 0.5f) / 2.0f;
-                if (dx * dx + dy * dy < 1.0f && px_dith(x, y, 2 + (int)(bs.puddle * 2.0f)))
-                    px_pset(x, y, ((x + (int32_t)(bs.t * 4.0f)) % 9) ? PC_TEAR : PC_TEAR2);
-            }
-    }
+}
+
+/* where the tears end up: a pool on the floor, under it (drawn before the body: it sits in it). Flat, seen
+ * from above like its shadow; wider as it fills; its front rim catches the light, a glint drifts across */
+static void draw_puddle(const geo_t *g)
+{
+    const float w = g->r * (0.7f + 0.5f * bs.puddle), h = mm_clampf(w * 0.2f, 3.0f, 5.0f);
+    const float glint = g->cx + w * 0.8f * mm_sin_turns(bs.t * 0.07f);
+    int32_t x, y;
+    if (bs.puddle < 0.02f || g->pool > (float)PX_H)
+        return;
+    for (y = (int32_t)(g->pool - h); y <= (int32_t)(g->pool + h); y++)
+        for (x = (int32_t)(g->cx - w); x <= (int32_t)(g->cx + w); x++) {
+            const float dx = ((float)x - g->cx) / w, dy = ((float)y - g->pool) / h, d = dx * dx + dy * dy;
+            if (d >= 1.0f)
+                continue;
+            if (dy > 0.2f && d > 0.7f)                   /* the near rim, catching the light */
+                px_pset(x, y, PC_TEAR2);
+            else if (y == (int32_t)g->pool && mm_fabsf((float)x - glint) < 1.0f)
+                px_pset(x, y, PC_TEAR2);
+            else if (dy < -0.4f && px_dith4(x, y) + 0.5f < 0.5f)   /* the far side: the room in it, dim */
+                px_pset(x, y, PC_BG0);
+            else if (px_dith4(x, y) + 0.5f < 0.55f + 0.35f * bs.puddle)
+                px_pset(x, y, PC_TEAR);
+        }
 }
 
 /* ------------------------------------------------------------ the schematic --- */
@@ -1565,11 +1581,11 @@ static void animate(const geo_t *g)
             bs.tear[i].vy += 120.0f * dt;
             bs.tear[i].y += bs.tear[i].vy * dt;
             bs.tear[i].x += bs.tear[i].vx * dt;
-            if (bs.tear[i].y >= g->floor) {
+            if (bs.tear[i].y >= g->pool) {
                 bs.tear[i].on = 0;
                 bs.puddle += bs.tear[i].s * 0.03f;
-                spawn(PK_SPLASH, bs.tear[i].x, g->floor - 1.0f, -12.0f, -18.0f, 0.25f);
-                spawn(PK_SPLASH, bs.tear[i].x, g->floor - 1.0f, 12.0f, -18.0f, 0.25f);
+                spawn(PK_SPLASH, bs.tear[i].x, g->pool - 1.0f, -12.0f, -18.0f, 0.25f);
+                spawn(PK_SPLASH, bs.tear[i].x, g->pool - 1.0f, 12.0f, -18.0f, 0.25f);
             }
         }
     bs.puddle = mm_clampf(bs.puddle - dt * 0.012f, 0.0f, 1.0f);
@@ -1764,6 +1780,7 @@ static void blob_draw(void)
     g.floor = mm_minf(g.cy + g.r * 0.8f + 6.0f + 3.0f * size, g.ab - 3.0f);   /* (from above: right under it) */
     if (g.floor < g.cy + g.r * 0.9f)                     /* (close up: the floor is out of the picture) */
         g.floor = (float)PX_H + 40.0f;
+    g.pool = mm_minf(g.cy + g.r * 0.9f, g.floor);
 
     animate(&g);
     drips_move();
@@ -1776,6 +1793,7 @@ static void blob_draw(void)
     light_frame();
     draw_room(&g);
     draw_shadow(&g);
+    draw_puddle(&g);
     draw_copies(&g, sqx, sqy);
     draw_body(&g, sqx, sqy);
     draw_face(&g);
