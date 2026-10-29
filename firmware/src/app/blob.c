@@ -510,8 +510,8 @@ static void draw_shadow(const geo_t *g)
     for (y = (int32_t)top; y <= (int32_t)bot; y++)
         for (x = (int32_t)(g->cx - w); x <= (int32_t)(g->cx + w); x++) {
             const float dx = ((float)x - g->cx) / w, dy = ((float)y - cy) / h, d = dx * dx + dy * dy;
-            if (d < 1.0f && px_dith4(x, y) + 0.5f < (1.0f - d) * 1.3f)
-                px_pset(x, y, d < 0.25f ? PC_BLACK : PC_BG0);
+            if (d < 1.0f && px_dith4(x, y) + 0.5f < (1.0f - d) * (1.0f - d) * 0.8f)   /* (never solid: no edge) */
+                px_pset(x, y, PC_BG0);
         }
 }
 
