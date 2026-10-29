@@ -951,7 +951,7 @@ static void render_voices(float *ol, float *or_, uint32_t n, float lfo, float lf
                 if (ftype == FT_COMB) {                 /* both sides through one comb (stereo stays) */
                     const float at = (float)v->comb_w - comb_d;
                     const float pos_r = at < 0.0f ? at + (float)COMB_N : at;
-                    const uint32_t r0 = (uint32_t)pos_r, r1 = (r0 + 1u) & (COMB_N - 1u);
+                    const uint32_t r0 = (uint32_t)pos_r & (COMB_N - 1u), r1 = (r0 + 1u) & (COMB_N - 1u);   /* (-tiny + 512 rounds to 512) */
                     const float fr = pos_r - (float)r0, back = comb_line[i][r0] + (comb_line[i][r1] - comb_line[i][r0]) * fr;
                     v->comb_dull += 0.6f * (back - v->comb_dull);
                     comb_line[i][v->comb_w] = mm_flush(0.5f * (in[0] + in[1]) + comb_fb * v->comb_dull);

@@ -40,7 +40,7 @@ static int ota_fread(uint32_t off, void *p, uint32_t n);
 static void ota_show(uint32_t step, int32_t code);
 static void ota_commit(const uint8_t *parm);
 #ifdef OTA_HAS_STATS
-static void ota_reply_stats(void);               /* cmd 0x12: the firmware's own (its audio load) */
+static void ota_reply_stats(uint32_t cmd);      /* cmd 0x12, 0x13: the firmware's own (its load, its last crash) */
 #endif
 
 static uint32_t ota_rd16(const uint8_t *p) { return (uint32_t)p[0] | (uint32_t)p[1] << 8; }
@@ -163,8 +163,8 @@ static void ota_service(void)
     if (d == 7u && ota_dec[2] == 0x11)
         ota_reply_identity();
 #ifdef OTA_HAS_STATS
-    else if (d == 7u && ota_dec[2] == 0x12)
-        ota_reply_stats();
+    else if (d == 7u && (ota_dec[2] == 0x12 || ota_dec[2] == 0x13))
+        ota_reply_stats(ota_dec[2]);
 #endif
 }
 

@@ -162,6 +162,8 @@ jobs:
           path: |
             build/mope*.fwsc
             build/mope.bin
+            build/mope.dis
+            build/mope.sym
 
   pages:
     name: Publish the web app (and its installer's firmware) to GitHub Pages

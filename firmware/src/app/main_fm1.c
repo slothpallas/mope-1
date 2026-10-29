@@ -55,9 +55,21 @@ static void render_block(int32_t *o)                /* ALNK0: one half, measured
 /* asked over USB (cmd 0x12, tools/fm1_load.py): the audio's load. Words: the average (q8 of the
  * budget), the worst half since the last ask (us), the budget (us), late halves, voices sounding,
  * voices stolen. The worst is reset by asking. */
-static void ota_reply_stats(void)
+static void ota_reply_stats(uint32_t cmd)
 {
-    uint8_t b[24];
+    uint8_t b[32];
+    if (cmd == 0x13u) {                             /* the last crash: count, vector, pc, rets, uptime; boots */
+        ota_wr32(b, fm1_crash.magic == FM1_CRASH_MAGIC ? fm1_crash.count : 0u);
+        ota_wr32(b + 4, fm1_crash.vec);
+        ota_wr32(b + 8, fm1_crash.pc);
+        ota_wr32(b + 12, fm1_crash.rets);
+        ota_wr32(b + 16, fm1_crash.uptime_ms);
+        ota_wr32(b + 20, om_dbg.boots);
+        ota_wr32(b + 24, fm1_crash.sp);
+        ota_wr32(b + 28, fm1_ms);
+        ota_send_msg(0x13, b, 32);
+        return;
+    }
     ota_wr32(b, om_dbg.cpu_q8);
     ota_wr32(b + 4, om_dbg.max_us);
     ota_wr32(b + 8, HALF_FRAMES * 1000000u / FS);
@@ -65,7 +77,7 @@ static void ota_reply_stats(void)
     ota_wr32(b + 16, sy_tel.voices);
     ota_wr32(b + 20, sy_tel.steals);
     om_dbg.max_us = 0;
-    ota_send_msg(0x12, b, sizeof b);
+    ota_send_msg(0x12, b, 24);
 }
 
 void fm1_alnk0_irq(void)                            /* via isr_alnk0 (hal/fm1_isr.S) */

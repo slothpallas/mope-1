@@ -231,6 +231,7 @@ def build_app():
                                ("common/bin/objdump", "-d", elf),
                                ("common/bin/objdump", "-d", "-j", ".ram_text", elf))
     (OUT / "mope.dis").write_text(dis)
+    (OUT / "mope.sym").write_text(syms)
 
     def symv(name):
         return int(re.search(r"^([0-9a-f]+) .*\s" + name + r"$", syms, re.M).group(1), 16)

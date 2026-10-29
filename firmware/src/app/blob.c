@@ -1067,7 +1067,8 @@ static void schem_mouth(const drawer_t *p)               /* the envelope: attack
 
 static void schem_vibe(const drawer_t *p)                /* the LFO: its wave, its speed, where it is */
 {
-    static const char *const DEST[LD_N] = {"SHAPE", "EYES", "PITCH", "VOL"};
+    static const char *const DEST[] = {"SHAPE", "EYES", "PITCH", "VOL", "SHADOW"};
+    _Static_assert(sizeof DEST / sizeof DEST[0] == LD_N, "a name for every LFO destination");
     const int shape = proj.par[P_LFOSHAPE];
     const float cycles = 1.0f + 3.0f * pn(P_LFORATE), depth = 0.15f + 0.85f * pn(P_LFODEPTH);
     float v[64];
@@ -1087,8 +1088,12 @@ static void schem_vibe(const drawer_t *p)                /* the LFO: its wave, i
         }
     }
     /* where it goes */
-    px_text(p->gx1 - 22, p->gy0 + 2, "TO", PC_DIM);
-    px_text(p->gx1 - 22, p->gy0 + 9, DEST[proj.par[P_LFODEST]], PC_TEAR);
+    {
+        const char *to = DEST[proj.par[P_LFODEST]];
+        const int32_t w = px_text_w(to) + 1;
+        px_text(p->gx1 - 22, p->gy0 + 2, "TO", PC_DIM);
+        px_text(p->gx1 - (w > 22 ? w : 22), p->gy0 + 9, to, PC_TEAR);
+    }
 }
 
 static void schem_tears(const drawer_t *p)               /* the delay: the taps, left, right, left, fading */

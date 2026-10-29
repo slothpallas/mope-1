@@ -78,7 +78,8 @@ static const uint8_t PAGE_KNOB[NPAGES][4] = {
  * chorus delay time feedback | reverb size fry tape; then B table, B tune, B meets, B level | filter, drive |
  * mod attack, env wave | lfo2 rate depth shape dest | level (each preset's loudness, evened out) */
 enum { CAT_PAD, CAT_KEYS, CAT_PLUCK, CAT_LEAD, CAT_BASS, CAT_FX, NCAT };
-static const char *const CAT_NAME[NCAT] = {"PAD", "KEYS", "PLUCK", "LEAD", "BASS", "FX"};
+static const char *const CAT_NAME[] = {"PAD", "KEYS", "PLUCK", "LEAD", "BASS", "FX"};
+_Static_assert(sizeof CAT_NAME / sizeof CAT_NAME[0] == NCAT, "a name for each");
 #define MOOD_N (P_TAPE + 1)
 #define MOOD_X (P_LEVEL - P_BTABLE + 1)
 typedef struct {
@@ -170,14 +171,20 @@ static const mood_t MOODS[] = {
 /* what a level-up feels like */
 static const char *const LEVEL_UP[] = {"OK.", "COOL. I GUESS.", "LEVEL UP. NOTHING CHANGED.", "+1 SADNESS",
                                        "ACHIEVEMENT: STILL HERE", "GG", "IT LISTENED.", "NEW SKILL: NONE"};
-static const char *const LFO_DEST_NAME[LD_N] = {"TO: SHAPE", "TO: EYES", "TO: VOICE", "TO: VOLUME", "TO: SHADOW"};
-static const char *const MEET_NAME[MEET_N] = {"MIX: BESIDE IT", "FM: INSIDE IT", "RING: AROUND IT", "SYNC: TIED TO IT"};
-static const char *const FTYPE_NAME[FT_N] = {"LOW-PASS", "BAND-PASS: A SQUINT", "HIGH-PASS: WIDE AWAKE", "NOTCH: A WINK",
+static const char *const LFO_DEST_NAME[] = {"TO: SHAPE", "TO: EYES", "TO: VOICE", "TO: VOLUME", "TO: SHADOW"};
+_Static_assert(sizeof LFO_DEST_NAME / sizeof LFO_DEST_NAME[0] == LD_N, "a name for each");
+static const char *const MEET_NAME[] = {"MIX: BESIDE IT", "FM: INSIDE IT", "RING: AROUND IT", "SYNC: TIED TO IT"};
+_Static_assert(sizeof MEET_NAME / sizeof MEET_NAME[0] == MEET_N, "a name for each");
+static const char *const FTYPE_NAME[] = {"LOW-PASS", "BAND-PASS: A SQUINT", "HIGH-PASS: WIDE AWAKE", "NOTCH: A WINK",
                                              "COMB: THE BLINDS"};
-static const char *const LFO_SHAPE_NAME[LFO_NSHAPE] = {"SWAY", "BOB", "BOUNCE", "NOD", "TWITCH", "HEAVE", "WANDER", "STAGGER",
+_Static_assert(sizeof FTYPE_NAME / sizeof FTYPE_NAME[0] == FT_N, "a name for each");
+static const char *const LFO_SHAPE_NAME[] = {"SWAY", "BOB", "BOUNCE", "NOD", "TWITCH", "HEAVE", "WANDER", "STAGGER",
                                                           "THROB"};
-static const char *const ARP_MODE_NAME[ARP_NMODE] = {"UP", "DOWN", "UP AND DOWN", "WANDER", "STAB"};
-static const char *const ARP_RATE_NAME[ARP_NRATE] = {"1/4", "1/8", "1/8T", "1/16", "1/16T", "1/32"};
+_Static_assert(sizeof LFO_SHAPE_NAME / sizeof LFO_SHAPE_NAME[0] == LFO_NSHAPE, "a name for each");
+static const char *const ARP_MODE_NAME[] = {"UP", "DOWN", "UP AND DOWN", "WANDER", "STAB"};
+_Static_assert(sizeof ARP_MODE_NAME / sizeof ARP_MODE_NAME[0] == ARP_NMODE, "a name for each");
+static const char *const ARP_RATE_NAME[] = {"1/4", "1/8", "1/8T", "1/16", "1/16T", "1/32"};
+_Static_assert(sizeof ARP_RATE_NAME / sizeof ARP_RATE_NAME[0] == ARP_NRATE, "a name for each");
 
 static struct {
     uint8_t page;
@@ -619,6 +626,7 @@ static int cc_param;                                    /* CC 102 picks a parame
 static void midi_cc(uint32_t cc, uint32_t v)
 {
     switch (cc) {
+    case 104: sy_drums(v >= 64u); break;               /* (the deck, for testing over USB) */
     case 102: cc_param = (int)v < P_NPARAMS ? (int)v : P_NPARAMS - 1; break;
     case 103: {
         const sy_param_t *pi = sy_param_info(cc_param);
