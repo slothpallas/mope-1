@@ -240,8 +240,8 @@ static void draw_room(const geo_t *g)
                 hh = (hh ^ (hh >> 13)) * 1274126177u;
                 hh ^= hh >> 16;
                 nz = (float)(hh & 255u) / 255.0f;        /* (noise, not a grid: plaster) */
-                c = dv > near * 1.1f ? PC_BG1 : PC_BG0;
-                if (nz < (1.0f - near) * 0.55f)          /* left: cold from the window; right: the lamp's warmth */
+                c = dv > near * 1.07f ? PC_BG1 : PC_BG0;
+                if (nz < (1.0f - near) * 0.58f)          /* left: cold from the window; right: the lamp's warmth */
                     c = left ? PC_COOLW : PC_WARMW;
             } else if (y < y0) {
                 c = px_dith4(x, y) + 0.5f > t * 1.4f ? PC_BG1 : PC_BG0;   /* the ceiling */
@@ -860,23 +860,36 @@ static void draw_tears(const geo_t *g)
  * (drawn after the body: it reflects what is there) */
 static void draw_puddle(const geo_t *g)
 {
-    const float w = g->r * (0.7f + 0.45f * bs.puddle), h = mm_clampf(w * 0.2f, 3.0f, 7.0f);
+    const float w = g->r * (0.75f + 0.45f * bs.puddle), h = mm_clampf(w * 0.24f, 3.0f, 8.0f);
     const float k = 2.3f * g->r / (2.0f * h), top = g->pool - h;   /* (seen from above: the whole blob, squeezed) */
     const float glint = g->pcx + w * 0.7f * mm_sin_turns(bs.t * 0.05f), rip = 0.6f + 1.6f * bs.ripple;
     int32_t x, y;
     if (bs.puddle < 0.02f || g->pool > (float)PX_H)
         return;
-    for (y = (int32_t)(g->pool - h); y <= (int32_t)(g->pool + h); y++) {
+    for (y = (int32_t)(g->pool - 1.3f * h); y <= (int32_t)(g->pool + 1.3f * h); y++) {
         const int32_t sy = (int32_t)(g->cy + g->r * 1.05f - ((float)y - top) * k);   /* its feet at the far edge */
         const int32_t sx = (int32_t)(rip * mm_sin_turns((float)y * 0.31f + bs.t * 0.5f));
-        for (x = (int32_t)(g->pcx - w); x <= (int32_t)(g->pcx + w); x++) {
-            const float dx = ((float)x - g->pcx) / w, dy = ((float)y - g->pool) / h, d = dx * dx + dy * dy;
+        for (x = (int32_t)(g->pcx - 1.2f * w); x <= (int32_t)(g->pcx + 1.2f * w); x++) {
+            /* not an oval: a main pool, a lobe off its back left, a smaller one at its front right */
+            const float dx = ((float)x - g->pcx) / w, dy = ((float)y - g->pool) / h;
+            const float d0 = (dx - 0.1f) * (dx - 0.1f) * 1.9f + dy * dy * 1.5f;
+            const float d1 = (dx + 0.62f) * (dx + 0.62f) * 2.6f + (dy + 0.55f) * (dy + 0.55f) * 2.2f;
+            const float d2 = (dx - 0.72f) * (dx - 0.72f) * 3.4f + (dy - 0.5f) * (dy - 0.5f) * 2.8f;
+            const float d3 = (dx + 0.25f) * (dx + 0.25f) * 7.0f + (dy - 0.8f) * (dy - 0.8f) * 6.0f;
+            const float d = mm_minf(mm_minf(d0, d1), mm_minf(d2, d3));
+            int32_t jx, jy;
+            uint8_t c;
             if (d >= 1.0f)
                 continue;
             if (y == (int32_t)g->pool + 1 && mm_fabsf((float)x - glint) < 0.6f)
                 px_pset(x, y, PC_SHEEN);
-            else
-                px_pset(x, y, WET[px_get(x + sx, sy) < PC_N ? px_get(x + sx, sy) : 0]);
+            else {                                       /* blurred: each pixel from a scattered neighbour */
+                jx = (int32_t)(px_dith4(x, y) * 5.0f);
+                jy = (int32_t)(px_dith4(x + 2, y + 1) * 7.0f);
+                c = px_get(x + sx + jx, sy + jy);
+                c = px_dith4(x + 1, y + 3) + 0.5f < 0.2f ? PC_BG0 : WET[c < PC_N ? c : 0];
+                px_pset(x, y, c == PC_BG0 || c == PC_BLACK ? PC_COOLW : c);   /* (dark blue, not the shadow's black) */
+            }
         }
     }
 }
