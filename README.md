@@ -29,15 +29,15 @@ through X0X, FoMni and FiMba-1, the firmware MOPE-1 started from.
 | **Sub** | It gets heavier, and its bottom spreads. |
 | **Cutoff** | Its big eyes: wide open, then half-lidded, then shut (stoned), all the way. |
 | **Resonance** | Its pupils shrink to pinpoints and start to glow, and at the top they become laser eyes. |
-| **Env amount / Mod decay** | Its eyebrows rise with every note. |
+| **Filter kind, Drive** | The Eyes page's curve shows the kind: low-pass, band-pass (a squint), high-pass (wide awake), notch (a wink) or comb (the blinds). |
+| **Sigh: Env amount / Mod decay** | Its eyebrows rise with every note. |
 | **Attack / Decay / Sustain / Release** | Its big mouth opens wide with the note, stays open at the sustain and closes with the release. A long release is a yawn. |
 | **LFO** | Its whole body dances at the rate, as far as the depth: a sway (side to side, leaning into it), a bob (stretching as it rises), a bounce (squashed when it lands), a nod, a twitch, a heave (filling up slowly, then letting it all out), a wander (off somewhere and back), a stagger (sideways in four lurches) or a throb (two swells and a rest, like a heart); its lumps wobble along. It dances big while notes sound (riding their envelope), shows you a preview while you turn the Vibe knobs, and only murmurs when idle. |
 | **Chorus** | See-through copies of itself peek out from behind it, a beat out of step: one a side, then more, further out and fainter. |
-| **Delay** | It cries one tear per echo. Each tear is smaller than the one before, and they fall as far apart as the echoes. They pool on the ground. |
+| **Delay** | It cries one tear per echo. Each tear is smaller than the one before, and they fall as far apart as the echoes. They collect in a dark puddle on the floor in front of it, which mirrors it (blurred, upside down) and ripples when a tear lands. |
 | **Reverb, Size** | The walls throw cold light back onto its edges as the reverb rings. A bigger room pushes the walls out and the blob gets smaller in it. Past the walls is the void, with stars. |
 | **Fry** | It gets deep-fried in burnt patches: brown, crusty, sweating, then steaming. |
 | **Volume** | Its dirty orange aura. |
-| **Voices** | Six lights over its head, one per voice: bright while its note is held, glowing while it rings out. A stolen voice's light gets yeeted. |
 | **Clipping** | It catches fire and looks calm (this is fine). |
 | **The drums** | A smoky see-through cassette in the top-left corner, the tape winding between its spools, the style on its label, its reels turning at the tempo. Kicks squash the blob and make the light flinch, snares make it blink, hats are rain on the window. Gabber makes it shake. |
 | **Nothing** | Its mouth rests at meh. It falls asleep; much later it wakes up and stares at you. |
@@ -58,12 +58,12 @@ through X0X, FoMni and FiMba-1, the firmware MOPE-1 started from.
 
 ## Controls
 
-Press or hold a part's button: its schematic opens in a dark glass drawer over the bottom of the screen and the four knobs turn that part, each knob's name over its meter (the one you turn lights up). The drawer stays until 3 seconds after your last touch, then slides away, but **the page stays**: its button stays lit and the knobs still turn that part (turning one brings the drawer back). **HOME** goes back to the Body. **Press a part's button twice quickly and its drawer stays open** (switch pages with the other buttons) until you press **HOME**. OCT+ or OCT− is lit while the keyboard is shifted up or down. The blob stays big and shows faintly through the glass. The drawer is drawn in the room's cold colours, like the drum grid.
+Press or hold a part's button: its schematic opens in a dark glass drawer over the bottom of the screen and the four knobs turn that part, each knob's name over its meter (the one you turn lights up). The drawer stays until 3 seconds after your last touch, then slides away, but **the page stays**: its button stays lit and the knobs still turn that part (turning one brings the drawer back). **HOME** goes back to the Body. **Some parts have a second page:** press the button again while its page shows (HOME: Shadow, ENV: Sigh, LFO: Tremble, GLO: Setup, SEQ: Tape deck). Until you've found one, the caption nudges you (AGAIN: SHADOW.). **Press a part's button twice quickly and its drawer stays open** (switch pages with the other buttons) until you press **HOME**. OCT+ or OCT− is lit while the keyboard is shifted up or down. The blob stays big and shows faintly through the glass. The drawer is drawn in the room's cold colours, like the drum grid.
 
 | Page | Its schematic |
 | --- | --- |
 | Body | the wavetable's frames stacked, the one playing in front, the detuned copy sliding, the position on a frame ladder |
-| Eyes | the low-pass curve and its resonance peak, the cutoff marked, and where the note's envelope opens it now (red) |
+| Eyes | the filter's curve for its kind (low, band, high, notch, or the comb's teeth) and its resonance peak, the cutoff marked, and where the note's envelope opens it now (red) |
 | Mouth | the ADSR, a red dot riding it where the loudest note is |
 | Vibe | the LFO's wave (more cycles: faster), a red dot at its phase, where it goes |
 | Tears | the delay's taps, ping (blue) and pong (coral), each smaller; the chorus as a wobbling ribbon |
@@ -72,13 +72,19 @@ Press or hold a part's button: its schematic opens in a dark glass drawer over t
 | Mixer | four channel strips: each a fader and a live meter (voice, drums, bass, gunk) |
 | Arp | the next 16 steps as a piano roll, the playing one lit, each as long as the gate |
 | Setup | a note gliding to the next, MIDI out and channel |
+| Shadow | the second wave over the first at its interval, how they meet (mix, FM, ring, sync), the interval in semitones |
+| Sigh | the second envelope's rise and fall, a red dot where the loudest note is; meters for how far it moves the wave (W, up or down the table) and the eyes (E) |
+| Tremble | the second LFO, drawn like Vibe's |
 
 | Button | Part | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 | --- | --- | --- | --- | --- | --- |
 | HOME | Body | Table | Position | Detune | Sub |
-| EDIT | Eyes | Cutoff | Resonance | Env amount | Mod decay |
+| HOME again | Shadow | Its table | Tune (semitones, ±24) | Meets (mix, FM, ring, sync) | Level (0: off) |
+| EDIT | Eyes | Cutoff | Resonance | Kind (low, band, high, notch, comb) | Drive |
 | ENV | Mouth | Attack | Decay | Sustain | Release |
-| LFO | Vibe | Rate | Depth | Shape (sway, bob, bounce, nod, twitch, heave, wander, stagger, throb) | Destination (shape, eyes, voice, volume) |
+| ENV again | Sigh | Its attack (0: the mouth's) | Its decay | Wave (how far it sweeps the table, either way) | Eyes (how far it opens the filter) |
+| LFO | Vibe | Rate | Depth | Shape (sway, bob, bounce, nod, twitch, heave, wander, stagger, throb) | Destination (shape, eyes, voice, volume, shadow) |
+| LFO again | Tremble | Rate | Depth | Shape | Destination |
 | FX | Tears | Chorus | Delay | Time | Feedback |
 | SEL | Walls | Reverb | Size | Fry | Tape |
 | SEQ | Loop | Note | Length | Velocity (of the chosen step, or the whole loop) | Bars (1, 2, 4) |
@@ -135,10 +141,16 @@ CHANGED."). Level 10 gives it a balloon, mostly deflated.
   boot from harmonic recipes, so they take no flash space. Each frame is mipmapped at five sizes, so
   high notes don't alias (the test checks C7 on Sync: aliases at −68 dB).
 - **6 voices:** two detuned oscillators panned apart, a sine sub, slow analog drift, a resonant
-  low-pass (Simper's SVF) with key tracking, an amp ADSR and a mod envelope on the cutoff. A stolen
-  voice restarts from its current level, so stealing doesn't click.
-- **One LFO** with 9 shapes (sine, triangle, square, saw down, random, saw up, smooth random, four steps,
-  a heartbeat) and 4 destinations.
+  filter (Simper's SVF: low, band, high or notch; or a comb) with key tracking and drive, an amp ADSR
+  and a mod envelope (its own attack) on the cutoff and the wavetable's position. A stolen voice
+  restarts from its current level, so stealing doesn't click.
+- **The shadow:** a second oscillator per voice, its own table, ±24 semitones away, mixed in, frequency
+  modulating the first, ring modulating it or synced to it.
+- **Two LFOs** with 9 shapes (sine, triangle, square, saw down, random, saw up, smooth random, four steps,
+  a heartbeat) and 5 destinations (the position, the cutoff, the pitch, the volume, the shadow).
+- **It keeps up:** on the FM-1 a heavy sound (the shadow, drive, a band-pass) plays fewer voices so
+  the audio never runs late, and if a moment still runs hot it lets the oldest voice go quickly.
+- **Presets at one level:** each preset carries a trim measured on the FM-1, so switching doesn't jump.
 - **Effects:** fry (drive, then bitcrush and sample-rate crush), a three-tap chorus, the tears (a
   ping-pong delay: every echo crosses the room darker and thinner, its time wobbling with Tape), the
   room (a reverb of eight walls handing sound to each other, four of them breathing; Size goes from a

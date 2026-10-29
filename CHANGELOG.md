@@ -4,6 +4,36 @@ A release is a push to `main` that changes `VERSION` to a version with no tag ye
 release build, tags the commit `vX.Y.Z` and publishes the GitHub Release with that version's notes,
 taken from its section below. Add the section in the same pull request as the `VERSION` change.
 
+## 0.3.0
+
+More sound from the same blob: a second oscillator, more filters, a second envelope and a second LFO,
+each on a second page; presets that are all different and all as loud; and a crash fixed.
+
+- **Second pages.** Press a part's button again while its page shows (not twice fast: that keeps the
+  drawer open). Until you've found one, the caption nudges you: AGAIN: SHADOW.
+  - **Shadow** (HOME again): a second oscillator in every voice, with its own wavetable, up to two
+    octaves away, mixed in, frequency modulating the first, ring modulating it or synced to it.
+  - **Sigh** (ENV again): the mod envelope gets its own attack, and it can sweep the wavetable on every
+    note, up or down, as well as open the eyes.
+  - **Tremble** (LFO again): a second LFO, any of the 9 shapes, to the shape, the eyes, the pitch, the
+    volume or the shadow.
+  - Each page has its own drawing in the drawer.
+- **The Eyes page** now turns the filter's kind (low-pass, band-pass, high-pass, notch, or a comb)
+  and drive. Env amount and mod decay moved to Sigh.
+- **Every preset is its own sound** and sets all of the new pages, so nothing carries over from the
+  last one (that was the slow pitch wobble on every preset). Fewer of them wobble the pitch or the tape.
+- **Presets at one level:** each is trimmed to the same loudness, measured on the FM-1 itself.
+- **No crackle on chords:** a heavy sound (the shadow, drive, a band-pass) plays fewer voices, and if
+  a moment still runs hot the oldest voice lets go quickly. Plain sounds cost what they did before.
+- **Fixed a crash** when the LFO's destination was the shadow and its page was drawn.
+- **The puddle:** the tears collect in a dark puddle on the floor in front of the blob, inside one soft
+  shadow, a blurred mirror of the blob and the room that ripples when a tear lands. No more dotted
+  floor reflection, and no row of voice lights over its head.
+- The side walls are a touch more visible.
+- Under the hood: random sessions are run under the sanitizers in CI, which found two places drawing
+  just past the edge of their memory (both fixed); the FM-1 answers a USB query with its audio load
+  and its last crash.
+
 ## 0.2.0
 
 MOPE-1's own sound and its own player: the last parts that came from FiMba-1 are rewritten.

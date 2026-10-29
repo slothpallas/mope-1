@@ -122,7 +122,8 @@ if (window.self !== window.top) document.documentElement.classList.add("framed")
     <ul>
       <li>The blob is the sound. Its body is the wavetable, its eyes the filter, its mouth the envelope, its tears the delay, the room around it the reverb.</li>
       <li>Press a part's button: its drawer opens under the blob and the four knobs turn that part. The drawer hides after 3 s, the page stays (its button lit). Press twice: the drawer stays until <b>HOME</b>.</li>
-      <li><b>HOME</b> body · <b>EDIT</b> eyes · <b>ENV</b> mouth · <b>LFO</b> vibe · <b>FX</b> tears · <b>SEL</b> walls · <b>GLO</b> mixer, again setup · <b>ARP</b> held: the arpeggiator · <b>SEQ</b> the loop, again the tape deck.</li>
+      <li>Some parts have a second page: press the button again (not twice fast). The caption says so (AGAIN: SHADOW.).</li>
+      <li><b>HOME</b> body, again shadow (a second oscillator) · <b>EDIT</b> eyes (the filter, its kind and drive) · <b>ENV</b> mouth, again sigh (a second envelope that sweeps the wavetable) · <b>LFO</b> vibe, again tremble (a second LFO) · <b>FX</b> tears · <b>SEL</b> walls · <b>GLO</b> mixer, again setup · <b>ARP</b> held: the arpeggiator · <b>SEQ</b> the loop, again the tape deck.</li>
     </ul>
   </div>
   <div>
@@ -190,9 +191,9 @@ if (window.self !== window.top) document.documentElement.classList.add("framed")
 const BUTTONS = [
   // row by row, as on the panel
   ["FX", 0, "Tears: chorus, delay, time, feedback"], ["SEL", 1, "Walls: reverb, size, fry, tape"],
-  ["ENV", 2, "Mouth: attack, decay, sustain, release"], ["LFO", 3, "Vibe: rate, depth, shape, where it goes"],
-  ["EDIT", 4, "Eyes: cutoff, resonance, envelope, mod decay"], ["GLO", 5, "Mixer; again: setup"],
-  ["HOME", 6, "Body: wavetable, position, detune, sub"], ["SAVE", 7, "Save (hold 1.5 s: factory settings)"],
+  ["ENV", 2, "Mouth: attack, decay, sustain, release; again: sigh"], ["LFO", 3, "Vibe: rate, depth, shape, where it goes; again: tremble"],
+  ["EDIT", 4, "Eyes: cutoff, resonance, filter kind, drive"], ["GLO", 5, "Mixer; again: setup"],
+  ["HOME", 6, "Body: wavetable, position, detune, sub; again: shadow"], ["SAVE", 7, "Save (hold 1.5 s: factory settings)"],
   ["ARP", 8, "Tap: arpeggiator on / off. Hold: its settings"], ["SEQ", 9, "The loop and its steps; again: the tape deck"],
   ["PLAY\nSTOP", 10, "The band: drums, bass, your loop"], ["REC", 11, "Record into the loop"],
 ];

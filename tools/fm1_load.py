@@ -88,6 +88,44 @@ def wiggle(i, o, secs, chord):
     print(f"wiggled {secs:.0f} s: worst {worst:.1f}%")
 
 
+def chaos(i, o, secs, seed=1):
+    """everything over MIDI at random: any parameter to any value, presets, notes, bends, the deck"""
+    import random
+    r = random.Random(seed)
+    held, end, worst, n = set(), time.time() + secs, 0.0, 0
+    while time.time() < end:
+        x = r.random()
+        if x < 0.35:
+            o.send(mido.Message("control_change", control=102, value=r.randint(0, 60)))
+            o.send(mido.Message("control_change", control=103, value=r.choice([0, 127, r.randint(0, 127)])))
+        elif x < 0.6:
+            k = r.randint(24, 96)
+            if k in held:
+                o.send(mido.Message("note_off", note=k)); held.discard(k)
+            else:
+                o.send(mido.Message("note_on", note=k, velocity=r.randint(1, 127))); held.add(k)
+        elif x < 0.65:
+            o.send(mido.Message("program_change", program=r.randint(0, 127)))
+        elif x < 0.72:
+            o.send(mido.Message("pitchwheel", pitch=r.randint(-8192, 8191)))
+        elif x < 0.75:
+            o.send(mido.Message("control_change", control=104, value=r.choice([0, 127])))
+        elif x < 0.8:
+            o.send(mido.Message("control_change", control=r.choice([1, 7, 70, 71, 72, 73, 74, 91, 93, 94, 123]), value=r.randint(0, 127)))
+        time.sleep(r.choice([0.002, 0.01, 0.03]))
+        n += 1
+        if n % 50 == 0:
+            s = ask(i, o)
+            if s is None:
+                print("no answer: the FM-1 stopped or restarted")
+                return
+            worst = max(worst, s["worst"])
+    for k in held:
+        o.send(mido.Message("note_off", note=k))
+    o.send(mido.Message("control_change", control=104, value=0))
+    print(f"chaos {secs:.0f} s, {n} messages: worst {worst:.1f}%")
+
+
 def main():
     a = argparse.ArgumentParser()
     a.add_argument("--preset", type=int, nargs="*", default=[0])
@@ -97,6 +135,7 @@ def main():
     a.add_argument("--port")
     a.add_argument("--crash", action="store_true", help="print the last crash and the boot count")
     a.add_argument("--wiggle", type=float, default=0, help="seconds of beat + chords + LFO knob turning")
+    a.add_argument("--chaos", type=float, default=0, help="seconds of everything at random over MIDI")
     o_ = a.parse_args()
     name = o_.port or next((n for n in mido.get_output_names() if "FM-1" in n or "Felucca" in n), None)
     if not name:
@@ -109,6 +148,14 @@ def main():
         if o_.crash:
             c = crash(i, o)
             print({k: hex(v) if k in ("vec", "pc", "rets", "sp") else v for k, v in c.items()} if c else "no crash record")
+            return
+        if o_.chaos:
+            before, b0 = crash(i, o), ask(i, o)
+            chaos(i, o, o_.chaos)
+            time.sleep(1)
+            after, b1 = crash(i, o), ask(i, o)
+            print("crashes before/after:", before["count"], after["count"] if after else "?", " boots:", before["boots"],
+                  after["boots"] if after else "?", " late halves:", (b1["late"] - b0["late"]) if b1 else "?")
             return
         if o_.wiggle:
             before = crash(i, o)

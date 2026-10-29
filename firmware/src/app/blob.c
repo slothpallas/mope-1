@@ -418,7 +418,7 @@ static void shade_px(const shade_t *sh, int32_t x, int32_t y)
 {
     const float dx = (float)x + 0.5f - sh->cx, dy = (float)y + 0.5f - sh->cy;
     const float dist = mm_sqrtf(dx * dx + dy * dy), a = atan_turns(dy, dx) * (float)NV;
-    const int k = (int)a;
+    const int k = (int)a < NV ? ((int)a < 0 ? 0 : (int)a) : NV - 1;   /* (a can be exactly NV: a full turn) */
     const float rr = sh->rr[k] + (sh->rr[k + 1] - sh->rr[k]) * (a - (float)k);
     float nx, ny, nz, d, lam, lv, sp;
     const float dith = px_dith4(x, y);
