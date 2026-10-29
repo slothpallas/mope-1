@@ -19,6 +19,7 @@
  *   wav FILE | wavstop           start / stop recording the output
  *   peakreset                    restart the output peak (expect peak_db_min / peak_db_max)
  *   shot FILE.png                save the screen
+ *   film N MS NAME               N shots MS apart: NAME_00.png .. (for the site's loops)
  *   leds                         print the lit buttons and keys
  *   expect WHAT VALUE            check state: exit 1 on mismatch; VALUE "<N" / ">N" is a bound
  *                                (WHAT: page dirty store_writes midi_out voices gates drums style steals
@@ -530,6 +531,15 @@ int main(int argc, char **argv)
         else if (!strcmp(cmd, "shot")) {
             snprintf(out, sizeof out, "%s/%s", dir, a);
             png_write(out);
+        } else if (!strcmp(cmd, "film")) {                /* film N MS NAME: N shots MS apart, NAME_00.png .. */
+            const int n = atoi(a), ms = atoi(b);
+            int k;
+            if (n > 0 && ms > 0 && c[0])
+                for (k = 0; k < n; k++) {
+                    run_ms((uint32_t)ms);
+                    snprintf(out, sizeof out, "%s/%s_%02d.png", dir, c, k);
+                    png_write(out);
+                }
         } else if (!strcmp(cmd, "leds")) {
             int i;
             printf("  leds: buttons");

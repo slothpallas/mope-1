@@ -85,6 +85,8 @@ jobs:
           mkdir -p site
           cp build/play/MOPE-1.html site/index.html
           cp build/play/voice.js build/play/mope.wasm site/
+          # the about page: the blob's states from the site scenario (run by the tests above), the manual
+          python3 web/about/build.py build/scenarios/site site/about
           touch site/.nojekyll
 
       - name: Keep the web app with the run

@@ -68,5 +68,14 @@ for s in tests/scenarios/*.mope; do
     mkdir -p "build/scenarios/$n"
     run "scenario-$n" build/host/mope_host "$s" "build/scenarios/$n"
 done
+# the about page (web/about), from the site scenario's pictures; with the player beside it when built
+PY="${PYTHON:-python3}"
+if "$PY" -c "import PIL" 2>/dev/null; then
+    run about sh -c "rm -rf build/site && mkdir -p build/site && \
+        { [ ! -f build/play/MOPE-1.html ] || cp build/play/MOPE-1.html build/site/index.html; } && \
+        $PY web/about/build.py build/scenarios/site build/site/about >/dev/null && $PY tests/host/about_test.py build/site"
+else
+    echo "  skip about page (no Pillow for $PY)"
+fi
 [ $FAIL -eq 0 ] && echo "all tests passed" || echo "TESTS FAILED"
 exit $FAIL

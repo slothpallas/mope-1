@@ -1,0 +1,185 @@
+# The site's pictures (web/about): the blob in its states, still and as short loops, the drawer
+# closed (the whole room); then each page's drawer, for the manual. MIDI holds the notes (no key
+# touched: the drawer slides away), a program change starts each state from a preset (MONDAY).
+wait 4000
+# IDLE: the top of the page, nothing played yet, the rain
+shot idle.png
+film 16 120 idle
+# AWAKE: the filter open, a chord
+tap EDIT
+spin K1 30
+midi 90 30 64
+midi 90 33 64
+midi 90 37 64
+wait 3500
+expect panel 0
+shot awake.png
+film 12 80 awake
+midi 80 30 00
+midi 80 33 00
+midi 80 37 00
+wait 1500
+# STONED: the filter shut
+midi c0 00 00
+tap EDIT
+spin K1 -60
+midi 90 30 64
+wait 3500
+expect panel 0
+shot stoned.png
+film 12 80 stoned
+midi 80 30 00
+wait 800
+# LASERS: resonance to the top
+midi c0 00 00
+tap EDIT
+spin K2 90
+midi 90 30 64
+wait 3500
+shot lasers.png
+film 12 80 lasers
+midi 80 30 00
+wait 800
+# DANCING: the LFO, a bounce
+midi c0 00 00
+tap LFO
+spin K2 70
+spin K3 2
+midi 90 30 64
+wait 3500
+shot dance.png
+film 16 60 dance
+midi 80 30 00
+wait 800
+# YAWN: a long release, after the note
+midi c0 00 00
+tap ENV
+spin K4 60
+midi 90 30 64
+wait 3500
+midi 80 30 00
+wait 300
+shot yawn.png
+film 12 100 yawn
+wait 4000
+# CRYING: the delay, one tear an echo, the puddle filling
+midi c0 00 00
+tap FX
+spin K2 70
+spin K4 50
+midi 90 30 64
+wait 600
+midi 80 30 00
+midi 90 33 64
+wait 600
+midi 80 33 00
+midi 90 37 64
+wait 2500
+shot cry.png
+film 16 80 cry
+midi 80 37 00
+wait 1500
+# THE VOID: the room past its walls
+midi c0 00 00
+tap SEL
+spin K1 60
+spin K2 100
+midi 90 30 64
+wait 3500
+shot void.png
+film 12 100 void
+midi 80 30 00
+wait 1500
+# FIRE: clipping (this is fine): all of it up, a big low chord
+midi c0 1a 00
+wait 300
+tap GLO
+spin K1 100
+master 4096
+midi b0 07 7f
+midi b0 66 37
+midi b0 67 7f
+midi b0 66 03
+midi b0 67 7f
+midi 90 24 7f
+midi 90 30 7f
+midi 90 33 7f
+midi 90 37 7f
+midi 90 3c 7f
+midi 90 3f 7f
+wait 3500
+shot fire.png
+film 12 80 fire
+midi 80 24 00
+midi 80 30 00
+midi 80 33 00
+midi 80 37 00
+midi 80 3c 00
+midi 80 3f 00
+master 2600
+midi c0 00 00
+wait 3500
+# ASLEEP; much later, it looks at you
+wait 30000
+shot asleep.png
+film 12 150 asleep
+wait 70000
+shot stare.png
+film 12 150 stare
+# THE PAGES, for the manual: each drawer, a note riding it
+midi c0 00 00
+wait 300
+midi 90 30 64
+tap HOME
+wait 1500
+shot page_body.png
+tap EDIT
+wait 1500
+shot page_eyes.png
+tap ENV
+wait 1500
+shot page_mouth.png
+tap LFO
+wait 1500
+shot page_vibe.png
+tap FX
+wait 1500
+shot page_tears.png
+tap SEL
+wait 1500
+shot page_walls.png
+tap GLO
+wait 1500
+shot page_mixer.png
+tap ARP
+wait 400
+tap ARP
+wait 400
+tap HOME
+wait 1000
+tap HOME
+wait 400
+expect page 11
+shot page_shadow.png
+tap ENV
+wait 1000
+tap ENV
+wait 400
+expect page 12
+shot page_sigh.png
+tap LFO
+wait 1000
+tap LFO
+wait 400
+expect page 13
+shot page_tremble.png
+midi 80 30 00
+tap SEQ
+wait 1000
+tap SEQ
+tap PLAY
+wait 1500
+expect page 6
+shot page_deck.png
+tap PLAY
+wait 300

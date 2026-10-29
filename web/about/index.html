@@ -1,0 +1,225 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!-- MOPE-1, about: a portrait of the blob, a short manual, how to try it and put it on. Built by
+     web/about/build.py, which fills in the states, the manual's knobs (from README.md) and the version. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MOPE-1</title>
+<meta name="description" content="MOPE-1: free firmware for the M-VAVE FM-1. A sad wavetable synth whose interface is a blob in a rainy room.">
+<meta property="og:title" content="MOPE-1">
+<meta property="og:description" content="It's a synthesizer. It's having a hard time.">
+<meta property="og:image" content="https://slothpallas.github.io/mope-1/about/img/og.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap">
+<style>
+/* the same room as the player: near-black, rainy grey words, sodium orange for what you can press.
+   Only the screens glow. */
+:root {
+  --night: #0b0d0f; --ink: #d8dee5; --text: #8f9ba5; --quiet: #5e6873; --line: rgba(186, 204, 222, .14);
+  --sodium: #f28a5a; --glow: rgba(110, 160, 190, .16);
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { margin: 0; background: var(--night); color: var(--text); font: 14px/1.7 var(--mono); }
+a { color: var(--sodium); text-decoration: none; border-bottom: 1px solid rgba(242, 138, 90, .35); }
+a:hover, a:focus-visible { border-bottom-color: var(--sodium); }
+a:focus-visible { outline: 1px solid var(--sodium); outline-offset: 3px; }
+h1, h2, h3 { font-family: var(--serif); font-weight: 400; color: var(--ink); margin: 0; }
+h2 { font-size: 2.3rem; line-height: 1.05; margin-bottom: 1.4rem; }
+h3 { font-size: 1.45rem; line-height: 1.15; margin-bottom: .4rem; }
+b { color: var(--ink); font-weight: 600; }
+p { margin: 0 0 1rem; }
+
+/* the pixels: whole multiples of 120, never smoothed; the screen's own light around it */
+img.px { display: block; image-rendering: pixelated; image-rendering: crisp-edges; background: #000;
+         box-shadow: 0 0 70px var(--glow), 0 0 0 1px rgba(0, 0, 0, .9); }
+
+.index { position: absolute; top: 18px; right: 20px; font-size: 12px; letter-spacing: .04em; }
+.index a { color: var(--quiet); border: 0; margin-left: 14px; }
+.index a:hover, .index a:focus-visible { color: var(--ink); }
+
+.wrap { max-width: 760px; margin: 0 auto; padding: 0 16px; }
+section { padding: 120px 0 0; }
+
+/* the window */
+.hero { padding-top: 90px; text-align: center; }
+.hero img.px { width: 480px; height: 480px; margin: 0 auto 44px; }
+.hero h1 { font-size: 4.6rem; line-height: .95; }
+.hero .line { font-family: var(--serif); font-style: italic; font-size: 1.7rem; color: var(--ink); margin: .6rem 0 .8rem; }
+.hero .sub { max-width: 34rem; margin: 0 auto 1.6rem; }
+.hero .go a { margin: 0 12px; }
+
+/* what it is: three plain lines */
+.what ul { list-style: none; padding: 0; margin: 0; }
+.what li { padding: 14px 0; border-top: 1px solid var(--line); }
+.what li:last-child { border-bottom: 1px solid var(--line); }
+
+/* the states: one per row on a phone, two on a desk */
+.states { display: grid; grid-template-columns: 1fr; gap: 64px 40px; justify-items: center; }
+@media (min-width: 800px) { .states { grid-template-columns: 1fr 1fr; } }
+.state { margin: 0; width: 360px; max-width: 100%; }
+.state img.px { width: 360px; height: 360px; }
+.state figcaption { margin-top: 16px; color: var(--ink); }
+.state figcaption span { display: block; color: var(--quiet); font-size: 12px; letter-spacing: .04em; }
+.state[data-wake] { cursor: pointer; }
+
+/* try it, put it on */
+.steps { counter-reset: s; }
+.step { display: grid; grid-template-columns: 48px 1fr; gap: 0 12px; margin-bottom: 36px; }
+.step::before { counter-increment: s; content: "0" counter(s); font-family: var(--serif); font-size: 2rem; color: var(--quiet); line-height: 1; }
+.step ul { margin: .4rem 0 0; padding-left: 1.1rem; }
+
+/* the manual */
+.rules { list-style: none; padding: 0; margin: 0 0 56px; font-family: var(--serif); font-size: 1.5rem; color: var(--ink); line-height: 1.4; }
+.part { display: grid; grid-template-columns: 240px 1fr; gap: 0 28px; padding: 40px 0; border-top: 1px solid var(--line); }
+.part img.px { width: 240px; height: 240px; }
+.part img.px.small { width: 120px; height: 120px; margin-top: 14px; box-shadow: 0 0 30px var(--glow); }
+.part .px.none { width: 240px; height: 0; }
+.btn { display: inline-block; font: 600 12px/1 var(--mono); letter-spacing: .06em; color: var(--ink); border: 1px solid rgba(186, 204, 222, .4);
+       border-radius: 3px; padding: 4px 6px 3px; margin-right: 6px; vertical-align: 4px; }
+.knobs { border-collapse: collapse; width: 100%; margin: .2rem 0 1rem; font-size: 12.5px; }
+.knobs td { border-top: 1px solid var(--line); padding: 7px 10px 7px 0; vertical-align: top; color: var(--ink); width: 25%; }
+.knobs .k { display: block; color: var(--quiet); font-size: 11px; }
+.again { margin-top: 1rem; }
+.others { margin-top: 40px; padding-top: 28px; border-top: 1px solid var(--line); }
+.others li { margin-bottom: .35rem; }
+@media (max-width: 640px) {
+  h2 { font-size: 1.9rem; }
+  .hero h1 { font-size: 3.4rem; }
+  .hero img.px { width: 240px; height: 240px; }
+  .part { grid-template-columns: 1fr; }
+  .part img.px { margin-bottom: 18px; }
+  .knobs, .knobs tr, .knobs td { display: block; width: 100%; }
+  .knobs td { padding: 6px 0; }
+  .knobs .k { display: inline-block; width: 1.4rem; }
+  .index { position: static; text-align: center; padding-top: 14px; }
+  .index a { margin: 0 6px; }
+  section { padding-top: 88px; }
+}
+@media (min-width: 400px) and (max-width: 640px) { .hero img.px { width: 360px; height: 360px; } }
+
+.small-print dl { margin: 0; }
+.small-print dt { color: var(--ink); margin-top: 1.2rem; }
+.small-print dd { margin: .2rem 0 0; }
+footer { text-align: center; padding: 140px 16px 70px; }
+footer img.px { width: 120px; height: 120px; margin: 0 auto 18px; box-shadow: 0 0 30px var(--glow); }
+footer p { color: var(--quiet); font-size: 12px; max-width: 38rem; margin: 0 auto .6rem; }
+</style>
+</head>
+<body>
+<nav class="index" aria-label="On this page"><a href="../">Play</a><a href="#try">Install</a><a href="#states">States</a><a href="#manual">Manual</a><a href="https://github.com/slothpallas/mope-1">Source</a></nav>
+
+<header class="hero wrap">
+  <picture><source srcset="img/idle.png" media="(prefers-reduced-motion: reduce)">
+  <img class="px" src="img/idle.apng" width="120" height="120" alt="The blob, a lumpy pale-blue jelly with big eyes, floating in a small dark room with a rainy window behind it."></picture>
+  <h1>MOPE-1</h1>
+  <p class="line">It's a synthesizer. It's having a hard time.</p>
+  <p class="sub">Free firmware for the M-VAVE FM-1. A sad wavetable synth whose interface is a blob in a rainy room. Everything you turn happens to it.</p>
+  <p class="go"><a href="../">Play it in the browser</a> <a href="#try">Put it on your FM-1</a></p>
+</header>
+
+<main class="wrap">
+  <section class="what" aria-labelledby="what-h">
+    <h2 id="what-h">What it is.</h2>
+    <ul>
+      <li>A wavetable synth. Sixteen wavetables, two oscillators a voice, six voices, five kinds of filter, two LFOs, a room and a delay.</li>
+      <li>A backing band, like an old toy keyboard's, that only knows depressing beats. Grief Drill. Funeral Bossa. Office Ambivalent. There's a bass that follows you, an arpeggiator and a loop you can fix step by step.</li>
+      <li>It runs on the M-VAVE FM-1. It's free and open source (GPL-3.0). You can always go back.</li>
+    </ul>
+  </section>
+
+  <section id="states" aria-labelledby="states-h">
+    <h2 id="states-h">Things that happen to it.</h2>
+    <p>These are its own screens, from the firmware. Nobody drew them for this page.</p>
+    <div class="states">
+<!--STATES-->
+    </div>
+  </section>
+
+  <section id="try" class="steps" aria-labelledby="try-h">
+    <h2 id="try-h">Try it. Then put it on.</h2>
+    <div class="step"><div>
+      <h3>Play it in the browser.</h3>
+      <p>The same firmware, compiled for the browser, on a drawing of the FM-1. Your computer's keys play it, and it answers a MIDI keyboard. Nothing to install. <a href="../">Open the player</a></p>
+    </div></div>
+    <div class="step"><div>
+      <h3>Put it on your keyboard. It won't mind.</h3>
+      <ul>
+        <li>First keep M-VAVE's own firmware (FM-1 V15 or V16, "PC Firmware", from m-vave.com/download), so you can always go back.</li>
+        <li>Plug the FM-1 straight into a computer with a USB cable that carries data. Use Chrome or Edge.</li>
+        <li>Open <a href="../#install">the installer</a> and press <b>Install MOPE-1</b>. It takes about a minute. Don't unplug it. If it gets cut off, press Install again: it carries on.</li>
+        <li>To leave, install another firmware the same way. It doesn't mind that either.</li>
+      </ul>
+    </div></div>
+  </section>
+
+  <section id="manual" aria-labelledby="manual-h">
+    <h2 id="manual-h">The manual.</h2>
+    <p>Nine buttons. Four knobs each. Nobody needs more than that.</p>
+    <ol class="rules">
+      <li>Press a part.</li>
+      <li>Turn its four knobs.</li>
+      <li>Press it again for its other side.</li>
+    </ol>
+    <p>The part's page opens in a drawer under the blob and closes three seconds after you stop. The page stays: its button stays lit and the knobs still turn it. Press a button twice quickly and the drawer stays open until <span class="btn">HOME</span>.</p>
+<!--MANUAL-->
+    <div class="others">
+      <h3>The rest of the panel.</h3>
+      <ul>
+        <li><b>PRESETS</b> turns through 38 whole sounds. <b>ALGORITHM</b> changes only the wavetable. <b>SELECT</b> changes the band's tape.</li>
+        <li><b>PLAY</b> starts the band. <b>REC</b> records what you play into the loop. <b>SAVE</b> keeps everything (hold it for the factory settings).</li>
+        <li><b>OCT−</b> and <b>OCT+</b> move the keys. A MIDI keyboard works too, over USB.</li>
+        <li>The numbers are in the <a href="https://github.com/slothpallas/mope-1#controls">README</a>, if you want them.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="small-print" aria-labelledby="print-h">
+    <h2 id="print-h">Small print.</h2>
+    <p>Version {{VERSION}}. 38 presets. 16 wavetables. 13 beats. That's all of them. <a href="https://github.com/slothpallas/mope-1/blob/main/CHANGELOG.md">What changed</a> · <a href="https://github.com/slothpallas/mope-1/releases/latest">Downloads</a> · <a href="https://github.com/slothpallas/mope-1">Source</a></p>
+    <dl>
+      <dt>Will it break my FM-1?</dt>
+      <dd>It has been installed and taken off a real one many times. If a firmware ever crashes at start-up, the FM-1 comes up in a safe mode after two tries, with the installer still working. The chip's own update mode can't be overwritten. Custom firmware is still at your own risk.</dd>
+      <dt>Can I go back?</dt>
+      <dd>Yes. Install M-VAVE's firmware, or another one, the same way. MOPE-1 can't read other firmwares' saved projects, and they can't read its.</dd>
+      <dt>Why is it sad?</dt>
+      <dd>We asked. It didn't say.</dd>
+    </dl>
+  </section>
+</main>
+
+<footer>
+  <img class="px" src="img/stare.png" width="120" height="120" alt="The blob, staring at you.">
+  <p>Still here.</p>
+  <p>MOPE-1 by slothpallas. It runs on the open FM-1 platform of <a href="https://github.com/hugelton/Felucca">Felucca</a> (Hügelton Instruments), by way of X0X, FoMni and FiMba-1. Not affiliated with M-VAVE.</p>
+</footer>
+
+<script>
+// the one thing it does when you touch it: asleep, it wakes up and looks at you (and stays awake)
+for (const fig of document.querySelectorAll("[data-wake]")) {
+  const wake = () => {
+    const to = fig.dataset.wake, img = fig.querySelector("img"), src = fig.querySelector("source");
+    if (!to || !img) return;
+    img.src = "img/" + to + ".apng";
+    if (src) src.srcset = "img/" + to + ".png";
+    img.alt = "The blob, awake again, staring at you.";
+    fig.querySelector("figcaption").firstChild.textContent = "You woke it up. It's looking at you now.";
+    fig.querySelector("figcaption span").textContent = "you touched it";
+    delete fig.dataset.wake;
+  };
+  fig.tabIndex = 0;
+  fig.setAttribute("role", "button");
+  fig.setAttribute("aria-label", "Wake it up");
+  fig.addEventListener("click", wake);
+  fig.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); wake(); } });
+}
+</script>
+</body>
+</html>

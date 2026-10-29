@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // MOPE-1 to play (build/play) on http://localhost:8137 for local testing: node tools/serve_play.mjs
+// (or the whole site, the player and /about/: node tools/serve_play.mjs build/site)
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT = fileURLToPath(new URL("../build/play/", import.meta.url));
+const ROOT = fileURLToPath(new URL(`../${process.argv[2] ? process.argv[2].replace(/\/?$/, "/") : "build/play/"}`, import.meta.url));
 const PORT = Number(process.env.PORT || 8137);
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".wasm": "application/wasm",
-                ".json": "application/json", ".png": "image/png" };
+                ".json": "application/json", ".png": "image/png", ".apng": "image/apng" };
 createServer(async (req, res) => {
   try {
     let url = decodeURIComponent(req.url.split("?")[0]);

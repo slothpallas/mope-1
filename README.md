@@ -17,7 +17,8 @@ through X0X, FoMni and FiMba-1, the firmware MOPE-1 started from.
 
 > **Status: beta, tested on a real FM-1.** It installs from M-VAVE's own firmware, plays, records and
 > updates itself on the device. Install it from **https://slothpallas.github.io/mope-1/** (Chrome or Edge, USB)
-> or play it there in the browser. Custom firmware is installed at your own risk: keep M-VAVE's stock
+> or play it there in the browser. The blob in its states and a short manual:
+> **https://slothpallas.github.io/mope-1/about/**. Custom firmware is installed at your own risk: keep M-VAVE's stock
 > firmware (m-vave.com/download) to go back.
 
 ## The blob is the synth
