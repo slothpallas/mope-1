@@ -502,13 +502,16 @@ static void shade_ball(const geo_t *g, float cx, float cy, float rx, float ry, f
 
 static void draw_shadow(const geo_t *g)
 {
-    const float lift = g->floor - (g->cy + g->r), w = g->r * (0.9f - mm_clampf(lift, 0.0f, 20.0f) * 0.02f);
+    /* one wide, soft darkness on the floor, from under it out to past the puddle (which lies in it) */
+    const float lift = g->floor - (g->cy + g->r), w = g->r * (1.45f - mm_clampf(lift, 0.0f, 20.0f) * 0.02f);
+    const float cy = mm_minf(g->pool, (float)PX_H), h = cy - (g->floor - 4.0f);   /* (the puddle in its middle) */
+    const float top = cy - h, bot = cy + h;
     int32_t x, y;
-    for (y = (int32_t)(g->floor - 5.0f); y <= (int32_t)(g->floor + 5.0f); y++)   /* (seen from above: rounder) */
+    for (y = (int32_t)top; y <= (int32_t)bot; y++)
         for (x = (int32_t)(g->cx - w); x <= (int32_t)(g->cx + w); x++) {
-            const float dx = ((float)x - g->cx) / w, dy = ((float)y - g->floor) / 5.0f, d = dx * dx + dy * dy;
-            if (d < 1.0f && px_dith4(x, y) + 0.5f < (1.0f - d) * 1.4f)
-                px_pset(x, y, PC_BG0);
+            const float dx = ((float)x - g->cx) / w, dy = ((float)y - cy) / h, d = dx * dx + dy * dy;
+            if (d < 1.0f && px_dith4(x, y) + 0.5f < (1.0f - d) * 1.3f)
+                px_pset(x, y, d < 0.25f ? PC_BLACK : PC_BG0);
         }
 }
 
@@ -870,9 +873,7 @@ static void draw_puddle(const geo_t *g)
             const float dx = ((float)x - g->cx) / w, dy = ((float)y - g->pool) / h, d = dx * dx + dy * dy;
             if (d >= 1.0f)
                 continue;
-            if (d > 0.8f && dy < 0.0f)                   /* the far edge: a dark lip */
-                px_pset(x, y, PC_BLACK);
-            else if (y == (int32_t)g->pool + 1 && mm_fabsf((float)x - glint) < 0.6f)
+            if (y == (int32_t)g->pool + 1 && mm_fabsf((float)x - glint) < 0.6f)
                 px_pset(x, y, PC_SHEEN);
             else
                 px_pset(x, y, WET[px_get(x + sx, sy) < PC_N ? px_get(x + sx, sy) : 0]);
