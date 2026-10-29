@@ -46,11 +46,11 @@ img.px { display: block; image-rendering: pixelated; image-rendering: crisp-edge
 .index a:hover, .index a:focus-visible { color: var(--ink); }
 
 .wrap { max-width: 760px; margin: 0 auto; padding: 0 16px; }
-section { padding: 120px 0 0; }
+section { padding: 96px 0 0; }
 
 /* the window */
-.hero { padding-top: 90px; text-align: center; }
-.hero img.px { width: 480px; height: 480px; margin: 0 auto 44px; }
+.hero { padding-top: 72px; text-align: center; }
+.hero img.px { width: 360px; height: 360px; margin: 0 auto 36px; }
 .hero h1 { font-size: 4.6rem; line-height: .95; }
 .hero .line { font-family: var(--serif); font-style: italic; font-size: 1.7rem; color: var(--ink); margin: .6rem 0 .8rem; }
 .hero .sub { max-width: 34rem; margin: 0 auto 1.6rem; }
@@ -61,12 +61,17 @@ section { padding: 120px 0 0; }
 .what li { padding: 14px 0; border-top: 1px solid var(--line); }
 .what li:last-child { border-bottom: 1px solid var(--line); }
 
-/* the states: one per row on a phone, two on a desk */
-.states { display: grid; grid-template-columns: 1fr; gap: 64px 40px; justify-items: center; }
-@media (min-width: 800px) { .states { grid-template-columns: 1fr 1fr; } }
-.state { margin: 0; width: 360px; max-width: 100%; }
-.state img.px { width: 360px; height: 360px; }
-.state figcaption { margin-top: 16px; color: var(--ink); }
+/* the states: three a row on a desk (2x), two on a phone (160 px: 4 device pixels each on most phones) */
+.states { display: grid; grid-template-columns: repeat(3, 240px); gap: 40px 20px; justify-content: center; }
+.state { margin: 0; }
+.state img.px { width: 240px; height: 240px; box-shadow: 0 0 44px var(--glow), 0 0 0 1px rgba(0, 0, 0, .9); }
+.state figcaption { margin-top: 12px; color: var(--ink); font-size: 13px; line-height: 1.55; }
+@media (max-width: 799px) and (min-width: 521px) { .states { grid-template-columns: repeat(2, 240px); } }
+@media (max-width: 520px) {
+  .states { grid-template-columns: repeat(2, 160px); gap: 28px 14px; }
+  .state img.px { width: 160px; height: 160px; }
+  .state figcaption { font-size: 12px; }
+}
 .state figcaption span { display: block; color: var(--quiet); font-size: 12px; letter-spacing: .04em; }
 .state[data-wake] { cursor: pointer; }
 
@@ -78,10 +83,10 @@ section { padding: 120px 0 0; }
 
 /* the manual */
 .rules { list-style: none; padding: 0; margin: 0 0 56px; font-family: var(--serif); font-size: 1.5rem; color: var(--ink); line-height: 1.4; }
-.part { display: grid; grid-template-columns: 240px 1fr; gap: 0 28px; padding: 40px 0; border-top: 1px solid var(--line); }
-.part img.px { width: 240px; height: 240px; }
-.part img.px.small { width: 120px; height: 120px; margin-top: 14px; box-shadow: 0 0 30px var(--glow); }
-.part .px.none { width: 240px; height: 0; }
+.part { display: grid; grid-template-columns: 180px 1fr; gap: 0 28px; padding: 28px 0; border-top: 1px solid var(--line); }
+.part img.px { width: 180px; height: 180px; box-shadow: 0 0 34px var(--glow), 0 0 0 1px rgba(0, 0, 0, .9); }
+.part img.px.small { width: 120px; height: 120px; margin-top: 10px; box-shadow: 0 0 24px var(--glow); }
+.part .px.none { width: 180px; height: 0; }
 .btn { display: inline-block; font: 600 12px/1 var(--mono); letter-spacing: .06em; color: var(--ink); border: 1px solid rgba(186, 204, 222, .4);
        border-radius: 3px; padding: 4px 6px 3px; margin-right: 6px; vertical-align: 4px; }
 .knobs { border-collapse: collapse; width: 100%; margin: .2rem 0 1rem; font-size: 12.5px; }
@@ -94,6 +99,7 @@ section { padding: 120px 0 0; }
   h2 { font-size: 1.9rem; }
   .hero h1 { font-size: 3.4rem; }
   .hero img.px { width: 240px; height: 240px; }
+  .part img.px { width: 240px; height: 240px; }
   .part { grid-template-columns: 1fr; }
   .part img.px { margin-bottom: 18px; }
   .knobs, .knobs tr, .knobs td { display: block; width: 100%; }
@@ -101,9 +107,8 @@ section { padding: 120px 0 0; }
   .knobs .k { display: inline-block; width: 1.4rem; }
   .index { position: static; text-align: center; padding-top: 14px; }
   .index a { margin: 0 6px; }
-  section { padding-top: 88px; }
+  section { padding-top: 72px; }
 }
-@media (min-width: 400px) and (max-width: 640px) { .hero img.px { width: 360px; height: 360px; } }
 
 .small-print dl { margin: 0; }
 .small-print dt { color: var(--ink); margin-top: 1.2rem; }
@@ -152,10 +157,10 @@ footer p { color: var(--quiet); font-size: 12px; max-width: 38rem; margin: 0 aut
     <div class="step"><div>
       <h3>Put it on your keyboard. It won't mind.</h3>
       <ul>
-        <li>First keep M-VAVE's own firmware (FM-1 V15 or V16, "PC Firmware", from m-vave.com/download), so you can always go back.</li>
-        <li>Plug the FM-1 straight into a computer with a USB cable that carries data. Use Chrome or Edge.</li>
-        <li>Open <a href="../#install">the installer</a> and press <b>Install MOPE-1</b>. It takes about a minute. Don't unplug it. If it gets cut off, press Install again: it carries on.</li>
-        <li>To leave, install another firmware the same way. It doesn't mind that either.</li>
+        <li>First download M-VAVE's own firmware (FM-1 V15, "PC Firmware", from <a href="https://www.m-vave.com/download">m-vave.com/download</a>), so you can always go back.</li>
+        <li>Plug the FM-1 straight into a computer with a USB cable that carries data (no hub). Close other apps that use MIDI. Use Chrome or Edge, and allow MIDI with SysEx when it asks.</li>
+        <li>Open <a href="../#install">the installer</a> and press <b>Install MOPE-1</b>. It takes about a minute: leave the page open and don't unplug it. If it gets cut off, press Install again: it carries on. The FM-1 restarts as MOPE-1.</li>
+        <li>To leave, the installer has a way back to M-VAVE's firmware (the V15 file you kept). Or install another firmware the same way. It doesn't mind that either.</li>
       </ul>
     </div></div>
   </section>
@@ -188,7 +193,7 @@ footer p { color: var(--quiet); font-size: 12px; max-width: 38rem; margin: 0 aut
       <dt>Will it break my FM-1?</dt>
       <dd>It has been installed and taken off a real one many times. If a firmware ever crashes at start-up, the FM-1 comes up in a safe mode after two tries, with the installer still working. The chip's own update mode can't be overwritten. Custom firmware is still at your own risk.</dd>
       <dt>Can I go back?</dt>
-      <dd>Yes. Install M-VAVE's firmware, or another one, the same way. MOPE-1 can't read other firmwares' saved projects, and they can't read its.</dd>
+      <dd>Yes. The installer puts M-VAVE's V15 back, or install another firmware the same way. MOPE-1 can't read other firmwares' saved projects, and they can't read its.</dd>
       <dt>Why is it sad?</dt>
       <dd>We asked. It didn't say.</dd>
     </dl>

@@ -184,7 +184,7 @@ scripts, only `'wasm-unsafe-eval'` if the page has a content security policy.
 
 ## Installing it
 
-1. Download M-VAVE's stock firmware (FM-1 V15 or V16, "PC Firmware", m-vave.com/download) so you can always go back.
+1. Download M-VAVE's stock firmware (FM-1 V15, "PC Firmware", m-vave.com/download) so you can always go back (the installer's way back takes V15).
 2. Plug the FM-1 into the computer directly with a USB data cable, open **https://slothpallas.github.io/mope-1/** in Chrome or Edge, and press **Install MOPE-1**. Or from a terminal: `python3 tools/fm1_install.py mope-0.1.0.fwsc`.
 3. It takes about a minute; don't unplug while it writes (if it's cut off, press Install again: it continues).
 
