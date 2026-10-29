@@ -30,7 +30,7 @@ static const sy_param_t PARAMS[P_NPARAMS] = {
     {"Mod attack", 0, 100, 0}, {"Env wave", -100, 100, 0},
     {"LFO2 rate", 0, 100, 55}, {"LFO2 depth", 0, 100, 0}, {"LFO2 shape", 0, LFO_NSHAPE - 1, LFO_TRI},
     {"LFO2 dest", 0, LD_N - 1, LD_PITCH},
-    {"Level", -50, 50, 0},
+    {"Level", -60, 60, 0},
 };
 const sy_param_t *sy_param_info(int i) { return &PARAMS[i < 0 ? 0 : i >= P_NPARAMS ? P_NPARAMS - 1 : i]; }
 

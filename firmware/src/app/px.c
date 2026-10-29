@@ -226,10 +226,11 @@ static void px_present(void)
 {
     int32_t b, y, x;
     for (b = 0; b < PX_H; b += PX_BAND) {
+        const int32_t rows = PX_H - b < PX_BAND ? PX_H - b : PX_BAND;   /* (120 rows: the last band is 8) */
         uint16_t *o;
         lcd_sync();                                     /* the last band's transfer may still read the canvas */
         o = cv_px;
-        for (y = b; y < b + PX_BAND; y++) {
+        for (y = b; y < b + rows; y++) {
             const uint8_t *row = px_fb + y * PX_W;
             uint16_t *o2 = o + 240;
             for (x = 0; x < PX_W; x++) {
@@ -238,6 +239,6 @@ static void px_present(void)
             }
             o += 480;
         }
-        lcd_blit(0, (uint32_t)(2 * b), 240, 2 * PX_BAND, cv_px);
+        lcd_blit(0, (uint32_t)(2 * b), 240, (uint32_t)(2 * rows), cv_px);
     }
 }

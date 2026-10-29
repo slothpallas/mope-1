@@ -73,6 +73,9 @@ jobs:
       - name: Tests (engine, platform, the whole app in the simulator, the WebAssembly build)
         run: sh tests/run_tests.sh
 
+      - name: Crash hunt (random sessions, address and undefined-behaviour sanitizers)
+        run: CC=clang sh tests/fuzz.sh 6 8000
+
       - name: Build the web app
         env:
           RELEASE: ${{ needs.version.outputs.release }}

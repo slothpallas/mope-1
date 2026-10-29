@@ -66,3 +66,27 @@ wait 300
 shot 20_long_name.png
 expect par0 10
 expect dropped 0
+# the second pages, each its own drawing (pressed again, slowly: not twice fast, which keeps it open)
+tap HOME
+wait 1000
+tap HOME
+wait 600
+expect page 11
+shot 30_shadow.png
+tap ENV
+wait 1000
+tap ENV
+wait 600
+expect page 12
+shot 31_sigh.png
+tap LFO
+wait 1000
+tap LFO
+wait 600
+expect page 13
+shot 32_tremble.png
+tap EDIT
+wait 400
+spin K3 60
+wait 400
+shot 33_eyes_comb.png

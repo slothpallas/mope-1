@@ -543,18 +543,12 @@ static void draw_voices(const geo_t *g)
     int i;
     if (y < 3)
         y = 3;
-    if (ui.arp) {                                        /* the arpeggiator: a staircase, its step lit */
+    if (ui.arp) {                                        /* the arpeggiator: a staircase over its head, its step lit */
         const int st = (int)(sy_tel.arp_seq % 4u);
         for (i = 0; i < 4; i++)
-            px_rect(x0 + w + 4 + i * 3, y + 3 - i, 2, 1 + i, i == st ? PC_SPEC : PC_BLOB0);
+            px_rect(x0 + w / 2 - 5 + i * 3, y + 3 - i, 2, 1 + i, i == st ? PC_SPEC : PC_BLOB0);
     }
-    for (i = 0; i < SY_NVOICE; i++) {
-        const uint8_t c = i < sy_tel.gates ? PC_AMBER : i < sy_tel.voices ? PC_EMBER : PC_GRID;
-        const int32_t x = x0 + i * 5;
-        px_rect(x, y, 3, 3, c);
-        if (i < sy_tel.gates)
-            px_pset(x + 1, y + 1, PC_WHITE);
-    }
+    /* (no row of voice dots: the buddies and the mouth already say how many are sounding) */
 }
 
 static void draw_body(const geo_t *g, float sqx, float sqy)
@@ -991,16 +985,29 @@ static void schem_body(const drawer_t *p)                /* the wavetable: its f
 static void schem_eyes(const drawer_t *p)                /* the filter: its curve, and where the envelope takes it */
 {
     const float cut = pn(P_CUTOFF), k = 2.0f - 1.94f * pn(P_RESO), amt = pn(P_ENVAMT);
+    const int ft = proj.par[P_FTYPE];
+    const float fb = 0.35f + 0.6f * pn(P_RESO), band_g = k > 0.35f ? k : 0.35f;
     float v[56], v2[56];
     int i, live;
     for (live = 0; live < 2; live++) {
         const float oct = cut * 9.3f + (live ? amt * 6.0f * sy_tel.mod_env : 0.0f);
         for (i = 0; i < 56; i++) {
-            /* across: 20 Hz .. 20 kHz on octaves; up: -36 .. +18 dB */
+            /* across: 20 Hz .. 20 kHz on octaves; up: -36 .. +18 dB. Each kind its own curve (synth.c's SVF) */
             const float fo = (float)i / 55.0f * 10.0f - (oct + 0.6f), w = mm_exp2f(fo), w2 = w * w;
-            const float mag2 = 1.0f / ((1.0f - w2) * (1.0f - w2) + w2 * k * k);
-            const float db = 10.0f * mm_log2f(mag2) * 0.30103f;
-            (live ? v2 : v)[i] = (db + 36.0f) / 54.0f;
+            const float den = (1.0f - w2) * (1.0f - w2) + w2 * k * k;
+            float mag2;
+            switch (ft) {
+            case FT_BAND: mag2 = w2 * band_g * band_g / den; break;
+            case FT_HIGH: mag2 = w2 * w2 / den; break;
+            case FT_NOTCH: mag2 = (1.0f - w2) * (1.0f - w2) / den + 1e-4f; break;
+            case FT_COMB: {                              /* teeth at the cutoff and its multiples */
+                const float c = mm_sin_turns(w + 0.25f);
+                mag2 = 0.36f * (1.0f + fb * fb + 2.0f * fb * c) / (1.0f + fb * fb - 2.0f * fb * c + 1e-4f) * 0.25f;
+                break;
+            }
+            default: mag2 = 1.0f / den; break;
+            }
+            (live ? v2 : v)[i] = (10.0f * mm_log2f(mag2 + 1e-9f) * 0.30103f + 36.0f) / 54.0f;
         }
     }
     curve(p, v, 56, PC_BLOB2, PC_BLOBD, 1);
@@ -1065,12 +1072,13 @@ static void schem_mouth(const drawer_t *p)               /* the envelope: attack
     }
 }
 
-static void schem_vibe(const drawer_t *p)                /* the LFO: its wave, its speed, where it is */
+/* an LFO (VIBE's, TREMBLE's): its wave, its speed, where it is, where it goes */
+static void schem_lfo(const drawer_t *p, int shape_p, int rate_p, int depth_p, int dest_p, float phase)
 {
     static const char *const DEST[] = {"SHAPE", "EYES", "PITCH", "VOL", "SHADOW"};
     _Static_assert(sizeof DEST / sizeof DEST[0] == LD_N, "a name for every LFO destination");
-    const int shape = proj.par[P_LFOSHAPE];
-    const float cycles = 1.0f + 3.0f * pn(P_LFORATE), depth = 0.15f + 0.85f * pn(P_LFODEPTH);
+    const int shape = proj.par[shape_p];
+    const float cycles = 1.0f + 3.0f * pn(rate_p), depth = 0.15f + 0.85f * pn(depth_p);
     float v[64];
     int i;
     for (i = 0; i < 64; i++)
@@ -1081,7 +1089,7 @@ static void schem_vibe(const drawer_t *p)                /* the LFO: its wave, i
         px_line(q.gx0, (q.gy0 + q.gy1) / 2, q.gx1, (q.gy0 + q.gy1) / 2, PC_WALL);
         curve(&q, v, 64, PC_BLOB2, PC_BLOBD, 0);
         {   /* the dot riding the first cycle */
-            const float ph = sy_tel.lfo_phase;
+            const float ph = phase;
             const int32_t x = q.gx0 + (int32_t)(ph / cycles * (float)(q.gx1 - q.gx0));
             const int32_t y = gy_of(&q, 0.5f + 0.48f * depth * lfo_shape_at(shape, ph));
             px_rect(x - 1, y - 1, 3, 3, PC_SPEC);
@@ -1089,10 +1097,74 @@ static void schem_vibe(const drawer_t *p)                /* the LFO: its wave, i
     }
     /* where it goes */
     {
-        const char *to = DEST[proj.par[P_LFODEST]];
+        const char *to = DEST[proj.par[dest_p]];
         const int32_t w = px_text_w(to) + 1;
         px_text(p->gx1 - 22, p->gy0 + 2, "TO", PC_DIM);
         px_text(p->gx1 - (w > 22 ? w : 22), p->gy0 + 9, to, PC_TEAR);
+    }
+}
+
+static void schem_vibe(const drawer_t *p) { schem_lfo(p, P_LFOSHAPE, P_LFORATE, P_LFODEPTH, P_LFODEST, sy_tel.lfo_phase); }
+static void schem_tremble(const drawer_t *p) { schem_lfo(p, P_LFO2SHAPE, P_LFO2RATE, P_LFO2DEPTH, P_LFO2DEST, sy_tel.lfo2_phase); }
+
+static void schem_shadow(const drawer_t *p)              /* the second wave: its own, over the first, at its interval */
+{
+    static const char *const MEET[] = {"MIX", "FM", "RING", "SYNC"};
+    _Static_assert(sizeof MEET / sizeof MEET[0] == MEET_N, "a name for every meeting");
+    const float pos = pn(P_POS), lvl = pn(P_BLEVEL), ratio = mm_exp2f((float)proj.par[P_BTUNE] / 12.0f);
+    float a[64], b[64];
+    int i;
+    drawer_t q = *p;
+    q.gx1 = p->gx1 - 26;
+    for (i = 0; i < 64; i++) {                           /* two of A's cycles */
+        const float t = (float)i / 63.0f * 2.0f;
+        a[i] = 0.5f + 0.42f * sy_shape(proj.par[P_TABLE], pos, t - mm_floorf(t));
+        b[i] = 0.5f + 0.42f * (0.15f + 0.85f * lvl) * sy_shape(proj.par[P_BTABLE], pos, t * ratio - mm_floorf(t * ratio));
+    }
+    px_line(q.gx0, (q.gy0 + q.gy1) / 2, q.gx1, (q.gy0 + q.gy1) / 2, PC_WALL);
+    curve(&q, a, 64, PC_WALL2, 0, 0);                    /* the first, dim behind */
+    curve(&q, b, 64, lvl > 0.0f ? PC_GHOST : PC_GRID, 0, 0);
+    {   /* how they meet, and how far apart */
+        char iv[6];
+        int n = proj.par[P_BTUNE], j = 0;
+        iv[j++] = n < 0 ? '-' : '+';
+        n = n < 0 ? -n : n;
+        if (n >= 10)
+            iv[j++] = (char)('0' + n / 10);
+        iv[j++] = (char)('0' + n % 10);
+        iv[j] = 0;
+        px_text(p->gx1 - 22, p->gy0 + 2, MEET[proj.par[P_BMEET]], PC_TEAR);
+        px_text(p->gx1 - 22, p->gy0 + 9, iv, PC_DIM);
+    }
+}
+
+static void schem_sigh(const drawer_t *p)                /* the second envelope: up, down; how far it moves the wave */
+{
+    const float a = proj.par[P_MATTACK] ? 0.04f + 0.3f * pn(P_MATTACK) : 0.04f + 0.3f * pn(P_ATTACK);
+    const float d = 0.05f + 0.6f * pn(P_MODDEC), sweep = (float)proj.par[P_MWAVE] / 100.0f, eyes = pn(P_ENVAMT);
+    float v[56];
+    int i;
+    drawer_t q = *p;
+    q.gx1 = p->gx1 - 26;
+    for (i = 0; i < 56; i++) {
+        const float t = (float)i / 55.0f;
+        v[i] = t < a ? t / a : mm_expf(-(t - a) / (d * 0.35f + 0.02f));
+    }
+    curve(&q, v, 56, PC_BLOB2, PC_BLOBD, 1);
+    {   /* where the loudest note's is now */
+        const int32_t y = gy_of(&q, sy_tel.mod_env);
+        if (sy_tel.mod_env > 0.02f)
+            px_rect(q.gx0 + 1, y - 1, 3, 3, PC_SPEC);
+    }
+    {   /* two meters: the wave (from the middle: up or down the table) and the eyes */
+        const int32_t xw = p->gx1 - 18, xe = p->gx1 - 7, mid = (p->gy0 + p->gy1) / 2, top = gy_of(p, eyes);
+        const int32_t sw = (int32_t)(sweep * (float)(p->gy1 - p->gy0) * 0.5f);
+        px_line(xw - 2, mid, xw + 4, mid, PC_WALL2);
+        if (sw)
+            px_rect(xw, sw > 0 ? mid - sw : mid, 3, sw > 0 ? sw : -sw, PC_GHOST);
+        px_rect(xe, top, 3, p->gy1 - top, PC_TEAR);
+        px_text(xw - 3, p->gy0 - 1, "W", PC_DIM);
+        px_text(xe - 1, p->gy0 - 1, "E", PC_DIM);
     }
 }
 
@@ -1417,6 +1489,14 @@ static void draw_panel(const geo_t *g)
         case PG_VIBE: what = LFO_SHAPE_NAME[proj.par[P_LFOSHAPE]]; break;
         case PG_DECK: what = sy_style_name(proj.par[P_STYLE]); break;
         case PG_ARP: what = ARP_RATE_NAME[proj.par[P_ARPRATE]]; break;
+        case PG_SHADOW: what = SY_TABLE_NAME[proj.par[P_BTABLE]]; break;
+        case PG_TREMBLE: what = LFO_SHAPE_NAME[proj.par[P_LFO2SHAPE]]; break;
+        case PG_EYES: {
+            static const char *const KIND[] = {"LOW", "BAND", "HIGH", "NOTCH", "COMB"};
+            _Static_assert(sizeof KIND / sizeof KIND[0] == FT_N, "a name for every filter");
+            what = KIND[proj.par[P_FTYPE]];
+            break;
+        }
         case PG_LOOP: what = sy_tel.rec == 2 ? "REC" : sy_tel.rec == 1 ? "READY" : sy_tel.loop_sel >= 0 ? "STEP" : "ALL"; break;
         default: break;
         }
@@ -1448,6 +1528,9 @@ static void draw_panel(const geo_t *g)
     case PG_MIX: schem_mix(&p); break;
     case PG_ARP: schem_arp(&p); break;
     case PG_LOOP: schem_loop(&p); break;
+    case PG_SHADOW: schem_shadow(&p); break;
+    case PG_SIGH: schem_sigh(&p); break;
+    case PG_TREMBLE: schem_tremble(&p); break;
     default: schem_setup(&p); break;
     }
     /* the knobs: a name over a meter, the one being turned lit up */
