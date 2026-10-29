@@ -160,7 +160,7 @@ typedef struct {
     float vy;                                           /* the back wall's middle: above it (we look down into the room) */
     float bw, bh;                                       /* the back wall's half width, half height */
     float floor;                                        /* the floor under the blob */
-    float pool;                                         /* where its tears land: at its feet */
+    float pool, pcx;                                    /* the puddle: still, on the floor in front (it doesn't bob) */
 } geo_t;
 
 /* ------------------------------------------------------------ the room --- */
@@ -593,7 +593,7 @@ static void draw_body(const geo_t *g, float sqx, float sqy)
     sh.rim = 0.15f + 0.35f * vol + 0.6f * sy_tel.amp_env * vol;   /* louder: the lamp catches more of it */
     sh.outline = PC_BLOBD;
     sh.floor = g->floor;
-    sh.refl = 0.45f;
+    sh.refl = 0.0f;                                     /* (the puddle reflects it now) */
     sh.ab = (int32_t)g->ab;
     shade_body(&sh);
     if (fry > 0.55f) {                                   /* deep-fried: crust, blown-out pixels */
@@ -862,15 +862,15 @@ static void draw_puddle(const geo_t *g)
 {
     const float w = g->r * (0.7f + 0.45f * bs.puddle), h = mm_clampf(w * 0.2f, 3.0f, 7.0f);
     const float k = 2.3f * g->r / (2.0f * h), top = g->pool - h;   /* (seen from above: the whole blob, squeezed) */
-    const float glint = g->cx + w * 0.7f * mm_sin_turns(bs.t * 0.05f), rip = 0.6f + 1.6f * bs.ripple;
+    const float glint = g->pcx + w * 0.7f * mm_sin_turns(bs.t * 0.05f), rip = 0.6f + 1.6f * bs.ripple;
     int32_t x, y;
     if (bs.puddle < 0.02f || g->pool > (float)PX_H)
         return;
     for (y = (int32_t)(g->pool - h); y <= (int32_t)(g->pool + h); y++) {
         const int32_t sy = (int32_t)(g->cy + g->r * 1.05f - ((float)y - top) * k);   /* its feet at the far edge */
         const int32_t sx = (int32_t)(rip * mm_sin_turns((float)y * 0.31f + bs.t * 0.5f));
-        for (x = (int32_t)(g->cx - w); x <= (int32_t)(g->cx + w); x++) {
-            const float dx = ((float)x - g->cx) / w, dy = ((float)y - g->pool) / h, d = dx * dx + dy * dy;
+        for (x = (int32_t)(g->pcx - w); x <= (int32_t)(g->pcx + w); x++) {
+            const float dx = ((float)x - g->pcx) / w, dy = ((float)y - g->pool) / h, d = dx * dx + dy * dy;
             if (d >= 1.0f)
                 continue;
             if (y == (int32_t)g->pool + 1 && mm_fabsf((float)x - glint) < 0.6f)
@@ -1810,7 +1810,11 @@ static void blob_draw(void)
     g.floor = mm_minf(g.cy + g.r * 0.8f + 6.0f + 3.0f * size, g.ab - 3.0f);   /* (from above: right under it) */
     if (g.floor < g.cy + g.r * 0.9f)                     /* (close up: the floor is out of the picture) */
         g.floor = (float)PX_H + 40.0f;
-    g.pool = mm_minf(g.floor + 5.0f + g.r * 0.2f, g.ab - 4.0f);   /* (in front of it, on the floor) */
+    {   /* (where the floor would be with the blob at rest: the puddle stays there while it bobs) */
+        const float rest = g.rcy - bs.focus * g.r + g.r * 0.8f + 6.0f + 3.0f * size;
+        g.pool = g.floor > (float)PX_H ? g.floor : mm_minf(rest + 5.0f + g.r * 0.2f, g.ab - 4.0f);
+        g.pcx = g.rcx;
+    }
 
     animate(&g);
     drips_move();
