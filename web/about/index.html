@@ -16,119 +16,131 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap">
 <style>
-/* the same room as the player: near-black, rainy grey words, sodium orange for what you can press.
-   Only the screens glow. */
+/* MOPE-1's front page. One column (748 px inside 16 px gutters); everything hangs on its left edge.
+   Lists hang their icon or number in a 22 px column, 16 px from the text, so every label in a list starts
+   38 px in. Spacing is on a 4 px scale; line heights are whole pixels, so the pixel art lands on whole
+   pixels. Only the screens glow. */
 :root {
-  --night: #07080a; --ink: #d8dee5; --text: #8f9ba5; --quiet: #5e6873; --line: rgba(186, 204, 222, .14);
+  --night: #07080a; --ink: #d8dee5; --text: #9aa5af; --quiet: #6f7984; --line: rgba(186, 204, 222, .14);
   --tile: rgba(186, 204, 222, .035); --sodium: #f28a5a; --glow: rgba(110, 160, 190, .16);
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --hang: 22px; --hang-gap: 16px;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; scroll-padding-top: 64px; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
-body { margin: 0; background: var(--night); color: var(--text); font: 14px/1.65 var(--mono); }
-main a, footer a { color: var(--sodium); text-decoration: none; border-bottom: 1px solid rgba(242, 138, 90, .35); }
-main a:hover, main a:focus-visible { border-bottom-color: var(--sodium); }
-main a:focus-visible { outline: 1px solid var(--sodium); outline-offset: 3px; }
-h1, h2, h3 { font-family: var(--serif); font-weight: 400; color: var(--ink); margin: 0; }
-h2 { font-size: 2.2rem; line-height: 1.05; margin-bottom: 1.2rem; }
-h3 { font-size: 1.4rem; line-height: 1.15; margin-bottom: .3rem; }
+body { margin: 0; background: var(--night); color: var(--text); font: 14px/22px var(--mono); }
+main a, footer a, .hero a { color: var(--sodium); text-decoration: none; border-bottom: 1px solid rgba(242, 138, 90, .35); }
+main a:hover, main a:focus-visible, .hero a:hover { border-bottom-color: var(--sodium); }
+main a:focus-visible, .hero a:focus-visible { outline: 1px solid var(--sodium); outline-offset: 4px; }
+h1, h2, h3 { font-family: var(--serif); font-weight: 400; color: var(--ink); margin: 0; text-wrap: balance; }
+h2 { font-size: 40px; line-height: 44px; margin-bottom: 24px; }
+h3 { font-size: 24px; line-height: 28px; margin-bottom: 4px; }
 b { color: var(--ink); font-weight: 600; }
-p { margin: 0 0 1rem; }
-ul { margin: 0; }
+p { margin: 0 0 16px; text-wrap: pretty; }
+ul, ol, dl, dd { margin: 0; padding: 0; }
 .wrap { max-width: 780px; margin: 0 auto; padding: 0 16px; }
-section { padding: 84px 0 0; }
+@supports (margin-left: round(down, 1.5px, 1px)) {   /* (centred on a whole pixel: the pixel art stays sharp) */
+  .wrap { margin: 0; margin-left: max(0px, round(down, calc((100% - 780px) / 2), 1px)); }
+}
+section { padding: 96px 0 0; }
+.note { font-size: 12px; line-height: 20px; color: var(--quiet); margin: 16px 0 0; }
+.note.links a + a { margin-left: 12px; }
 
 /* the pixels: whole multiples of 120, never smoothed; the screen's own light around it */
 img.px { display: block; image-rendering: pixelated; image-rendering: crisp-edges; background: #000;
          box-shadow: 0 0 44px var(--glow), 0 0 0 1px rgba(0, 0, 0, .9); }
-.icon { width: 22px; height: 22px; flex: none; color: var(--sodium); shape-rendering: crispEdges; }
+
+/* a hanging list: the icon or number in the first column, as tall as the first line, the text 38 px in */
+.hang { list-style: none; display: grid; gap: 16px; }
+.hang > li { display: grid; grid-template-columns: var(--hang) 1fr; gap: 0 var(--hang-gap); align-items: start; }
+.hang .icon { width: var(--hang); height: var(--hang); color: var(--sodium); shape-rendering: crispEdges; display: block; }
+.hang .n { font: 22px/22px var(--serif); color: var(--sodium); text-align: left; }
+.hang .t { color: var(--ink); }
+.hang .d { display: block; color: var(--text); font-size: 13px; line-height: 20px; margin-top: 2px; }
 
 /* the top: its name, a line, and the player */
-.hero { padding-top: 46px; text-align: center; }
-.hero h1 { font-size: 4.2rem; line-height: .95; }
-.hero .line { font-family: var(--serif); font-style: italic; font-size: 1.6rem; color: var(--ink); margin: .5rem 0 1.6rem; }
-.player { max-width: 720px; margin: 0 auto; }
-.player iframe { display: block; width: 100%; height: 470px; border: 0; background: transparent; }
-.player .under { font-size: 12.5px; color: var(--quiet); margin-top: .6rem; }
+.hero { padding-top: 48px; text-align: center; }
+.hero h1 { font-size: 64px; line-height: 64px; }
+.hero .line { font: italic 24px/32px var(--serif); color: var(--ink); margin: 8px 0 32px; }
+.player iframe { display: block; width: 100%; height: 488px; border: 0; background: transparent; }
+.player .under { font-size: 12px; line-height: 20px; color: var(--quiet); margin: 12px 0 0; }
 
-/* what it is: short lines, an icon each */
-.what ul { list-style: none; padding: 0; display: grid; gap: 14px; }
-.what li { display: flex; gap: 14px; align-items: flex-start; color: var(--ink); }
-.what li span { color: var(--text); display: block; font-size: 13px; margin-top: 2px; }
+/* the numbers: no boxes, a hairline over each, three a row */
+.facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px 16px; margin-top: 48px; }
+.fact { border-top: 1px solid var(--line); padding-top: 12px; }
+.fact b { display: block; font: 400 32px/36px var(--serif); color: var(--ink); }
+.fact span { display: block; font-size: 12px; line-height: 20px; color: var(--text); }
 
-/* chunks: a number or a word, big; what it is, small */
-.chunks { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 28px; }
-.chunk { background: var(--tile); border: 1px solid var(--line); border-radius: 10px; padding: 14px 14px 12px; }
-.chunk b { display: block; font: 2.1rem/1 var(--serif); font-weight: 400; color: var(--ink); margin-bottom: 6px; }
-.chunk span { font-size: 12px; color: var(--text); line-height: 1.45; display: block; }
-
-/* the states: three a row, 2x; two a row on a phone (160 px: 4 device pixels each on most phones) */
-.states { display: grid; grid-template-columns: repeat(3, 240px); gap: 36px 20px; justify-content: center; }
+/* the states: three a row at 2x, exactly the column's width (3 x 240 + 2 x 14) */
+.states { display: grid; grid-template-columns: repeat(3, 240px); gap: 32px 14px; }
 .state { margin: 0; cursor: pointer; }
-.state:focus-visible { outline: 1px solid var(--sodium); outline-offset: 6px; }
+.state:focus-visible { outline: 1px solid var(--sodium); outline-offset: 4px; }
 .state img.px { width: 240px; height: 240px; }
-.state figcaption { margin-top: 10px; color: var(--ink); font-size: 13px; line-height: 1.5; }
-.state figcaption span { display: block; color: var(--quiet); font-size: 11.5px; letter-spacing: .04em; }
+.state figcaption { margin-top: 12px; color: var(--ink); font-size: 13px; line-height: 20px; }
+.state figcaption span { display: block; color: var(--quiet); font-size: 12px; line-height: 20px; }
 
-/* steps and key combinations, as chunks */
-.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; counter-reset: s; }
-.steps li { list-style: none; background: var(--tile); border: 1px solid var(--line); border-radius: 10px; padding: 14px; font-size: 12.5px; line-height: 1.5; }
-.steps li::before { counter-increment: s; content: counter(s); display: block; font: 1.9rem/1 var(--serif); color: var(--sodium); margin-bottom: 8px; }
-.steps { padding: 0; margin: 0 0 16px; }
-.combos { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 16px 0 0; }
-.combo { background: var(--tile); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 12.5px; line-height: 1.5; }
-.combo .keys { display: block; margin-bottom: 6px; }
-.btn { display: inline-block; font: 600 11.5px/1 var(--mono); letter-spacing: .06em; color: var(--ink); border: 1px solid rgba(186, 204, 222, .45);
-       border-radius: 4px; padding: 4px 6px 3px; }
-.plus { color: var(--quiet); margin: 0 4px; }
-.go-btn { display: inline-block; margin-top: 4px; padding: 10px 18px; border-radius: 999px; background: var(--sodium); color: #2a140a !important;
-          border: 0 !important; font-weight: 600; }
+.go-btn { display: inline-block; margin: 24px 0 0 38px; padding: 8px 20px; border-radius: 999px; background: var(--sodium); color: #2a140a !important;
+          border: 0 !important; font-weight: 600; line-height: 24px; }
+.go-btn + .note { margin-left: 38px; }
 
 /* the manual */
-.rules { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 0; margin: 0 0 18px; }
-.rules li { list-style: none; background: var(--tile); border: 1px solid var(--line); border-radius: 10px; padding: 14px;
-            font: 1.25rem/1.25 var(--serif); color: var(--ink); }
-.rules li span { display: block; font: 11px var(--mono); color: var(--quiet); margin-bottom: 6px; letter-spacing: .06em; }
-.part { display: grid; grid-template-columns: 180px 1fr; gap: 0 26px; padding: 26px 0; border-top: 1px solid var(--line); }
-.part img.px { width: 180px; height: 180px; box-shadow: 0 0 34px var(--glow), 0 0 0 1px rgba(0, 0, 0, .9); }
+.rules .t { font: 20px/22px var(--serif); color: var(--ink); }
+.rules { margin-bottom: 24px; }
+.part { display: grid; grid-template-columns: 180px 1fr; gap: 0 24px; padding: 24px 0; border-top: 1px solid var(--line); }
+.part img.px { width: 180px; height: 180px; box-shadow: 0 0 32px var(--glow), 0 0 0 1px rgba(0, 0, 0, .9); }
 .part .px.none { width: 180px; height: 0; }
-.part.second { border-top: 1px dashed var(--line); padding-left: 0; }
-.press { color: var(--quiet); font-size: 12.5px; margin: .15rem 0 .6rem; }
-.press .btn { margin-left: 4px; vertical-align: 1px; }
-.eyebrow { color: var(--sodium); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 .3rem; }
-.knobs { border-collapse: collapse; width: 100%; margin: .2rem 0 0; font-size: 12.5px; }
-.knobs td { border-top: 1px solid var(--line); padding: 7px 10px 7px 0; vertical-align: top; color: var(--ink); width: 25%; }
-.knobs .k { display: block; color: var(--quiet); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; }
-.sub-h { margin-top: 56px; }
+.part.second { border-top-style: dashed; }
+.press { color: var(--quiet); font-size: 12px; line-height: 20px; margin: 0 0 8px; }
+.press .btn { margin-left: 4px; }
+.eyebrow { color: var(--sodium); font-size: 11px; line-height: 16px; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 4px; }
+.knobs { border-collapse: collapse; width: 100%; margin: 4px 0 0; font-size: 12px; line-height: 20px; }
+.knobs td { border-top: 1px solid var(--line); padding: 8px 12px 8px 0; vertical-align: top; color: var(--ink); width: 25%; }
+.knobs .k { display: block; color: var(--quiet); font-size: 11px; line-height: 16px; text-transform: uppercase; letter-spacing: .06em; }
+.sub-h { margin-top: 64px; }
 
-.faq { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 20px; }
-.faq div { background: var(--tile); border: 1px solid var(--line); border-radius: 10px; padding: 14px; font-size: 12.5px; line-height: 1.5; }
-.faq b { display: block; font: 1.2rem/1.2 var(--serif); font-weight: 400; margin-bottom: 6px; }
-.links-row { font-size: 12.5px; }
-.links-row a { margin-right: 14px; }
-footer { text-align: center; padding: 110px 16px 60px; }
-footer img.px { width: 120px; height: 120px; margin: 0 auto 16px; box-shadow: 0 0 26px var(--glow); }
-footer p { color: var(--quiet); font-size: 12px; max-width: 38rem; margin: 0 auto .5rem; }
+/* button combinations: these are separate things, so they get boxes */
+.btn { display: inline-block; font: 600 11px/16px var(--mono); letter-spacing: .06em; color: var(--ink);
+       border: 1px solid rgba(186, 204, 222, .45); border-radius: 4px; padding: 1px 6px; vertical-align: 1px; }
+.plus { color: var(--quiet); margin: 0 4px; font-size: 12px; }
+.combos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.combo { background: var(--tile); border: 1px solid var(--line); border-radius: 8px; padding: 15px; font-size: 13px; line-height: 20px; }
+.combo .keys { display: block; margin-bottom: 8px; color: var(--quiet); font-size: 12px; line-height: 20px; }
+.combos > .combo:last-child:nth-child(3n + 1) { grid-column: 1 / -1; }
 
-@media (max-width: 799px) and (min-width: 521px) { .states { grid-template-columns: repeat(2, 240px); } }
+/* small print */
+.faq { display: grid; gap: 24px; margin-top: 32px; }
+.faq dt { font: 20px/28px var(--serif); color: var(--ink); }
+.faq dd { margin-top: 4px; max-width: 60ch; }
+footer { text-align: center; padding: 96px 16px 64px; }
+footer img.px { width: 120px; height: 120px; margin: 0 auto 16px; box-shadow: 0 0 24px var(--glow); }
+footer p { color: var(--quiet); font-size: 12px; line-height: 20px; max-width: 38rem; margin: 0 auto 8px; }
+
+@media (max-width: 779px) and (min-width: 521px) {
+  .states { grid-template-columns: repeat(2, 240px); }
+  .combos { grid-template-columns: repeat(2, 1fr); }
+  .combos > .combo:last-child:nth-child(3n + 1) { grid-column: auto; }
+  .combos > .combo:last-child:nth-child(2n + 1) { grid-column: 1 / -1; }
+}
 @media (max-width: 640px) {
-  h2 { font-size: 1.8rem; }
-  .hero h1 { font-size: 3.2rem; }
-  .rules { grid-template-columns: 1fr; }
+  h2 { font-size: 32px; line-height: 36px; }
+  .hero h1 { font-size: 48px; line-height: 52px; }
+  .hero .line { font-size: 20px; line-height: 28px; }
+  section { padding-top: 64px; }
+  .facts { grid-template-columns: repeat(2, 1fr); column-gap: 15px; }   /* ((343 - 15) / 2: whole pixels) */
   .part { grid-template-columns: 1fr; }
   .part img.px { width: 240px; height: 240px; margin-bottom: 16px; }
   .knobs, .knobs tr, .knobs td { display: block; width: 100%; }
-  .knobs td { padding: 6px 0; }
-  .knobs .k { display: inline-block; width: 4.6rem; }
-  section { padding-top: 64px; }
+  .knobs td { padding: 4px 0; }
+  .knobs .k { display: inline-block; width: 72px; }
 }
 @media (max-width: 520px) {
-  .states { grid-template-columns: repeat(2, 160px); gap: 26px 14px; }
+  .states { grid-template-columns: repeat(2, 160px); gap: 24px 0; justify-content: space-between; }
   .state img.px { width: 160px; height: 160px; }
-  .state figcaption { font-size: 12px; }
+  .combos { grid-template-columns: 1fr; }
+  .combos > .combo:last-child { grid-column: auto !important; }
 }
 </style>
 </head>
@@ -147,20 +159,20 @@ footer p { color: var(--quiet); font-size: 12px; max-width: 38rem; margin: 0 aut
 <main class="wrap">
   <section class="what" aria-labelledby="what-h">
     <h2 id="what-h">What it is</h2>
-    <ul>
-      <li><!--ICON:fm1--><div>Free firmware for the M-VAVE FM-1<span>Open source (GPL-3.0). The original firmware goes back on any time.</span></div></li>
-      <li><!--ICON:blob--><div>A blob is the interface<span>Whatever you turn happens to it: its eyes, its mouth, its tears, its room.</span></div></li>
-      <li><!--ICON:wave--><div>A sad wavetable synth<span>Two oscillators a voice, five kinds of filter, two LFOs, a delay and a reverb.</span></div></li>
-      <li><!--ICON:tape--><div>A backing band that only plays sad beats<span>Like an old toy keyboard's: Grief Drill, Funeral Bossa, Office Ambivalent. A bass follows your chords.</span></div></li>
-      <li><!--ICON:loop--><div>A loop and an arpeggiator<span>Record what you play, then fix it one step at a time.</span></div></li>
+    <ul class="hang">
+      <li><!--ICON:fm1--><div><span class="t">Free firmware for the M-VAVE FM-1</span><span class="d">Open source (GPL-3.0). The original firmware goes back on any time.</span></div></li>
+      <li><!--ICON:blob--><div><span class="t">A blob is the interface</span><span class="d">Whatever you turn happens to it: its eyes, its mouth, its tears, its room.</span></div></li>
+      <li><!--ICON:wave--><div><span class="t">A sad wavetable synth</span><span class="d">Two oscillators a voice, five kinds of filter, two LFOs, a delay and a reverb.</span></div></li>
+      <li><!--ICON:tape--><div><span class="t">A backing band that only plays sad beats</span><span class="d">Like an old toy keyboard's: Grief Drill, Funeral Bossa, Office Ambivalent. A bass follows your chords.</span></div></li>
+      <li><!--ICON:loop--><div><span class="t">A loop and an arpeggiator</span><span class="d">Record what you play, then fix it one step at a time.</span></div></li>
     </ul>
-    <div class="chunks" aria-label="In numbers">
-      <div class="chunk"><b>6</b><span>voices</span></div>
-      <div class="chunk"><b>16</b><span>wavetables</span></div>
-      <div class="chunk"><b>38</b><span>presets</span></div>
-      <div class="chunk"><b>13</b><span>sad beats</span></div>
-      <div class="chunk"><b>5</b><span>filters, from low-pass to comb</span></div>
-      <div class="chunk"><b>192</b><span>notes in a loop, up to 4 bars</span></div>
+    <div class="facts" aria-label="In numbers">
+      <div class="fact"><b>6</b><span>voices</span></div>
+      <div class="fact"><b>16</b><span>wavetables</span></div>
+      <div class="fact"><b>38</b><span>presets</span></div>
+      <div class="fact"><b>13</b><span>sad beats</span></div>
+      <div class="fact"><b>5</b><span>filters, low-pass to comb</span></div>
+      <div class="fact"><b>192</b><span>notes in a loop, 4 bars</span></div>
     </div>
   </section>
 
@@ -174,22 +186,22 @@ footer p { color: var(--quiet); font-size: 12px; max-width: 38rem; margin: 0 aut
 
   <section id="install" aria-labelledby="install-h">
     <h2 id="install-h">Put it on your FM-1</h2>
-    <ol class="steps">
-      <li>Download M-VAVE's firmware first (FM-1 V15, "PC Firmware", <a href="https://www.m-vave.com/download">m-vave.com</a>), to go back later.</li>
-      <li>Plug the FM-1 straight into a computer with a USB data cable. No hub. Close other MIDI apps.</li>
-      <li>In Chrome or Edge, open the installer and allow MIDI with SysEx.</li>
-      <li>Press <b>Install MOPE-1</b>. About a minute. If it's cut off, press it again.</li>
+    <ol class="hang steps">
+      <li><span class="n">1</span><span>Download M-VAVE's firmware first (FM-1 V15, "PC Firmware", <a href="https://www.m-vave.com/download">m-vave.com</a>), to go back later.</span></li>
+      <li><span class="n">2</span><span>Plug the FM-1 straight into a computer with a USB data cable. No hub. Close other MIDI apps.</span></li>
+      <li><span class="n">3</span><span>In Chrome or Edge, open the installer and allow MIDI with SysEx.</span></li>
+      <li><span class="n">4</span><span>Press <b>Install MOPE-1</b>. It takes about a minute. If it's cut off, press it again.</span></li>
     </ol>
     <a class="go-btn" href="play/#install">Open the installer</a>
-    <p class="links-row" style="margin-top:18px">To go back, the installer puts M-VAVE's V15 back. Saved projects don't carry over between firmwares.</p>
+    <p class="note">To go back, the installer puts M-VAVE's V15 back. Saved projects don't carry over between firmwares.</p>
   </section>
 
   <section id="manual" aria-labelledby="manual-h">
     <h2 id="manual-h">The manual</h2>
-    <ol class="rules">
-      <li><span>1</span>Press a part's button.</li>
-      <li><span>2</span>Turn its four knobs.</li>
-      <li><span>3</span>Press the button again for its second page.</li>
+    <ol class="hang rules">
+      <li><span class="n">1</span><span class="t">Press a part's button.</span></li>
+      <li><span class="n">2</span><span class="t">Turn its four knobs.</span></li>
+      <li><span class="n">3</span><span class="t">Press the button again for its second page.</span></li>
     </ol>
     <p>The page opens in a drawer under the blob and slides away three seconds after you stop, but it stays selected: the knobs keep turning that part. Press a button twice quickly to keep the drawer open until <span class="btn">HOME</span>.</p>
 <!--MANUAL-->
@@ -214,17 +226,17 @@ footer p { color: var(--quiet); font-size: 12px; max-width: 38rem; margin: 0 aut
       <div class="combo"><span class="keys"><span class="btn">SAVE</span></span>Keeps everything (it also saves by itself).</div>
       <div class="combo"><span class="keys"><span class="btn">OCT−</span> <span class="btn">OCT+</span></span>Move the keys an octave.</div>
     </div>
-    <p class="links-row" style="margin-top:16px">Every setting with its range is in the <a href="https://github.com/slothpallas/mope-1#controls">README</a>.</p>
+    <p class="note">Every setting with its range is in the <a href="https://github.com/slothpallas/mope-1#controls">README</a>.</p>
   </section>
 
   <section class="small-print" aria-labelledby="print-h">
     <h2 id="print-h">Small print</h2>
-    <p class="links-row">Version {{VERSION}} · <a href="https://github.com/slothpallas/mope-1/blob/main/CHANGELOG.md">What changed</a> <a href="https://github.com/slothpallas/mope-1/releases/latest">Downloads</a> <a href="https://github.com/slothpallas/mope-1">Source</a></p>
-    <div class="faq">
-      <div><b>Will it break my FM-1?</b>Installed and taken off a real one many times. If a firmware crashes at start-up, the FM-1 comes up in safe mode, and the installer still works. Still at your own risk.</div>
-      <div><b>Can I go back?</b>Yes: the installer puts M-VAVE's V15 back, or install another firmware the same way.</div>
-      <div><b>Why is it sad?</b>We asked. It didn't say.</div>
-    </div>
+    <p class="note links">Version {{VERSION}} · <a href="https://github.com/slothpallas/mope-1/blob/main/CHANGELOG.md">What changed</a> <a href="https://github.com/slothpallas/mope-1/releases/latest">Downloads</a> <a href="https://github.com/slothpallas/mope-1">Source</a></p>
+    <dl class="faq">
+      <div><dt>Will it break my FM-1?</dt><dd>It has been installed on a real one and taken off again many times. If a firmware crashes at start-up, the FM-1 comes up in safe mode, and the installer still works there. Still at your own risk.</dd></div>
+      <div><dt>Can I go back?</dt><dd>Yes: the installer puts M-VAVE's V15 back, or install another firmware the same way.</dd></div>
+      <div><dt>Why is it sad?</dt><dd>We asked. It didn't say.</dd></div>
+    </dl>
   </section>
 </main>
 

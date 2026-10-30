@@ -1,7 +1,9 @@
 <!-- the site's bar, the same on every page: put in where a page says SITE-NAV, by web/play/pack.py and
      web/about/build.py (tests/host/about_test.py checks both pages carry it unchanged) -->
 <style>
-.site { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 20px; height: 52px; padding: 0 22px;
+.site { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 20px; height: 52px;
+        padding: 0 max(16px, calc((100% - 748px) / 2));   /* (its edges on the front page's column) */
+        padding-left: max(16px, round(down, calc((100% - 748px) / 2), 1px));
         background: rgba(7, 8, 10, .88); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
         border-bottom: 1px solid rgba(186, 204, 222, .12);
         font: 12.5px/1 ui-monospace, "SF Mono", Menlo, Consolas, monospace; letter-spacing: .03em; }
@@ -10,7 +12,7 @@
 .site a:focus-visible { outline: 1px solid #f28a5a; outline-offset: 4px; }
 .site .home { font: 1.4rem/1 "Instrument Serif", Georgia, serif; letter-spacing: 0; color: #d8dee5; margin-right: auto; }
 .site .links { display: flex; gap: 20px; }
-@media (max-width: 480px) { .site { gap: 12px; padding: 0 14px; } .site .links { gap: 13px; } }
+@media (max-width: 480px) { .site { gap: 12px; } .site .links { gap: 12px; } }
 .framed .site { display: none; }
 </style>
 <nav class="site" aria-label="MOPE-1">
