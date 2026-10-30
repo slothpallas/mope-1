@@ -5,20 +5,6 @@ wait 4000
 # IDLE: the top of the page, nothing played yet, the rain
 shot idle.png
 film 16 120 idle
-# AWAKE: the filter open, a chord
-tap EDIT
-spin K1 30
-midi 90 30 64
-midi 90 33 64
-midi 90 37 64
-wait 3500
-expect panel 0
-shot awake.png
-film 12 80 awake
-midi 80 30 00
-midi 80 33 00
-midi 80 37 00
-wait 1500
 # STONED: the filter shut
 midi c0 00 00
 tap EDIT
@@ -40,28 +26,6 @@ shot lasers.png
 film 12 80 lasers
 midi 80 30 00
 wait 800
-# DANCING: the LFO, a bounce
-midi c0 00 00
-tap LFO
-spin K2 70
-spin K3 2
-midi 90 30 64
-wait 3500
-shot dance.png
-film 16 60 dance
-midi 80 30 00
-wait 800
-# YAWN: a long release, after the note
-midi c0 00 00
-tap ENV
-spin K4 60
-midi 90 30 64
-wait 3500
-midi 80 30 00
-wait 300
-shot yawn.png
-film 12 100 yawn
-wait 4000
 # CRYING: the delay, one tear an echo, the puddle filling
 midi c0 00 00
 tap FX

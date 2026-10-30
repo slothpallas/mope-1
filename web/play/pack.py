@@ -40,6 +40,8 @@ def main(page_path, out):
     for mark in ("/*FM1LIB*/", "<!--MOPE-EMBED-->"):
         once(page, mark)
     page = page.replace("/*FM1LIB*/", installer())
+    once(page, "<!--SITE-NAV-->")
+    page = page.replace("<!--SITE-NAV-->", (WEB / "nav.html").read_text())   # (the site's bar, as on every page)
     (out / "index.html").write_text(page.replace("<!--MOPE-EMBED-->\n", ""))
     wasm = base64.b64encode((out / "mope.wasm").read_bytes()).decode()
     voice = base64.b64encode((out / "voice.js").read_bytes()).decode()

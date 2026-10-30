@@ -6,7 +6,10 @@ install it. The pictures are the firmware's own screen, from the host simulator
 pixels, shown large and crisp by the page. The manual's knob tables come from README.md's Button
 table, so the two can't drift apart. Needs Pillow.
 
-  build.py SCENARIOS_DIR OUT_DIR [VERSION]   (e.g. build/scenarios/site build/site/about 0.3.0)"""
+  build.py SCENARIOS_DIR SITE_DIR [VERSION]   (e.g. build/scenarios/site build/site 0.3.0)
+
+writes SITE_DIR/index.html (the site's front page) and SITE_DIR/img/, and SITE_DIR/about/index.html sending
+an old link on to the front page. The player goes in SITE_DIR/play/ (web.yml)."""
 import html
 import pathlib
 import re
@@ -19,16 +22,10 @@ ROOT = HERE.parent.parent
 
 # the states: name, caption (what it is, flatly), the control that does it, what the picture shows
 STATES = [
-    ("awake", "Filter open. It is regrettably alert.", "EDIT · knob 1 up",
-     "The blob with its eyes wide open and its mouth open on a chord, in its rainy room."),
     ("stoned", "Filter down. Best not to talk to it.", "EDIT · knob 1 down",
      "The blob with half-closed, heavy eyelids."),
     ("lasers", "Resonance up. It has seen something.", "EDIT · knob 2 up",
      "Red laser beams coming out of the blob's eyes."),
-    ("dance", "The LFO makes it dance, not that it enjoys it.", "LFO · knobs 2 and 3",
-     "The blob bouncing, squashed as it lands."),
-    ("yawn", "With a long release it takes a while to stop.", "ENV · knob 4 up",
-     "The blob's mouth slowly closing after the note has ended."),
     ("cry", "Delay: one tear per echo, and they collect on the floor.", "FX · knobs 2 and 4",
      "Tears falling from the blob into a dark puddle on the floor that mirrors it."),
     ("void", "Reverb. The room got bigger and it didn't.", "SEL · knobs 1 and 2 up",
@@ -37,8 +34,6 @@ STATES = [
      "Embers flying off the blob, which looks calm."),
     ("asleep", "Leave it alone for a while and it falls asleep.", "leave it",
      "The blob asleep, eyes shut."),
-    ("stare", "Later it wakes up and looks at you.", "leave it longer",
-     "The blob awake again, staring straight out of the screen."),
 ]
 
 # the manual: each button's part, what it does to the blob, its drawer's picture (README has the knobs)
@@ -63,6 +58,28 @@ PARTS = [
      ("Tape deck", "page_deck", "the backing band: a cassette in the corner. Kicks squash it, snares make it blink.")),
     ("ARP", "Arp", None, "Tap it to turn the arpeggiator on or off, or hold it for its page. The keys you hold become its pattern.", None),
 ]
+
+
+# small pixel icons (11 x 11, # lit), drawn in the page's orange
+ICONS = {
+    "fm1": ["###########", "#.........#", "#.###.....#", "#.###.#.#.#", "#.###.....#", "#.........#",
+            "#.#.#.#.#.#", "#.........#", "#.#.#.#.#.#", "#.........#", "###########"],
+    "blob": ["...#####...", "..#.....#..", ".#.......#.", "#..##.##..#", "#..##.##..#", "#.........#",
+             "#...###...#", "#..#...#..#", ".#.......#.", "..##...##..", "....###...."],
+    "wave": ["...........", "..##.......", ".#..#......", "#....#.....", "#....#.....", "......#...#",
+             "......#...#", ".......#..#", "........##.", "...........", "###########"],
+    "tape": ["###########", "#.........#", "#.#######.#", "#.#.....#.#", "#.#.#.#.#.#", "#.#.....#.#",
+             "#.#######.#", "#.........#", "#..#####..#", "#.#.....#.#", "###########"],
+    "loop": ["...........", "..#######..", ".#.......#.", "#.........#", "#.........#", "#......###.",
+             "#.......#..", "#..........", ".#.......#.", "..#######..", "..........."],
+}
+
+
+def icon(name):
+    rows = ICONS[name]
+    rects = "".join(f'<rect x="{x}" y="{y}" width="1" height="1"/>' for y, r in enumerate(rows)
+                    for x, c in enumerate(r) if c == "#")
+    return f'<svg class=icon viewBox="0 0 11 11" fill="currentColor" aria-hidden="true">{rects}</svg>'
 
 
 def shrink(path):
@@ -165,23 +182,32 @@ def main():
             raise SystemExit(f"{scen}: no film of {name}")
         film([shrink(f) for f in frames], img / f"{name}.apng",
              120 if name in ("asleep", "stare", "yawn", "void") else 90)
-    for name in ("idle",):                              # (the top of the page: just it, in the rain)
+    for name in ("idle", "stare"):                      # (it in the rain; and what waking it gives)
         film([shrink(f) for f in sorted(scen.glob(f"{name}_[0-9][0-9].png"))], img / f"{name}.apng", 120)
         indexed(shrink(scen / f"{name}.png")).save(img / f"{name}.png", optimize=True)
     for _, _, pg, _, again in PARTS:
         for p in (pg, again and again[1]):
             if p:
                 indexed(shrink(scen / f"{p}.png")).save(img / f"{p}.png", optimize=True)
-    shrink(scen / "awake.png").resize((960, 960), Image.NEAREST).save(img / "og.png", optimize=True)   # (link previews)
+    shrink(scen / "idle.png").resize((960, 960), Image.NEAREST).save(img / "og.png", optimize=True)   # (link previews)
     page = (HERE / "index.html").read_text()
-    for slot, text in (("<!--STATES-->", states()), ("<!--MANUAL-->", manual(readme_rows())),
-                       ("{{VERSION}}", esc(version))):
+    for slot, text in (("<!--SITE-NAV-->", (HERE.parent / "nav.html").read_text()), ("<!--STATES-->", states()),
+                       ("<!--MANUAL-->", manual(readme_rows())), ("{{VERSION}}", esc(version))):
         if slot not in page:
             raise SystemExit(f"web/about/index.html: no {slot}")
         page = page.replace(slot, text)
+    for name in ICONS:
+        page = page.replace(f"<!--ICON:{name}-->", icon(name))
+    if "<!--ICON:" in page:
+        raise SystemExit("web/about/index.html: an icon that build.py doesn't have")
     (out / "index.html").write_text(page)
-    size = sum(f.stat().st_size for f in out.rglob("*") if f.is_file() and f.name != "og.png")
-    print(f"about: {out}/index.html, {len(list(img.iterdir()))} pictures, {size // 1024} KB (without og.png)")
+    (out / "about").mkdir(exist_ok=True)                 # (the page used to live at about/: send old links on)
+    (out / "about" / "index.html").write_text(
+        '<!doctype html><meta charset="utf-8"><title>MOPE-1</title><meta http-equiv="refresh" content="0; url=../">'
+        '<link rel="canonical" href="../"><script>location.replace("../" + location.hash)</script>'
+        '<a href="../">MOPE-1</a>\n')
+    size = (out / "index.html").stat().st_size + sum(f.stat().st_size for f in img.iterdir() if f.name != "og.png")
+    print(f"front page: {out}/index.html, {len(list(img.iterdir()))} pictures, {size // 1024} KB (without og.png)")
 
 
 if __name__ == "__main__":

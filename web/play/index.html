@@ -28,7 +28,10 @@ h1 { font-size: 2.4rem; line-height: 1; }
 h2 { font-size: 1.55rem; line-height: 1.1; color: var(--ink); margin-bottom: .45rem; }
 header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem 1.1rem; margin-bottom: 1.1rem; }
 header p { margin: 0; color: var(--quiet); font: italic 1.15rem var(--serif); }
-header nav { margin-left: auto; display: flex; gap: 1rem; font: .8rem var(--mono); }
+/* bare (?bare, inside the about page): the FM-1 and its status line, nothing else */
+.bare main { padding: 0; max-width: none; }
+.bare header, .bare .sideways, .bare .guide, .bare .install, .bare #forget, .bare #cpu { display: none; }
+.bare .bar { margin-top: .6rem; }
 .sideways { display: none; color: var(--quiet); font: .8rem var(--mono); margin: 0 0 .8rem; }
 @media (orientation: portrait) and (max-width: 700px) { .sideways { display: block; } }
 
@@ -92,14 +95,15 @@ kbd { font: .78rem var(--mono); color: var(--ink); border: 1px solid var(--line-
 <script>
 // inside another site's page (an iframe): no title, no installer (a frame has no USB); the page around it has both
 if (window.self !== window.top) document.documentElement.classList.add("framed");
+if (/[?&]bare\b/.test(location.search)) document.documentElement.classList.add("framed", "bare");
 </script>
 </head>
 <body>
+<!--SITE-NAV-->
 <main>
 <header class="standalone-only">
-  <h1>MOPE-1</h1>
-  <p>a sad wavetable synth for the M-VAVE FM-1, playing here from the same C code</p>
-  <nav><a href="https://slothpallas.github.io/mope-1/about/">about &amp; manual</a><a href="https://github.com/slothpallas/mope-1">source</a><a href="#install">install</a></nav>
+  <h1>The player</h1>
+  <p>MOPE-1's firmware, running in your browser from the same C code as on the FM-1</p>
 </header>
 <p class="sideways">Turn your phone sideways for bigger controls.</p>
 
@@ -145,7 +149,7 @@ if (window.self !== window.top) document.documentElement.classList.add("framed")
   </div>
   <div>
     <h2>What this is</h2>
-    <p>MOPE-1 by slothpallas: the FM-1 firmware's screen and sound, compiled to WebAssembly and running at the FM-1's 44.1 kHz. It sits on the open FM-1 platform of <a href="https://github.com/hugelton/Felucca">Felucca</a>. Free software (GPL-3.0): <a href="https://github.com/slothpallas/mope-1">the source</a>. The blob in its states and a short manual: <a href="https://slothpallas.github.io/mope-1/about/">about</a>.</p>
+    <p>MOPE-1 by slothpallas: the FM-1 firmware's screen and sound, compiled to WebAssembly and running at the FM-1's 44.1 kHz. It sits on the open FM-1 platform of <a href="https://github.com/hugelton/Felucca">Felucca</a>. Free software (GPL-3.0): <a href="https://github.com/slothpallas/mope-1">the source</a>. The blob in its states and a short manual: <a href="https://slothpallas.github.io/mope-1/">MOPE-1's page</a>.</p>
   </div>
 </section>
 
@@ -505,8 +509,9 @@ if (!document.documentElement.classList.contains("framed")) {
   (async () => {
     if (!navigator.requestMIDIAccess) { $("instWhat").textContent = ""; say("Installing needs Web MIDI: open this page in Chrome or Edge."); return; }
     try {
-      const about = await (await fetch("firmware/latest.json", { cache: "no-cache" })).json();
-      const raw = new Uint8Array(await (await fetch("firmware/" + about.file, { cache: "no-cache" })).arrayBuffer());
+      const fw = /\/play\/(index\.html)?$/.test(location.pathname) ? "../firmware/" : "firmware/";   // (the site keeps it at its root)
+      const about = await (await fetch(fw + "latest.json", { cache: "no-cache" })).json();
+      const raw = new Uint8Array(await (await fetch(fw + about.file, { cache: "no-cache" })).arrayBuffer());
       pick.latest = { ...unpack(raw, about.file), version: about.version };
       if (pick.latest.product !== about.product) throw new Error("the file isn't the release it says it is");
       $("instLatest").textContent = `Install MOPE-1 ${about.version}`;
@@ -569,6 +574,15 @@ if (!document.documentElement.classList.contains("framed")) {
   $("instLatest").addEventListener("click", () => pick.latest && install(pick.latest, `MOPE-1 ${pick.latest.version}`, false));
   $("instFileGo").addEventListener("click", () => pick.file && install(pick.file, pick.file.product, false));
   $("stockGo").addEventListener("click", () => pick.stock && install(pick.stock, "M-VAVE's firmware", true));
+}
+</script>
+<script>
+// bare, in the about page: say how tall it is, so the frame fits it
+if (document.documentElement.classList.contains("bare") && window.parent !== window) {
+  const main = document.querySelector("main");   // (its content, not the frame's own height)
+  const tell = () => window.parent.postMessage({ mope: "height", h: Math.ceil(main.getBoundingClientRect().bottom) + 2 }, "*");
+  new ResizeObserver(tell).observe(main);
+  tell();
 }
 </script>
 </body>

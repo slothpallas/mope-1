@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""The about page as built (web/about/build.py -> SITE/about): every picture is there, 120 x 120 and
-described; every link inside the site and every #anchor lands; it stays light.
+"""The site as built (web/about/build.py -> SITE/index.html, the player in SITE/play/): every picture on the
+front page is there, 120 x 120 and described; every link inside the site and every #anchor lands; the
+site's bar (web/nav.html) is on both pages unchanged; the front page stays light.
   about_test.py SITE          (e.g. build/site)"""
 import pathlib
 import struct
@@ -15,11 +16,13 @@ BUDGET = 600 * 1024                     # the page and all its pictures (og.png 
 class Page(HTMLParser):
     def __init__(self):
         super().__init__()
-        self.imgs, self.srcsets, self.links, self.ids = [], [], [], set()
+        self.imgs, self.srcsets, self.links, self.ids, self.dup = [], [], [], set(), []
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
         if "id" in a:
+            if a["id"] in self.ids:
+                self.dup.append(a["id"])
             self.ids.add(a["id"])
         if tag == "img":
             self.imgs.append(a)
@@ -40,9 +43,10 @@ def png_size(path):
 
 def main():
     site = pathlib.Path(sys.argv[1])
-    about = site / "about"
+    about = site                                        # (the front page is the site's root)
+    front = (about / "index.html").read_text()
     page = Page()
-    page.feed((about / "index.html").read_text())
+    page.feed(front)
     fails = []
 
     def check(ok, what):
@@ -70,13 +74,21 @@ def main():
             target = target / "index.html"
         if not target.is_relative_to(site.resolve()):
             check(False, f"link {href} stays in the site")
-        elif target == (site / "index.html").resolve() and not target.exists():
+        elif target == (site / "play" / "index.html").resolve() and not target.exists():
             print(f"  skip {href} (the player isn't in {site})")
         else:
             check(target.exists(), f"link {href} lands")
             if u.fragment and target.suffix == ".html":
                 check(f'id="{u.fragment}"' in target.read_text(), f"link {href}: its anchor is there")
-    size = sum(f.stat().st_size for f in about.rglob("*") if f.is_file() and f.name != "og.png")
+    check(not page.dup, f"every id is used once ({', '.join(page.dup) or 'none twice'})")
+    nav = (pathlib.Path(__file__).resolve().parents[2] / "web" / "nav.html").read_text()
+    check(nav in front, "the front page carries the site's bar (web/nav.html) unchanged")
+    player = site / "play" / "index.html"
+    if player.exists():
+        check(nav in player.read_text(), "the player carries the same bar")
+    old = site / "about" / "index.html"
+    check(old.exists() and 'url=../' in old.read_text(), "about/ sends old links on to the front page")
+    size = (about / "index.html").stat().st_size + sum(f.stat().st_size for f in (about / "img").iterdir() if f.name != "og.png")
     check(size <= BUDGET, f"the page weighs {size // 1024} KB (at most {BUDGET // 1024})")
     print("about page: " + ("all passed" if not fails else f"{len(fails)} FAILED"))
     return 1 if fails else 0

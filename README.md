@@ -16,9 +16,8 @@ drivers, the update loader, safe mode, the installer's protocol and the build to
 through X0X, FoMni and FiMba-1, the firmware MOPE-1 started from.
 
 > **Status: beta, tested on a real FM-1.** It installs from M-VAVE's own firmware, plays, records and
-> updates itself on the device. Install it from **https://slothpallas.github.io/mope-1/** (Chrome or Edge, USB)
-> or play it there in the browser. The blob in its states and a short manual:
-> **https://slothpallas.github.io/mope-1/about/**. Custom firmware is installed at your own risk: keep M-VAVE's stock
+> updates itself on the device. **https://slothpallas.github.io/mope-1/** has it to play in the browser, the
+> blob in its states, a short manual and the installer (Chrome or Edge, USB). Custom firmware is installed at your own risk: keep M-VAVE's stock
 > firmware (m-vave.com/download) to go back.
 
 ## The blob is the synth
@@ -185,7 +184,7 @@ scripts, only `'wasm-unsafe-eval'` if the page has a content security policy.
 ## Installing it
 
 1. Download M-VAVE's stock firmware (FM-1 V15, "PC Firmware", m-vave.com/download) so you can always go back (the installer's way back takes V15).
-2. Plug the FM-1 into the computer directly with a USB data cable, open **https://slothpallas.github.io/mope-1/** in Chrome or Edge, and press **Install MOPE-1**. Or from a terminal: `python3 tools/fm1_install.py mope-0.1.0.fwsc`.
+2. Plug the FM-1 into the computer directly with a USB data cable, open **https://slothpallas.github.io/mope-1/play/** in Chrome or Edge, and press **Install MOPE-1**. Or from a terminal: `python3 tools/fm1_install.py mope-0.1.0.fwsc`.
 3. It takes about a minute; don't unplug while it writes (if it's cut off, press Install again: it continues).
 
 Leaving it is the same: install another firmware, or M-VAVE's, from the hub or its own installer. If a firmware ever crashes at start-up, the FM-1 comes up in safe mode after two tries (USB on, the installer works); the chip's own update mode can't be overwritten.
