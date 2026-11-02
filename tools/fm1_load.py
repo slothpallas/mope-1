@@ -136,6 +136,7 @@ def main():
     a.add_argument("--crash", action="store_true", help="print the last crash and the boot count")
     a.add_argument("--wiggle", type=float, default=0, help="seconds of beat + chords + LFO knob turning")
     a.add_argument("--chaos", type=float, default=0, help="seconds of everything at random over MIDI")
+    a.add_argument("--punch", type=int, nargs="*", default=[], help="punches held during the measurement (PU_* numbers)")
     o_ = a.parse_args()
     name = o_.port or next((n for n in mido.get_output_names() if "FM-1" in n or "Felucca" in n), None)
     if not name:
@@ -178,6 +179,8 @@ def main():
             before = ask(i, o)
             for n in chord:
                 o.send(mido.Message("note_on", note=n, velocity=100))
+            for fx in o_.punch:
+                o.send(mido.Message("control_change", control=105, value=64 + fx))
             worst, avgs, end = 0.0, [], time.time() + o_.secs
             while time.time() < end:
                 time.sleep(0.25)
@@ -186,6 +189,8 @@ def main():
                     worst = max(worst, s["worst"])
                     avgs.append(s["avg"])
             s = ask(i, o) or before
+            for fx in o_.punch:
+                o.send(mido.Message("control_change", control=105, value=fx))
             for n in chord:
                 o.send(mido.Message("note_off", note=n))
             time.sleep(1.5)
