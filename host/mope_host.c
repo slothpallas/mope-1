@@ -22,7 +22,7 @@
  *   film N MS NAME               N shots MS apart: NAME_00.png .. (for the site's loops)
  *   leds                         print the lit buttons and keys
  *   expect WHAT VALUE            check state: exit 1 on mismatch; VALUE "<N" / ">N" is a bound
- *                                (WHAT: page dirty store_writes midi_out voices gates drums style steals
+ *                                (WHAT: page dirty store_writes midi_out voices gates drums style steals punch punchbuf
  *                                 dropped rec loopn arp arpseq latch xp parN (parameter N, synth.h P_*) kicks hats
  *                                 lumaY (brightness 0..255 of the screen at x 2, row Y)
  *                                 pixRGB X Y (not here: see shot) peak_db_max peak_db_min)
@@ -370,6 +370,10 @@ static int expect(const char *what, const char *val)
         got = sy_tel.style;
     else if (!strcmp(what, "steals"))
         got = (int)sy_tel.steals;
+    else if (!strcmp(what, "punch"))
+        got = (int)sy_tel.punch;
+    else if (!strcmp(what, "punchbuf"))
+        got = (int)sy_tel.punch_buf;
     else if (!strcmp(what, "kicks"))
         got = (int)sy_tel.kick_n;
     else if (!strcmp(what, "hats"))

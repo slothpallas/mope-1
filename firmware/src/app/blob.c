@@ -48,6 +48,9 @@ static struct {
     float vamt;                                         /* how big the LFO's dance is now (notes: big; idle: small) */                                /* the light's angle round it (turns) and where it goes */
     uint32_t lnotes;                                  /* the camera: how close, on what (in radii from the centre) */
     float sigh_due;
+    float pw[PU_N];                                     /* each punch, how much of it shows now (0..1) */
+    float rep_t, last_ph;                               /* REPEAT / STUTTER: the moment it goes back to, the slice's last phase */
+    float eye_close, grey, grain;                       /* the punches' marks on the body: shut eyes, colour gone, dissolving */
     uint32_t rng;
 } bs;
 
@@ -465,6 +468,14 @@ static void shade_px(const shade_t *sh, int32_t x, int32_t y)
         if (rim > 0.55f + dith * 0.5f)
             c = rim > 0.9f ? PC_AMBER : PC_ORANGE;
     }
+    if (bs.grain > 0.0f) {                               /* GRAIN: falling apart into a cloud of its own pixels */
+        const uint32_t hh = ((uint32_t)x * 73856093u) ^ ((uint32_t)y * 19349663u) ^ ((uint32_t)(bs.t * 9.0f) * 83492791u);
+        const float spread = sh->rmax * 0.6f * bs.grain;
+        if ((float)(hh & 255u) < bs.grain * 170.0f)
+            return;
+        x += (int32_t)(((float)((hh >> 8) & 31u) - 15.5f) / 15.5f * spread);
+        y += (int32_t)(((float)((hh >> 13) & 31u) - 15.5f) / 15.5f * spread);
+    }
     px_pset(x, y, c);
     /* its reflection in the wet floor: mirrored, darker, broken up */
     if (sh->refl > 0.0f) {
@@ -584,7 +595,7 @@ static void draw_body(const geo_t *g, float sqx, float sqy)
         sh.rmax = sh.rr[k] > sh.rmax ? sh.rr[k] : sh.rmax;
     }
     sh.rr[NV] = sh.rr[0];
-    sh.ramp = RAMP_BLOB;
+    sh.ramp = bs.grey > 0.5f ? RAMP_FOG : RAMP_BLOB;    /* (a tape stopping: the colour goes with it) */
     sh.fry = fry < 0.2f ? 0.0f : (fry - 0.2f) * 1.6f;
     sh.spec = (fry > 0.6f ? 0.4f : 0.8f) * mm_clampf(2.4f - bs.zoom, 0.0f, 1.0f);   /* (none in a close-up) */
     sh.verb = pn(P_REVERB) * sy_tel.verb * 1.5f;
@@ -623,6 +634,9 @@ static void draw_face(const geo_t *g)
     }
     open *= 1.0f - bs.blink;
     open *= 1.0f - bs.sleep;
+    open *= 1.0f - bs.eye_close;                         /* (muffled, or a tape stopping: they close) */
+    if (bs.grain > 0.6f)                                 /* (falling apart: no face left to see) */
+        return;
     if (fine)
         open = 0.35f;
     for (e = -1; e <= 1; e += 2) {
@@ -1287,6 +1301,28 @@ static void schem_dust(const drawer_t *p)                /* an old record: the b
     }
 }
 
+/* the punch pads: twelve, the white keys F3 .. C5, two rows of six; the ones punching lit */
+static const char *const PUNCH_PAD[PU_N] = {"1/2", "X2", "STP", "REV", "RPT", "STU", "GAT", "GRN", "CRU", "SWP", "WSH", "WOB"};
+static const char *const PUNCH_NAME[PU_N] = {"HALF", "DOUBLE", "STOP", "REVERSE", "REPEAT", "STUTTER", "GATE", "GRAIN", "CRUSH",
+                                            "SWEEP", "WASH", "WOBBLE"};
+static void schem_punch(const drawer_t *p)
+{
+    int i;
+    for (i = 0; i < PU_N; i++) {
+        const int32_t x = p->gx0 + (i % 6) * 19, y = p->gy0 + 1 + (i / 6) * 14;
+        const int on = sy_tel.punch >> i & 1u;
+        if (on)
+            px_rect(x, y, 17, 9, PC_TEAR);
+        else {
+            px_rect(x, y, 17, 1, PC_WALL2);
+            px_rect(x, y + 8, 17, 1, PC_WALL2);
+            px_rect(x, y, 1, 9, PC_WALL2);
+            px_rect(x + 16, y, 1, 9, PC_WALL2);
+        }
+        px_text(x + 9 - px_text_w(PUNCH_PAD[i]) / 2, y + 2, PUNCH_PAD[i], on ? PC_BG0 : PC_DIM);
+    }
+}
+
 /* a round step: d 3 (a plus) or 4/5 (corners cut); ring: only its edge */
 static void step_dot(int32_t x, int32_t y, int32_t d, uint8_t c, int ring)
 {
@@ -1553,6 +1589,14 @@ static void draw_panel(const geo_t *g)
         const char *what = 0;
         switch (ui.page) {
         case PG_BODY: what = SY_TABLE_NAME[proj.par[P_TABLE]]; break;
+        case PG_PUNCH: {                                 /* the buffer one playing, else the newest tone one, else how */
+            int fx = sy_tel.punch_buf;
+            for (i = PU_N - 1; fx < 0 && i > PU_GRAIN; i--)
+                if (sy_tel.punch >> i & 1u)
+                    fx = i;
+            what = fx >= 0 ? PUNCH_NAME[fx] : "HOLD + A KEY";
+            break;
+        }
         case PG_VIBE: what = LFO_SHAPE_NAME[proj.par[P_LFOSHAPE]]; break;
         case PG_DECK: what = sy_style_name(proj.par[P_STYLE]); break;
         case PG_ARP: what = ARP_RATE_NAME[proj.par[P_ARPRATE]]; break;
@@ -1582,7 +1626,7 @@ static void draw_panel(const geo_t *g)
     p.gx0 = 4;
     p.gx1 = PX_W - 5;
     p.gy0 = p.y0 + 12;
-    p.gy1 = p.y0 + 30;
+    p.gy1 = ui.page == PG_PUNCH || ui.page == PG_SAVE ? p.y0 + 41 : p.y0 + 30;   /* (no knob row: the whole drawer) */
     grid(&p);
     switch (ui.page) {
     case PG_BODY: schem_body(&p); break;
@@ -1593,6 +1637,7 @@ static void draw_panel(const geo_t *g)
     case PG_WALLS: schem_walls(&p); break;
     case PG_COPIES: schem_copies(&p); break;
     case PG_DUST: schem_dust(&p); break;
+    case PG_PUNCH: schem_punch(&p); break;
     case PG_DECK: schem_deck(&p); break;
     case PG_MIX: schem_mix(&p); break;
     case PG_ARP: schem_arp(&p); break;
@@ -1866,6 +1911,78 @@ static void animate(const geo_t *g)
 }
 
 /* ------------------------------------------------------------ the frame --- */
+/* is this pixel the blob's (its body, its face)? (the punches' after-touches only change the blob) */
+static int is_blob(uint8_t c)
+{
+    return (c >= PC_BLOB0 && c <= PC_TONGUE) || c == PC_BLOBD || c == PC_BLOBM || c == PC_SPEC || c == PC_EYE2 ||
+           c == PC_ORANGE || c == PC_AMBER;
+}
+/* the punches, after everything in the room is drawn and before the drawer: mirrored, glitched, gated,
+ * crushed, warped, washed */
+static void punch_post(const geo_t *g)
+{
+    const int32_t top = 0, bot = (int32_t)g->drawer < PX_H ? (int32_t)g->drawer : PX_H;
+    const int32_t x0 = (int32_t)(g->cx - g->r * 1.5f), x1 = (int32_t)(g->cx + g->r * 1.5f);
+    const int32_t y0 = (int32_t)(g->cy - g->r * 1.4f), y1 = (int32_t)(g->cy + g->r * 1.4f);
+    int32_t x, y;
+    if (bs.pw[PU_REVERSE] > 0.5f)                         /* REVERSE: the blob the other way round */
+        for (y = y0 < top ? top : y0; y < (y1 < bot ? y1 : bot); y++)
+            for (x = x0; x < (int32_t)g->cx; x++) {
+                const int32_t m = 2 * (int32_t)g->cx - x;
+                const uint8_t a = px_get(x, y), b = px_get(m, y);
+                if (is_blob(a) || is_blob(b)) {
+                    px_pset(x, y, b);
+                    px_pset(m, y, a);
+                }
+            }
+    if (bs.pw[PU_REPEAT] > 0.3f || bs.pw[PU_STUTTER] > 0.3f) {   /* REPEAT, STUTTER: rows of it slip sideways */
+        const int n = bs.pw[PU_STUTTER] > 0.3f ? 7 : 4;
+        int i;
+        for (i = 0; i < n; i++) {
+            const uint32_t hh = (uint32_t)i * 2654435761u ^ (uint32_t)(sy_tel.punch_ph * 8.0f) * 40503u;
+            const int32_t ry = y0 + (int32_t)(hh % (uint32_t)(y1 - y0 > 1 ? y1 - y0 : 1)), sh = (int32_t)((hh >> 10) % 7u) - 3;
+            uint8_t row[PX_W];
+            if (ry < top || ry >= bot || sh == 0)
+                continue;
+            for (x = 0; x < PX_W; x++)
+                row[x] = px_get(x, ry);
+            for (x = x0; x <= x1; x++)
+                if (is_blob(row[x - sh >= 0 && x - sh < PX_W ? x - sh : x]))
+                    px_pset(x, ry, row[x - sh >= 0 && x - sh < PX_W ? x - sh : x]);
+        }
+    }
+    if (bs.pw[PU_GATE] > 0.5f && sy_tel.punch_ph >= 0.55f)   /* GATE shut: only its outline */
+        for (y = y0 < top + 1 ? top + 1 : y0; y < (y1 < bot - 1 ? y1 : bot - 1); y++)
+            for (x = x0 < 1 ? 1 : x0; x < (x1 < PX_W - 1 ? x1 : PX_W - 1); x++)
+                if (is_blob(px_get(x, y)) && is_blob(px_get(x - 1, y)) && is_blob(px_get(x + 1, y)) &&
+                    is_blob(px_get(x, y - 1)) && is_blob(px_get(x, y + 1)))
+                    px_pset(x, y, (x + y) & 3 ? PC_BG0 : PC_BG1);
+    if (bs.pw[PU_CRUSH] > 0.3f) {                         /* CRUSH: the whole picture in blocks */
+        const int32_t b = 2 + (int32_t)(bs.pw[PU_CRUSH] * 2.0f);
+        for (y = top; y < bot; y += b)
+            for (x = 0; x < PX_W; x += b) {
+                const uint8_t c = px_get(x, y);
+                px_rect(x, y, b, (y + b <= bot ? b : bot - y), c);
+            }
+    }
+    if (bs.pw[PU_WOBBLE] > 0.05f)                         /* WOBBLE: the picture warped, row by row */
+        for (y = top; y < bot; y++) {
+            const int32_t sh = (int32_t)(2.8f * bs.pw[PU_WOBBLE] * mm_sin_turns((float)y * 0.035f + bs.t * 0.9f) + 0.5f);
+            uint8_t row[PX_W];
+            if (!sh)
+                continue;
+            for (x = 0; x < PX_W; x++)
+                row[x] = px_get(x, y);
+            for (x = 0; x < PX_W; x++)
+                px_pset(x, y, row[(x - sh + PX_W) % PX_W]);
+        }
+    if (bs.pw[PU_WASH] > 0.05f)                           /* WASH: a bright fog over it all */
+        for (y = top; y < bot; y++)
+            for (x = 0; x < PX_W; x++)
+                if (px_dith4(x, y) + 0.5f < bs.pw[PU_WASH] * 0.35f)
+                    px_pset(x, y, (x * 7 + y * 3) % 11 ? PC_SHEEN : PC_WHITE);
+}
+
 static void blob_draw(void)
 {
     const uint32_t now = plat_ms();
@@ -1877,7 +1994,29 @@ static void blob_draw(void)
     if (bs.dt > 0.1f)
         bs.dt = 0.1f;
     bs.last_ms = now;
-    bs.t += bs.dt;
+    {   /* the punches: each one's show follows the engine; some bend time (half, double, stopping, going round) */
+        int fx;
+        float tf = 1.0f;
+        for (fx = 0; fx < PU_N; fx++) {
+            const float want = (sy_tel.punch >> fx & 1u) ? (fx <= PU_GRAIN ? sy_tel.punch_wet : 1.0f) : 0.0f;
+            bs.pw[fx] = approach(bs.pw[fx], want, bs.dt * 14.0f);
+        }
+        tf *= 1.0f - 0.5f * bs.pw[PU_HALF];
+        tf *= 1.0f + bs.pw[PU_DOUBLE];
+        tf *= 1.0f - bs.pw[PU_STOP] * (1.0f - sy_tel.punch_k);
+        bs.t += bs.dt * tf;
+        if (sy_tel.punch_buf == PU_REPEAT || sy_tel.punch_buf == PU_STUTTER) {   /* round again: so is everything */
+            if (sy_tel.punch_ph < bs.last_ph)
+                bs.t = bs.rep_t;
+            else if (bs.last_ph == 0.0f)
+                bs.rep_t = bs.t;
+            bs.last_ph = sy_tel.punch_ph + 1e-4f;
+        } else
+            bs.last_ph = 0.0f;
+        bs.eye_close = mm_maxf(bs.pw[PU_SWEEP] * sy_tel.punch_k, bs.pw[PU_STOP] * (1.0f - sy_tel.punch_k));
+        bs.grey = bs.pw[PU_STOP] * (1.0f - sy_tel.punch_k);
+        bs.grain = bs.pw[PU_GRAIN];
+    }
     /* the panel slides in and out; the room takes what is left */
     bs.panel = approach(bs.panel, ui.panel || preset_card() ? 1.0f : 0.0f, bs.dt * 8.0f);
     pa = bs.panel;
@@ -1985,6 +2124,20 @@ static void blob_draw(void)
         g.pool = g.floor > (float)PX_H ? g.floor : mm_minf(rest + 5.0f + g.r * 0.2f, g.ab - 4.0f);
         g.pcx = g.rcx;
     }
+    {   /* the punches' poses: half speed lies down flat on the floor, double speed flies up to the ceiling, a
+         * stopping tape sinks and droops (its shadow stays where the floor is) */
+        const float half = bs.pw[PU_HALF], dbl = bs.pw[PU_DOUBLE], stop = bs.pw[PU_STOP] * (1.0f - sy_tel.punch_k);
+        sqy *= (1.0f - 0.45f * half) * (1.0f + 0.12f * dbl) * (1.0f - 0.2f * stop);
+        sqx *= (1.0f + 0.4f * half) * (1.0f - 0.08f * dbl) * (1.0f + 0.08f * stop);
+        g.cy += g.r * (0.5f * half + 0.3f * stop) - g.r * 0.72f * dbl;
+        if (dbl > 0.5f && (b_rnd() & 3u) == 0u)          /* (speed: sparks off its underside) */
+            spawn(PK_SPARK, g.cx + b_rs() * g.r * 0.6f, g.cy + g.r * 0.8f, b_rs() * 10.0f, 30.0f + b_rf() * 20.0f, 0.4f);
+        if (bs.pw[PU_WASH] > 0.3f) {
+            bs.wall_flash = mm_maxf(bs.wall_flash, bs.pw[PU_WASH]);
+            if ((b_rnd() & 7u) == 0u)
+                spawn(PK_STEAM, g.cx + b_rs() * g.r, g.cy + b_rs() * g.r * 0.5f, b_rs() * 4.0f, -6.0f, 1.2f);
+        }
+    }
 
     animate(&g);
     drips_move();
@@ -2005,6 +2158,7 @@ static void blob_draw(void)
     draw_unlocks(&g);
     draw_voices(&g);
     draw_particles();
+    punch_post(&g);
     draw_cassette(&g);
     draw_panel(&g);
     draw_xp();

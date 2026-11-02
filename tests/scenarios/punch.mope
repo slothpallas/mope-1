@@ -1,0 +1,98 @@
+# The punches: hold FX, and a white key punches while it is held (F3 .. C5: HALF DOUBLE STOP REVERSE REPEAT
+# STUTTER GATE GRAIN CRUSH SWEEP WASH WOBBLE); black keys still play. A chord plays under it all.
+wait 300
+midi 90 30 64
+midi 90 37 64
+midi 90 3c 64
+wait 600
+press FX
+expect page 16
+key w0 down
+wait 300
+expect punch 1
+expect punchbuf 0
+shot 00_half.png
+key w0 up
+wait 200
+key w1 down
+wait 300
+expect punchbuf 1
+shot 01_double.png
+key w1 up
+wait 200
+key w2 down
+wait 500
+shot 02_stop.png
+key w2 up
+wait 200
+key w3 down
+wait 300
+shot 03_reverse.png
+key w3 up
+wait 200
+key w4 down
+wait 300
+expect punchbuf 4
+shot 04_repeat.png
+# a tone punch on top of a buffer one: both
+key w8 down
+wait 200
+expect punch 272
+shot 04b_repeat_crush.png
+key w8 up
+key w4 up
+wait 200
+key w5 down
+wait 300
+shot 05_stutter.png
+key w5 up
+wait 200
+key w6 down
+wait 300
+shot 06_gate.png
+key w6 up
+wait 200
+key w7 down
+wait 400
+shot 07_grain.png
+key w7 up
+wait 200
+key w8 down
+wait 300
+shot 08_crush.png
+key w8 up
+wait 200
+key w9 down
+wait 900
+shot 09_sweep.png
+key w9 up
+wait 200
+key w10 down
+wait 800
+shot 10_wash.png
+key w10 up
+wait 200
+key w11 down
+wait 500
+shot 11_wobble.png
+# FX let go, the key still held: still punching
+release FX
+wait 200
+expect punch 2048
+key w11 up
+wait 600
+expect punch 0
+# a black key with FX held still plays
+press FX
+key b0 down
+wait 200
+expect voices >3
+key b0 up
+release FX
+# and without FX a white key is a note again
+tapkey w2
+wait 100
+expect punch 0
+midi 80 30 00
+midi 80 37 00
+midi 80 3c 00

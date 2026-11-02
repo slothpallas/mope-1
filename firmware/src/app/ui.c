@@ -221,6 +221,7 @@ static struct {
     uint32_t preset_t;                 /* when PRESETS last turned: its card shows a moment (0: never) */
     uint8_t key_note[NKEYS];           /* the note each key started (its note off) */
     uint32_t stepped;                  /* keys pressed as the loop's steps (their preview to stop) */
+    uint32_t punched;                   /* keys punching (FX held when they went down): up, the punch ends */
     uint8_t loop_bar, step_note;       /* the bar the steps show; the note a new step gets */
     int16_t step_held;                 /* a step key down on a step with notes: let go untouched, they go */
     uint8_t preview;                   /* the note a step key is sounding */
@@ -446,10 +447,25 @@ static int white_of(int k)
     return -1;
 }
 
+/* what each punch says when it starts, in its voice (white keys F3 .. C5, PU_* order) */
+static const char *const PUNCH_SAID[PU_N] = {"HALF.", "TWICE. WHY.", "STOP.", "BACKWARDS.", "AGAIN AGAIN.", "S-S-STUTTER.",
+                                             "ON OFF ON OFF.", "FALLING APART.", "CRUSHED.", "MUFFLED.", "WASHED OUT.",
+                                             "WARPED."};
 static void key_down(int k)
 {
     int n = KEY0_NOTE + k + 12 * proj.par[P_OCTAVE];
     n = n < 0 ? 0 : n > 127 ? 127 : n;
+    if (ui.btn >> B_FX & 1u) {                           /* FX held: the white keys punch (the black ones still play) */
+        const int w = white_of(k);
+        if (w >= 0 && w < PU_N) {
+            sy_punch(w, 1);
+            ui.punched |= 1u << k;
+            ui.btn_used |= 1u << B_FX;
+            ui_caption(PUNCH_SAID[w], 900u);
+            ui.page_until = plat_ms() + STAY_MS;
+            return;
+        }
+    }
     if (step_mode()) {                                   /* a white key: that 1/16 step of the bar on show */
         const int w = white_of(k);
         if (w >= 0) {
@@ -483,6 +499,11 @@ static void key_down(int k)
 }
 static void key_up(int k)
 {
+    if (ui.punched >> k & 1u) {                          /* a punch lasts until its key is up (FX let go or not) */
+        ui.punched &= ~(1u << k);
+        sy_punch(white_of(k), 0);
+        return;
+    }
     if (ui.stepped >> k & 1u) {
         ui.stepped &= ~(1u << k);
         sy_note_off(ui.preview);
@@ -644,6 +665,7 @@ static void midi_cc(uint32_t cc, uint32_t v)
 {
     switch (cc) {
     case 104: sy_drums(v >= 64u); break;               /* (the deck, for testing over USB) */
+    case 105: sy_punch((int)(v & 63u), v >= 64u); break;   /* (a punch: 64 + n on, n off; for testing over USB) */
     case 102: cc_param = (int)v < P_NPARAMS ? (int)v : P_NPARAMS - 1; break;
     case 103: {
         const sy_param_t *pi = sy_param_info(cc_param);
@@ -733,7 +755,7 @@ static void input(void)
     /* the lowest and the highest key together: it gives up, flat */
     {
         const uint32_t both = 1u | 1u << (NKEYS - 1);
-        uint8_t p = (keys & both) == both;
+        uint8_t p = (keys & both) == both && !(btn >> B_FX & 1u);   /* (not while punching) */
         if (p && !ui.pancake)
             ui_caption("SAME.", 2000u);
         ui.pancake = p;
@@ -788,7 +810,7 @@ static void input(void)
 /* ------------------------------------------------------------- lights --- */
 static void leds(void)
 {
-    uint32_t b = 1u << PAGE_BTN[ui.page];
+    uint32_t b = PAGE_BTN[ui.page] < NB ? 1u << PAGE_BTN[ui.page] : 0u, dim = 0u;
     if (sy_tel.drums_on && sy_tel.step % (sy_tel.steps / 4u ? sy_tel.steps / 4u : 4u) != 0u)
         b |= 1u << B_PLAY;                               /* lit, dark on each beat */
     if (sy_tel.rec == 2 || (sy_tel.rec == 1 && (plat_ms() / 125u) & 1u))
@@ -799,7 +821,15 @@ static void leds(void)
         b |= 1u << B_OCTDN | 1u << B_OCTUP;
     else if (proj.par[P_OCTAVE] != 0)                    /* up or down an octave or more: that way lit */
         b |= 1u << (proj.par[P_OCTAVE] > 0 ? B_OCTUP : B_OCTDN);
-    plat_leds(b, ui.keys, 0u);
+    if (ui.btn >> B_FX & 1u) {                           /* FX held: the punch pads dim, the ones punching lit */
+        int k;
+        for (k = 0; k < NKEYS; k++) {
+            const int w = white_of(k);
+            if (w >= 0 && w < PU_N)
+                dim |= 1u << k;
+        }
+    }
+    plat_leds(b, ui.keys | ui.punched, dim & ~ui.punched);
 }
 
 /* AUTOSAVE: a few seconds after a change, when it is quiet (a flash erase silences the audio a moment) */
