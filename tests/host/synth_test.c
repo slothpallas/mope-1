@@ -315,6 +315,151 @@ int main(int argc, char **argv)
         quiet();
     }
 
+    printf("punches\n");
+    {
+        int k, fx, eq;
+        float lo, mid, hi, before, after, most, least;
+        for (k = 0; k < P_NPARAMS; k++)
+            sy_set(k, sy_param_info(k)->def);
+        sy_set(P_GUNK, 0);
+        sy_set(P_TAPE, 0);
+        sy_set(P_CHORUS, 0);
+        sy_set(P_DELAY, 0);
+        sy_set(P_REVERB, 0);
+        sy_set(P_LFODEPTH, 0);
+        sy_set(P_DETUNE, 0);
+        sy_set(P_SUB, 0);
+        sy_set(P_POS, 0);                               /* (PLAIN at its start: a sine) */
+        sy_set(P_CUTOFF, 100);
+        sy_set(P_SUSTAIN, 100);
+        quiet();
+        /* HALF and DOUBLE: a 440 Hz sine comes out an octave down, an octave up */
+        sy_note_on(69, 100);
+        run(600);
+        for (fx = PU_HALF; fx <= PU_DOUBLE; fx++) {
+            sy_punch(fx, 1);
+            run(400);
+            capture();
+            lo = goertzel(220.0f);
+            mid = goertzel(440.0f);
+            hi = goertzel(880.0f);
+            if (fx == PU_HALF)
+                CHECK(lo > mid * 10.0f, "HALF: an octave down (220 Hz %.0f dB over 440)", (double)(10.0f * mm_log2f(lo / mid) * 0.30103f));
+            else
+                CHECK(hi > mid * 10.0f, "DOUBLE: an octave up (880 Hz %.0f dB over 440)", (double)(10.0f * mm_log2f(hi / mid) * 0.30103f));
+            sy_punch(fx, 0);
+            run(100);
+        }
+        capture();
+        CHECK(goertzel(440.0f) > goertzel(220.0f) * 100.0f && sy_tel.punch == 0, "let go: back to the note as it was");
+        /* STOP: slower, then nothing */
+        before = level(100);
+        sy_punch(PU_STOP, 1);
+        run(900);
+        after = level(100);
+        CHECK(after < before * 0.01f, "STOP: then nothing (%.4f of it)", (double)(after / before));
+        sy_punch(PU_STOP, 0);
+        run(50);
+        CHECK(level(100) > before * 0.5f, "...and back when let go");
+        /* GATE: open, shut, open, shut */
+        sy_punch(PU_GATE, 1);
+        run(100);
+        most = 0.0f;
+        least = 1.0f;
+        for (k = 0; k < 40; k++) {
+            const float lv = level(10);
+            most = lv > most ? lv : most;
+            least = lv < least ? lv : least;
+        }
+        CHECK(least < most * 0.1f, "GATE: open and shut (%.0f dB between)", (double)(20.0f * mm_log2f(most / (least + 1e-9f)) * 0.30103f));
+        sy_punch(PU_GATE, 0);
+        run(100);
+        /* CRUSH: the samples held, a fifth of the rate */
+        sy_punch(PU_CRUSH, 1);
+        run(100);
+        sy_render(blk, 256, 4096);
+        for (eq = 0, k = 1; k < 256; k++)
+            eq += blk[2 * k] == blk[2 * k - 2];
+        CHECK(eq > 160, "CRUSH: each sample held (%d of 255 the same as the last)", eq);
+        sy_punch(PU_CRUSH, 0);
+        run(100);
+        sy_note_off(69);
+        quiet();
+        /* SWEEP: a bright saw goes dark */
+        sy_set(P_POS, 100);                             /* (PLAIN's end: a saw) */
+        sy_note_on(57, 100);
+        run(300);
+        capture();
+        before = goertzel(3960.0f);
+        sy_punch(PU_SWEEP, 1);
+        run(1600);
+        capture();
+        after = goertzel(3960.0f);
+        CHECK(after < before * 0.01f, "SWEEP: the top closes (%.0f dB down at 4 kHz)", (double)(10.0f * mm_log2f(before / (after + 1e-20f)) * 0.30103f));
+        sy_punch(PU_SWEEP, 0);
+        run(300);
+        /* REPEAT: the note changes, but what comes out is the kept slice, again and again */
+        sy_punch(PU_REPEAT, 1);
+        run(40);
+        sy_note_off(57);
+        sy_note_on(64, 100);
+        run(400);
+        capture();
+        CHECK(goertzel(220.0f) > goertzel(329.6f) * 10.0f, "REPEAT: the slice from before goes round (not the new note)");
+        sy_punch(PU_REPEAT, 0);
+        run(200);
+        capture();
+        CHECK(goertzel(329.6f) > goertzel(220.0f) * 10.0f, "...let go: the new note");
+        sy_note_off(64);
+        quiet();
+        /* WASH: the room holds on long after the note */
+        sy_set(P_REVERB, 40);
+        sy_set(P_SIZE, 30);
+        sy_note_on(60, 100);
+        run(300);
+        sy_note_off(60);
+        run(2000);
+        before = level(200);
+        quiet();
+        sy_note_on(60, 100);
+        run(300);
+        sy_punch(PU_WASH, 1);
+        sy_note_off(60);
+        run(2000);
+        after = level(200);
+        CHECK(after > before * 10.0f, "WASH: the room holds it (%.0f dB more, 2 s on)", (double)(20.0f * mm_log2f(after / (before + 1e-9f)) * 0.30103f));
+        sy_punch(PU_WASH, 0);
+        sy_set(P_REVERB, 0);
+        quiet();
+        run(3000);
+        /* every one on silence: silence; all of them together: nothing breaks; a wrong one: nothing */
+        for (fx = 0; fx < PU_N; fx++) {
+            sy_punch(fx, 1);
+            run(150);
+            CHECK(level(100) < 1e-4f, "%d on silence: silence", fx);
+            sy_punch(fx, 0);
+            run(50);
+        }
+        sy_punch(99, 1);
+        sy_punch(-1, 1);
+        sy_note_on(48, 127);
+        sy_note_on(55, 127);
+        for (fx = 0; fx < PU_N; fx++)
+            sy_punch(fx, 1);
+        bad = 0;
+        peak = 0.0f;
+        run(2000);
+        for (fx = 0; fx < PU_N; fx++)
+            sy_punch(fx, 0);
+        run(300);
+        CHECK(!bad && peak <= 1.0f && sy_tel.punch == 0, "all twelve at once, then none: no NaN, nothing over (peak %.2f)", (double)peak);
+        sy_note_off(48);
+        sy_note_off(55);
+        for (k = 0; k < P_NPARAMS; k++)
+            sy_set(k, sy_param_info(k)->def);
+        quiet();
+    }
+
     printf("envelope\n");
     sy_set(P_ATTACK, 80);                               /* ~1.4 s */
     sy_set(P_TABLE, 0);

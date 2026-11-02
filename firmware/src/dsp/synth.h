@@ -122,6 +122,11 @@ int sy_loop_copy(sy_ev_t *dst, int max);            /* into a project, to save *
 const sy_ev_t *sy_loop_events(int *n);              /* for the screen: read-only, may change under you */             /* the notes it is cycling, low to high (for the screen) */
 int sy_arp_note(int held_n, int seq);               /* the note it plays at step seq over held_n notes (-1: a rest; STAB: the lowest) */
 void sy_panic(void);
+/* the punches: FX held, a key held, an effect on the whole mix while it is held. The buffer ones (HALF ..
+ * GRAIN) play one at a time (the last one held); the others stack on top. */
+enum { PU_HALF, PU_DOUBLE, PU_STOP, PU_REVERSE, PU_REPEAT, PU_STUTTER, PU_GATE, PU_GRAIN, PU_CRUSH, PU_SWEEP, PU_WASH,
+       PU_WOBBLE, PU_N };
+void sy_punch(int fx, int on);
 void sy_load(int pct);                              /* the last block's time, % of its budget (the device's): over 88, a voice goes */
 
 /* the render (audio ISR): n stereo frames, 24-bit in int32; gain Q12 (the MASTER pot) */
@@ -143,6 +148,11 @@ typedef struct {
     float wave_env;               /* the loudest voice's sweep of the table (SIGH), -1..1 */
     float wave_pos;               /* where in the table it is now, with every modulation, 0..1 */
     float wave_tbl;               /* which table, with the LFOs scanning across them (0..15, between two: both) */
+    uint16_t punch;               /* the punches sounding (a bit each, PU_*; still fading out: still set) */
+    int8_t punch_buf;             /* the buffer punch playing (PU_HALF .. PU_GRAIN), -1 none */
+    float punch_wet;              /* how much of it is heard, 0..1 */
+    float punch_ph;               /* where in its slice, gate step or stop it is, 0..1 */
+    float punch_k;                /* STOP: the speed left; SWEEP: how closed; WASH: how held */
     uint8_t amp_stage;            /* the loudest voice's envelope: 0 off, 1 attack, 2 decay, 3 sustain, 4 release */
     float out_peak;               /* the output's peak over the last block, before the limiter */
     float echo;                   /* what the delay is sending back, 0..~1 */
