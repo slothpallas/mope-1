@@ -2,6 +2,7 @@
 /* MOPE-1 project: one flash object (OBJ_PROJ). A project of another format, or none (or FoMni's),
  * gives the defaults. Part of the unity build, after app.h. */
 project_t proj;
+presets_t presets;
 
 void project_defaults(void)
 {
@@ -84,4 +85,35 @@ void project_apply(void)
     for (i = 0; i < P_NPARAMS; i++)
         sy_set(i, proj.par[i]);
     sy_loop_load(proj.loop, proj.loop_n);
+}
+
+/* your presets: a slot's values out of range (or ones it was saved without) take their defaults */
+int presets_load(void)
+{
+    int n, i, k;
+    memset(&presets, 0, sizeof presets);
+    n = plat_store_load(OBJ_PRESETS, &presets, sizeof presets);
+    if (n < 12 || presets.magic != PRESETS_MAGIC || presets.npar > PRESET_NPAR) {
+        memset(&presets, 0, sizeof presets);
+        presets.magic = PRESETS_MAGIC;
+        presets.format = 1;
+        presets.npar = P_NPARAMS;
+        return -1;
+    }
+    for (k = 0; k < PRESET_SLOTS; k++)
+        for (i = 0; i < P_NPARAMS; i++) {
+            const sy_param_t *p = sy_param_info(i);
+            if (i >= presets.npar || presets.slot[k].par[i] < p->lo || presets.slot[k].par[i] > p->hi)
+                presets.slot[k].par[i] = p->def;
+        }
+    presets.npar = P_NPARAMS;
+    return 0;
+}
+
+int presets_save(void)
+{
+    presets.magic = PRESETS_MAGIC;
+    presets.format = 1;
+    presets.npar = P_NPARAMS;
+    return plat_store_save(OBJ_PRESETS, &presets, sizeof presets);
 }
