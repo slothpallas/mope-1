@@ -1143,34 +1143,46 @@ static void schem_shadow(const drawer_t *p)              /* the second wave: its
     }
 }
 
-static void schem_sigh(const drawer_t *p)                /* the second envelope: up, down; how far it moves the wave */
+/* a small picture of one frame (its table at pos), in a dark box: the sigh's from and to */
+static void wave_glyph(int32_t x0, int32_t y0, float pos, uint8_t c)
+{
+    const int tbl = proj.par[P_TABLE];
+    int32_t i, lx = 0, ly = 0;
+    px_rect(x0 - 1, y0 - 1, 18, 10, PC_PANEL);
+    for (i = 0; i <= 15; i++) {
+        const int32_t x = x0 + i, y = y0 + 4 - (int32_t)(sy_shape(tbl, mm_clampf(pos, 0.0f, 1.0f), (float)i / 16.0f) * 3.5f);
+        if (i)
+            px_line(lx, ly, x, y, c);
+        lx = x;
+        ly = y;
+    }
+}
+
+static void schem_sigh(const drawer_t *p)                /* the second envelope: up, down; where it takes the wave */
 {
     const float a = proj.par[P_MATTACK] ? 0.04f + 0.3f * pn(P_MATTACK) : 0.04f + 0.3f * pn(P_ATTACK);
     const float d = 0.05f + 0.6f * pn(P_MODDEC), sweep = (float)proj.par[P_MWAVE] / 100.0f, eyes = pn(P_ENVAMT);
+    const float pos = pn(P_POS);
     float v[56];
     int i;
-    drawer_t q = *p;
-    q.gx1 = p->gx1 - 26;
     for (i = 0; i < 56; i++) {
         const float t = (float)i / 55.0f;
         v[i] = t < a ? t / a : mm_expf(-(t - a) / (d * 0.35f + 0.02f));
     }
-    curve(&q, v, 56, PC_BLOB2, PC_BLOBD, 1);
+    curve(p, v, 56, PC_BLOB2, PC_BLOBD, eyes > 0.02f ? 1 + (int)(eyes * 2.99f) : 0);   /* (Eyes: the fill, thicker) */
     {   /* where the loudest note's is now */
-        const int32_t y = gy_of(&q, sy_tel.mod_env);
+        const int32_t y = gy_of(p, sy_tel.mod_env);
         if (sy_tel.mod_env > 0.02f)
-            px_rect(q.gx0 + 1, y - 1, 3, 3, PC_SPEC);
+            px_rect(p->gx0 + 1, y - 1, 3, 3, PC_SPEC);
     }
-    {   /* two meters: the wave (from the middle: up or down the table) and the eyes */
-        const int32_t xw = p->gx1 - 18, xe = p->gx1 - 7, mid = (p->gy0 + p->gy1) / 2, top = gy_of(p, eyes);
-        const int32_t sw = (int32_t)(sweep * (float)(p->gy1 - p->gy0) * 0.5f);
-        px_line(xw - 2, mid, xw + 4, mid, PC_WALL2);
-        if (sw)
-            px_rect(xw, sw > 0 ? mid - sw : mid, 3, sw > 0 ? sw : -sw, PC_GHOST);
-        px_rect(xe, top, 3, p->gy1 - top, PC_TEAR);
-        px_text(xw - 3, p->gy0 - 1, "W", PC_DIM);
-        px_text(xe - 1, p->gy0 - 1, "E", PC_DIM);
+    /* the wave at the note's start, and the one the sweep reaches at the top (lit if it moves) */
+    wave_glyph(p->gx1 - 40, p->gy1 - 9, pos, PC_WALL2);
+    {
+        const int32_t xp = p->gx0 + (int32_t)(a * (float)(p->gx1 - p->gx0)) + 4;
+        wave_glyph(xp < p->gx1 - 62 ? xp : p->gx1 - 62, p->gy0 + 1, pos + sweep, sweep != 0.0f ? PC_GHOST : PC_WALL2);
     }
+    if (sweep != 0.0f)
+        px_text(p->gx1 - 20, p->gy1 - 8, sweep > 0.0f ? "UP" : "DN", PC_DIM);
 }
 
 static void schem_tears(const drawer_t *p)               /* the delay: the taps, left, right, left, fading */
