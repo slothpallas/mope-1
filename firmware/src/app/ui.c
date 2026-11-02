@@ -229,6 +229,10 @@ static struct {
     uint32_t loop_ver;
     uint32_t save_t, reset_ask;
     uint32_t last_draw;
+    uint8_t naming;                    /* SAVE AS open: the knobs (and typing) edit the name, SAVE keeps it */
+    uint8_t save_slot, cursor;
+    char name[PRESET_NAME + 1];
+    uint32_t name_dice;
 } ui;
 
 static void ui_caption(const char *s, uint32_t ms)
@@ -255,6 +259,11 @@ static uint32_t xp_level(uint32_t xp)
 /* the loop's steps: while its drawer is open (not while recording: then the keys play) */
 static int step_mode(void) { return ui.page == PG_LOOP && ui.panel && !sy_tel.rec; }
 
+#define CAT_MINE NCAT                  /* (yours: their own kind on the card) */
+static int mood_n(void) { return NMOOD + PRESET_SLOTS; }
+static int mood_used(int m) { return m < NMOOD || (m < mood_n() && (presets.used >> (m - NMOOD) & 1u)); }
+static const char *mood_name(int m) { return m < NMOOD ? MOODS[m].name : presets.slot[m - NMOOD].name; }
+static int mood_cat(int m) { return m < NMOOD ? MOODS[m].cat : CAT_MINE; }
 #include "px.c"
 #include "blob.c"
 
@@ -391,10 +400,181 @@ static void set_page(int pg)
     ui.touched = -1;
 }
 
+/* ------------------------------------------------------ your presets --- */
+/* what a preset is: the sound's settings (the table .. the tape, the octave and glide, the shadow .. its
+ * level, the effects' newer knobs), not the mixer, the tempo, the band or the MIDI */
+static int is_sound(int i)
+{
+    return i <= P_TAPE || i == P_GLIDE || i == P_OCTAVE || (i >= P_BTABLE && i <= P_LEVEL) || i >= P_RTONE;
+}
+/* the next preset that way (factory, then yours; empty slots skipped) */
+static int mood_step(int from, int dir)
+{
+    int m = from, k;
+    for (k = 0; k < mood_n(); k++) {
+        m = (m + (dir > 0 ? 1 : mood_n() - 1)) % mood_n();
+        if (mood_used(m))
+            return m;
+    }
+    return from;
+}
+/* a name, in its voice: two words */
+static const char *const NAME_A[] = {"TIRED", "DAMP", "LATE", "GREY", "SOFT", "LOST", "COLD", "NUMB", "STALE", "PALE", "QUIET",
+                                     "WET", "SLOW", "LAST", "SPARE", "FLAT", "DULL", "UNSENT"};
+static const char *const NAME_B[] = {"MONDAY", "SOCK", "TOAST", "RAIN", "CHAIR", "BUS", "TEA", "SOUP", "WINDOW", "PLANT", "MEMO",
+                                     "EMAIL", "TUESDAY", "SHRUG", "NAP", "REGRET", "LAMP", "SIGH"};
+static void sad_name(char *out)
+{
+    const char *a, *b;
+    int n = 0;
+    ui.name_dice = ui.name_dice * 1664525u + 1013904223u + plat_ms();
+    a = NAME_A[(ui.name_dice >> 8) % (sizeof NAME_A / sizeof NAME_A[0])];
+    b = NAME_B[(ui.name_dice >> 20) % (sizeof NAME_B / sizeof NAME_B[0])];
+    while (*a && n < PRESET_NAME)
+        out[n++] = *a++;
+    if (n < PRESET_NAME)
+        out[n++] = ' ';
+    while (*b && n < PRESET_NAME)
+        out[n++] = *b++;
+    out[n] = 0;
+}
+static const char NAME_CHARS[] = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.!?-:',/+";
+static int name_len(void)
+{
+    int n = PRESET_NAME;
+    while (n > 0 && (ui.name[n - 1] == ' ' || ui.name[n - 1] == 0))
+        n--;
+    return n;
+}
+static void name_slot(int slot)                          /* a slot chosen: its name, or a new one */
+{
+    int i;
+    ui.save_slot = (uint8_t)slot;
+    for (i = 0; i <= PRESET_NAME; i++)
+        ui.name[i] = 0;
+    if (presets.used >> slot & 1u)
+        for (i = 0; i < PRESET_NAME; i++)
+            ui.name[i] = presets.slot[slot].name[i];
+    else
+        sad_name(ui.name);
+    for (i = 0; i < PRESET_NAME; i++)                    /* (spaces to the end: the cursor can walk there) */
+        if (!ui.name[i])
+            ui.name[i] = ' ';
+    ui.name[PRESET_NAME] = 0;
+    ui.cursor = (uint8_t)(name_len() < PRESET_NAME ? name_len() : PRESET_NAME - 1);
+}
+static void set_page(int pg);
+static void save_open(void)                              /* SAVE tapped: SAVE AS, a slot and a name */
+{
+    int slot = ui.mood >= NMOOD ? ui.mood - NMOOD : -1, k;
+    for (k = 0; slot < 0 && k < PRESET_SLOTS; k++)
+        if (!(presets.used >> k & 1u))
+            slot = k;                                    /* (yours if it is one of yours, else the first empty) */
+    name_slot(slot < 0 ? 0 : slot);
+    ui.naming = 1;
+    set_page(PG_SAVE);
+    ui_caption("NAME IT. SAVE: KEEP.", 1500u);
+}
+static void save_close(int keep)
+{
+    ui.naming = 0;
+    ui.page_until = plat_ms() + 900u;
+    if (!keep) {
+        ui_caption("NOT SAVED.", 1000u);
+        return;
+    }
+    {
+        preset_slot_t *sl = &presets.slot[ui.save_slot];
+        int i;
+        for (i = 0; i < PRESET_NAME; i++)
+            sl->name[i] = i < name_len() ? ui.name[i] : 0;
+        if (!name_len())
+            sl->name[0] = '?';                           /* (a name of nothing: still something to find it by) */
+        for (i = 0; i < PRESET_NPAR; i++)
+            sl->par[i] = i < P_NPARAMS ? proj.par[i] : 0;
+        presets.used |= (uint16_t)(1u << ui.save_slot);
+        ui.mood = (uint8_t)(NMOOD + ui.save_slot);
+        if (presets_save() == 0 && project_save() == 0) {
+            static char said[32];
+            int n = 0;
+            ui.dirty = 0;
+            for (const char *q = "KEPT AS "; *q; q++)
+                said[n++] = *q;
+            for (i = 0; i < name_len() && n < 29; i++)
+                said[n++] = ui.name[i];
+            said[n++] = '.';
+            said[n] = 0;
+            ui_caption(said, 1600u);
+        } else
+            ui_caption("COULD NOT SAVE.", 1500u);
+    }
+}
+static void name_type(int c)                             /* a typed character, or a key that edits */
+{
+    if (c == 1)
+        ui.cursor = ui.cursor ? ui.cursor - 1 : 0;
+    else if (c == 2)
+        ui.cursor = ui.cursor < PRESET_NAME - 1 ? ui.cursor + 1 : PRESET_NAME - 1;
+    else if (c == 8) {
+        int i;
+        if (ui.cursor)
+            ui.cursor--;
+        for (i = ui.cursor; i < PRESET_NAME - 1; i++)    /* (the rest moves back) */
+            ui.name[i] = ui.name[i + 1];
+        ui.name[PRESET_NAME - 1] = ' ';
+    } else if (c == 13)
+        save_close(1);
+    else if (c == 27)
+        save_close(0);
+    else if (c >= 32 && c < 127) {
+        const char u = (char)(c >= 'a' && c <= 'z' ? c - 32 : c);
+        const char *q;
+        for (q = NAME_CHARS; *q && *q != u; q++)
+            ;
+        if (*q) {                                        /* (only what the screen's font can draw) */
+            ui.name[ui.cursor] = u;
+            if (ui.cursor < PRESET_NAME - 1)
+                ui.cursor++;
+        }
+    }
+    ui.page_until = plat_ms() + STAY_MS;
+}
+static void name_knob(int i, int32_t e)                  /* SAVE AS: 1 the cursor, 2 its letter, 3 a new name, 4 the slot */
+{
+    if (i == 0)
+        name_type(e > 0 ? 2 : 1);
+    else if (i == 1) {
+        const int n = (int)sizeof NAME_CHARS - 1;
+        int at = 0;
+        while (at < n && NAME_CHARS[at] != ui.name[ui.cursor])
+            at++;
+        at = ((at + (e > 0 ? 1 : -1)) % n + n) % n;
+        ui.name[ui.cursor] = NAME_CHARS[at];
+    } else if (i == 2) {
+        int k;
+        sad_name(ui.name);
+        for (k = 0; k < PRESET_NAME; k++)
+            if (!ui.name[k])
+                ui.name[k] = ' ';
+        ui.name[PRESET_NAME] = 0;
+        ui.cursor = (uint8_t)(name_len() < PRESET_NAME ? name_len() : PRESET_NAME - 1);
+    } else
+        name_slot((ui.save_slot + (e > 0 ? 1 : PRESET_SLOTS - 1)) % PRESET_SLOTS);
+}
+const char *ui_name(void) { return ui.naming ? ui.name : 0; }   /* SAVE AS open: the name being made */
+int ui_naming(void) { return ui.naming; }
+
 static void load_mood(int m)
 {
     int i;
     ui.mood = (uint8_t)m;
+    if (m >= NMOOD) {                                    /* one of yours: its sound, as you kept it */
+        for (i = 0; i < P_NPARAMS; i++)
+            if (is_sound(i))
+                knob_set(i, presets.slot[m - NMOOD].par[i]);
+        ui.preset_t = plat_ms() | 1u;
+        return;
+    }
     for (i = 0; i < MOOD_N; i++)
         knob_set(i, MOODS[m].v[i]);
     for (i = 0; i < MOOD_X; i++)
@@ -544,6 +724,10 @@ static void button(int b)
         ui_caption("KEPT.", 900u);
         return;
     }
+    if (ui.naming) {                                     /* SAVE AS open: SAVE keeps it, anything else: never mind */
+        save_close(b == B_SAVE);
+        return;
+    }
     if (b == B_HOME && ui.latch) {                       /* HOME ends a drawer that stays: the blob alone */
         ui.latch = 0;
         ui.held_btn = -1;
@@ -631,13 +815,8 @@ static void button(int b)
         knob_set(P_OCTAVE, proj.par[P_OCTAVE] + (b == B_OCTUP ? 1 : -1));
         ui_caption(b == B_OCTUP ? "UP. WHY." : "DOWN.", 900u);
         break;
-    case B_SAVE:
-        if (project_save() == 0) {
-            ui.dirty = 0;
-            ui_caption("SAVED. FOR WHAT.", 1300u);
-        } else {
-            ui_caption("COULD NOT SAVE.", 1500u);
-        }
+    case B_SAVE:                                         /* SAVE tapped: SAVE AS (the project saves itself, quietly) */
+        save_open();
         break;
     default: break;
     }
@@ -786,12 +965,21 @@ static void input(void)
         ui.page_until = plat_ms() + STAY_MS;
         ui.act_t = plat_ms();
     }
-    if ((e = plat_enc(EN_PRESET)) != 0) {                /* the preset: its mood */
-        load_mood((ui.mood + (e > 0 ? 1 : NMOOD - 1)) % NMOOD);
+    if ((e = plat_enc(EN_PRESET)) != 0) {                /* the preset: its mood (factory, then yours); SAVE AS: the slot */
+        if (ui.naming)
+            name_knob(3, e);
+        else
+            load_mood(mood_step(ui.mood, e));
         ui.act_t = plat_ms();
     }
     for (i = 0; i < 4; i++)
         if ((e = plat_enc(EN_K1 + (int)i)) != 0) {
+            if (ui.naming) {
+                name_knob((int)i, e);
+                ui.page_until = plat_ms() + STAY_MS;
+                ui.focus_t = ui.act_t = plat_ms();
+                continue;
+            }
             if (ui.page == PG_LOOP && i < 3) {           /* the chosen step (or the whole loop): note, length, velocity */
                 sy_loop_nudge((int)i, e > 0 ? 1 : -1);
                 ui.step_turned = 1;
@@ -861,14 +1049,18 @@ void ui_init(void)
 
 void ui_frame(void)
 {
+    int c;
     input();
+    while ((c = plat_text()) != 0)                       /* typing: into the name, while SAVE AS is open */
+        if (ui.naming)
+            name_type(c);
     if (sy_tel.loop_ver != ui.loop_ver) {                /* the loop changed: it wants saving */
         ui.loop_ver = sy_tel.loop_ver;
         if (plat_ms() > 1500u)
             mark_dirty();
     }
     autosave();
-    if (ui.panel && ui.held_btn < 0 && !ui.latch && (int32_t)(plat_ms() - ui.page_until) > 0)
+    if (ui.panel && ui.held_btn < 0 && !ui.latch && !ui.naming && (int32_t)(plat_ms() - ui.page_until) > 0)
         ui.panel = 0;                                    /* nothing held, nothing turned: the drawer hides, the page stays */
     if (plat_ms() - ui.last_draw >= 32u) {               /* ~30 pictures a second */
         ui.last_draw = plat_ms();

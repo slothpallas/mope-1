@@ -68,6 +68,9 @@ tap PLAY
 wait 600
 tap SAVE
 wait 200
+# (SAVE AS opened: SAVE again keeps it)
+tap SAVE
+wait 200
 reboot
 wait 300
 expect loopn 4

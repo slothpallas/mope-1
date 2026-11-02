@@ -307,6 +307,7 @@ static void fm1_main(void)
     sy_boot_tick = fm1_wdt_feed;                    /* the tables take a moment to build */
     sy_init();
     project_load();                                 /* defaults when nothing (or another format) is saved */
+    presets_load();                                 /* your presets (none: empty slots) */
     project_apply();
     audio_init();
     usb_start();

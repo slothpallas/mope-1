@@ -1522,16 +1522,17 @@ static void draw_preset_card(int32_t y0)
     int i;
     px_text(3, y0 + 3, "PRESET", PC_BLOB2);
     {
-        const char *nm = MOODS[ui.mood].name;
+        const char *nm = mood_name(ui.mood);
         px_text(PX_W - 3 - px_text_w(nm) > 36 ? PX_W - 3 - px_text_w(nm) : 36, y0 + 3, nm, PC_WHITE);
     }
     {   /* its kind, and where it sits among that kind's presets */
-        const int cat = MOODS[ui.mood].cat;
+        const int cat = mood_cat(ui.mood);
+        const char *cn = cat == CAT_MINE ? "MINE" : CAT_NAME[cat];
         int k = 0;
-        px_text(3, y0 + 10, CAT_NAME[cat], PC_TEAR);
-        for (i = 0; i < NMOOD; i++)
-            if (MOODS[i].cat == cat) {
-                px_rect(4 + px_text_w(CAT_NAME[cat]) + 3 + k * 5, y0 + 12, 3, 2, i == ui.mood ? PC_SPEC : PC_GRID);
+        px_text(3, y0 + 10, cn, PC_TEAR);
+        for (i = 0; i < mood_n(); i++)
+            if (mood_used(i) && mood_cat(i) == cat) {
+                px_rect(4 + px_text_w(cn) + 3 + k * 5, y0 + 12, 3, 2, i == ui.mood ? PC_SPEC : PC_GRID);
                 k++;
             }
     }

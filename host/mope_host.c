@@ -112,7 +112,17 @@ void plat_midi_out(uint32_t pkt)
 
 /* flash: one buffer per object, kept across a simulated reboot */
 static uint8_t store[OBJ_NOBJ][PLAT_STORE_MAX];
-static int store_len[OBJ_NOBJ] = {-1, -1};
+static int store_len[OBJ_NOBJ] = {-1, -1, -1};
+_Static_assert(OBJ_NOBJ == 3, "store_len: one -1 (nothing saved) for each object");
+/* typed characters, waiting (a script's "type", the web player's keyboard) */
+static char typed[64];
+static uint32_t typed_r, typed_w;
+static void type_char(int c)
+{
+    if (typed_w - typed_r < sizeof typed)
+        typed[typed_w++ % sizeof typed] = (char)c;
+}
+int plat_text(void) { return typed_r != typed_w ? (unsigned char)typed[typed_r++ % sizeof typed] : 0; }
 static uint32_t store_writes;
 int plat_store_load(uint32_t obj, void *dst, uint32_t max)
 {
@@ -278,6 +288,7 @@ static void boot(void)
 {
     sy_init();
     project_load();
+    presets_load();
     project_apply();
     lcd_fill(0, 0, 240, 240, 0);
     ui_init();

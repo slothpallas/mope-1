@@ -29,6 +29,28 @@ typedef struct {
 
 extern project_t proj;
 
+/* Your presets: 16 slots, each a name and a whole sound (every setting kept; a preset loads only the
+ * sound's, not the mixer, the tempo or the MIDI). Their own flash object (OBJ_PRESETS). */
+#define PRESETS_MAGIC 0x53504F4Du        /* "MOPS" */
+#define PRESET_SLOTS 16
+#define PRESET_NAME 16                   /* characters, no terminator needed */
+#define PRESET_NPAR 80                   /* room for settings to come (P_NPARAMS now) */
+typedef struct {
+    char name[PRESET_NAME];
+    int16_t par[PRESET_NPAR];
+} preset_slot_t;
+typedef struct {
+    uint32_t magic;
+    uint16_t format, npar;               /* npar: how many of par[] the saved slots hold */
+    uint16_t used, rsv;                  /* used: a bit a filled slot */
+    preset_slot_t slot[PRESET_SLOTS];
+} presets_t;
+_Static_assert(P_NPARAMS <= PRESET_NPAR, "a preset slot holds every setting");
+_Static_assert(sizeof(presets_t) <= PLAT_STORE_MAX - 512u, "presets: the object's last 512 bytes stay unwritten (the loader)");
+extern presets_t presets;
+int presets_load(void);                  /* 0 = loaded; else none */
+int presets_save(void);                  /* 0 = saved */
+
 void project_defaults(void);
 int project_load(void);                  /* 0 = loaded; else defaults are in place */
 int project_save(void);                  /* 0 = saved and verified */
