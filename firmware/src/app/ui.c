@@ -30,24 +30,29 @@
  *   The 27 keys play F3..G5. The lowest and the highest together: it gives up. */
 
 enum { PG_BODY, PG_EYES, PG_MOUTH, PG_VIBE, PG_TEARS, PG_WALLS, PG_DECK, PG_SETUP, PG_MIX, PG_ARP, PG_LOOP,
-       PG_SHADOW, PG_SIGH, PG_TREMBLE, NPAGES };
+       PG_SHADOW, PG_SIGH, PG_TREMBLE, PG_COPIES, PG_DUST, PG_PUNCH, PG_SAVE, NPAGES };
 static const char *const PAGE_NAME[NPAGES] = {"BODY", "EYES", "MOUTH", "VIBE", "TEARS", "WALLS", "TAPE DECK", "SETUP",
-                                              "MIXER", "ARP", "LOOP", "SHADOW", "SIGH", "TREMBLE"};
-static const uint8_t PAGE_BTN[NPAGES] = {B_HOME, B_EDIT, B_ENV, B_LFO, B_FX, B_SEL, B_SEQ, B_GLO, B_GLO, B_ARP, B_SEQ,
-                                         B_HOME, B_ENV, B_LFO};
-/* a button's second page (pressed again, its first page open), and back: -1 none */
-static const int8_t PAGE_AGAIN[NPAGES] = {PG_SHADOW, -1, PG_SIGH, PG_TREMBLE, -1, -1, PG_LOOP, PG_MIX, PG_SETUP, -1, PG_DECK,
-                                          PG_BODY, PG_MOUTH, PG_VIBE};
-/* which of its button's pages it is (0 first, 1 second; the dots in the drawer), and its bit in proj.seen */
-static const uint8_t PAGE_SECOND[NPAGES] = {0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1};
-static const uint8_t PAGE_SEEN_BIT[NPAGES] = {0, 0, 0, 0, 0, 0, 16, 8, 0, 0, 0, 1, 2, 4};
+                                              "MIXER", "ARP", "LOOP", "SHADOW", "SIGH", "TREMBLE", "COPIES", "DUST",
+                                              "PUNCH", "SAVE AS"};
+/* the button that opens it (PG_SAVE: none, SAVE's own flow opens it) */
+#define B_NONE 255
+static const uint8_t PAGE_BTN[NPAGES] = {B_HOME, B_EDIT, B_ENV, B_LFO, B_SEL, B_SEL, B_SEQ, B_GLO, B_GLO, B_ARP, B_SEQ,
+                                         B_HOME, B_ENV, B_LFO, B_SEL, B_SEL, B_FX, B_NONE};
+/* the next of its button's pages (pressed again, this one open), round: -1 none. SEL goes round four:
+ * the walls, the tears, the copies, the dust. */
+static const int8_t PAGE_AGAIN[NPAGES] = {PG_SHADOW, -1, PG_SIGH, PG_TREMBLE, PG_COPIES, PG_TEARS, PG_LOOP, PG_MIX, PG_SETUP,
+                                          -1, PG_DECK, PG_BODY, PG_MOUTH, PG_VIBE, PG_DUST, PG_WALLS, -1, -1};
+/* which of its button's pages it is (0 its first), and its bit in proj.seen (found: no more nudges) */
+static const uint8_t PAGE_NTH[NPAGES] = {0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 1, 1, 1, 2, 3, 0, 0};
+static const uint8_t PAGE_SEEN_BIT[NPAGES] = {0, 0, 0, 0, 32, 0, 16, 8, 0, 0, 0, 1, 2, 4, 64, 128, 0, 0};
 /* the knobs' names, under their meters in the schematic */
 static const char *const PAGE_LABEL[NPAGES][4] = {
     {"WAVE", "POS", "DTUN", "SUB"}, {"CUT", "RES", "TYPE", "DRIV"}, {"ATK", "DEC", "SUS", "REL"},
-    {"RATE", "DPTH", "SHPE", "DEST"}, {"CHOR", "DLY", "TIME", "FDBK"}, {"VERB", "SIZE", "FRY", "TAPE"},
-    {"STYL", "BPM", "SWNG", "HUMN"}, {"GLID", "CH", "OUT", "TUNE"}, {"VOX", "DRUM", "BASS", "GUNK"},
+    {"RATE", "DPTH", "SHPE", "DEST"}, {"DLY", "TIME", "FDBK", "DARK"}, {"VERB", "SIZE", "TONE", "RAIN"},
+    {"STYL", "BPM", "SWNG", "HUMN"}, {"GLID", "CH", "OUT", "TUNE"}, {"BPM", "VOX", "DRUM", "BASS"},
     {"MODE", "RATE", "OCT", "GATE"}, {"NOTE", "LEN", "VEL", "BARS"},
-    {"WAVE", "TUNE", "MEET", "LVL"}, {"ATK", "DEC", "WAVE", "EYES"}, {"RATE", "DPTH", "SHPE", "DEST"}};
+    {"WAVE", "TUNE", "MEET", "LVL"}, {"ATK", "DEC", "WAVE", "EYES"}, {"RATE", "DPTH", "SHPE", "DEST"},
+    {"CHOR", "RATE", "DPTH", "WIDE"}, {"TAPE", "CRKL", "DUST", "FRY"}, {"", "", "", ""}, {"CURS", "CHAR", "NAME", "SLOT"}};
 #define STAY_MS 3000u                  /* a drawer stays this long after the last touch (a press, a turn) */
 #define DOUBLE_MS 350u                 /* a part's button pressed twice this fast: its page stays until HOME */
 #define TAP_MS 300u                    /* ARP let go sooner: a tap (on / off), not a look at its page */
@@ -57,17 +62,25 @@ static const uint8_t PAGE_KNOB[NPAGES][4] = {
     {P_CUTOFF, P_RESO, P_FTYPE, P_DRIVE},
     {P_ATTACK, P_DECAY, P_SUSTAIN, P_RELEASE},
     {P_LFORATE, P_LFODEPTH, P_LFOSHAPE, P_LFODEST},
-    {P_CHORUS, P_DELAY, P_TIME, P_FEEDBACK},
-    {P_REVERB, P_SIZE, P_FRY, P_TAPE},
+    {P_DELAY, P_TIME, P_FEEDBACK, P_DDARK},          /* the tears: the delay */
+    {P_REVERB, P_SIZE, P_RTONE, P_GUNK},             /* the walls: the room, its rain */
     {P_STYLE, P_TEMPO, P_SWING, P_HUMAN},
     {P_GLIDE, P_MIDICH, P_MIDIOUT, P_TUNE},
-    {P_SYNTH, P_DRUMS, P_BASS, P_GUNK},
+    {P_TEMPO, P_SYNTH, P_DRUMS, P_BASS},             /* the mixer: the one tempo, the levels */
     {P_ARPMODE, P_ARPRATE, P_ARPOCT, P_ARPGATE},
     {K_NONE, K_NONE, K_NONE, P_LOOPBARS},            /* the loop: the stepped step's note, length, velocity */
     {P_BTABLE, P_BTUNE, P_BMEET, P_BLEVEL},          /* the shadow: oscillator B */
     {P_MATTACK, P_MODDEC, P_MWAVE, P_ENVAMT},        /* the sigh: the mod envelope, to the table and the eyes */
     {P_LFO2RATE, P_LFO2DEPTH, P_LFO2SHAPE, P_LFO2DEST},   /* the tremble: the second LFO */
+    {P_CHORUS, P_CHRATE, P_CHDEPTH, P_CHWIDTH},      /* the copies: the chorus */
+    {P_TAPE, P_CRACKLE, P_DUST, P_FRY},              /* the dust: an old record */
+    {K_NONE, K_NONE, K_NONE, K_NONE},                /* the punch: the keys, not the knobs */
+    {K_NONE, K_NONE, K_NONE, K_NONE},                /* save as: its own knobs (the name, the slot) */
 };
+_Static_assert(sizeof PAGE_KNOB / sizeof PAGE_KNOB[0] == NPAGES && sizeof PAGE_LABEL / sizeof PAGE_LABEL[0] == NPAGES &&
+                   sizeof PAGE_NAME / sizeof PAGE_NAME[0] == NPAGES && sizeof PAGE_BTN == NPAGES && sizeof PAGE_AGAIN == NPAGES &&
+                   sizeof PAGE_NTH == NPAGES && sizeof PAGE_SEEN_BIT == NPAGES,
+               "a row for every page");
 #define SAVE_HOLD_MS 1500u
 #define RESET_ASK_MS 5000u
 #define KEY0_NOTE 53                   /* the lowest key, F3 */
@@ -383,6 +396,8 @@ static void load_mood(int m)
         knob_set(i, MOODS[m].v[i]);
     for (i = 0; i < MOOD_X; i++)
         knob_set(P_BTABLE + i, MOODS[m].x[i]);
+    for (i = P_RTONE; i < P_NPARAMS; i++)                /* (the effects' newer knobs: as they come, unless it says) */
+        knob_set(i, sy_param_info(i)->def);
     knob_set(P_OCTAVE, MOODS[m].oct);                    /* (basses sit an octave down, some leads glide) */
     knob_set(P_GLIDE, MOODS[m].glide);
     ui.preset_t = plat_ms() | 1u;                        /* its card: the name, its kind, and what it brought */
@@ -526,17 +541,17 @@ static void button(int b)
             pg = PAGE_AGAIN[ui.page];
         else
             for (i = 0; pg < 0 && i < NPAGES; i++)
-                if (PAGE_BTN[i] == b && !PAGE_SECOND[i])
+                if (PAGE_BTN[i] == b && !PAGE_NTH[i])
                     pg = i;
         if (pg == PG_LOOP && !(ui.panel && ui.page == PG_LOOP))
             sy_loop_select(-1);                          /* (a fresh look: the knobs edit the whole loop) */
         if (pg >= 0) {                                   /* a part's button: its page while held, and 3 s on */
             const int again = PAGE_AGAIN[pg];
             set_page(pg);
-            if (PAGE_SECOND[pg] && !(proj.seen & PAGE_SEEN_BIT[pg])) {
+            if (PAGE_NTH[pg] && !(proj.seen & PAGE_SEEN_BIT[pg])) {
                 proj.seen |= PAGE_SEEN_BIT[pg];          /* found: no more nudging */
                 mark_dirty();
-            } else if (!dbl && again >= 0 && PAGE_SECOND[again] && !(proj.seen & PAGE_SEEN_BIT[again])) {
+            } else if (!dbl && again >= 0 && PAGE_NTH[again] && !(proj.seen & PAGE_SEEN_BIT[again])) {
                 static char nudge[32];                  /* not found yet: a nudge, in its voice */
                 const char *p = PAGE_NAME[again];
                 int n = 0;

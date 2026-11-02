@@ -1,0 +1,37 @@
+# SEL goes round the effects: the walls, the tears, the copies, the dust, and back (pressed again, slowly:
+# twice fast keeps a drawer open). Each page's knobs turn its own effect.
+wait 300
+tap SEL
+expect page 5
+shot 00_walls.png
+wait 1000
+tap SEL
+expect page 4
+shot 01_tears.png
+wait 1000
+tap SEL
+expect page 14
+spin K1 60
+spin K3 40
+tapkey 12
+wait 300
+expect par16 >60
+shot 02_copies.png
+wait 1000
+tap SEL
+expect page 15
+spin K2 60
+spin K3 50
+tapkey 12
+wait 400
+expect par62 >40
+shot 03_dust.png
+wait 1000
+tap SEL
+expect page 5
+# GLO: the one tempo, then the levels
+tap GLO
+expect page 8
+spin K1 10
+expect par25 94
+shot 04_mixer.png
