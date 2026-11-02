@@ -28,9 +28,11 @@ midi 80 30 00
 wait 800
 # CRYING: the delay, one tear an echo, the puddle filling
 midi c0 00 00
-tap FX
-spin K2 70
-spin K4 50
+tap SEL
+wait 1000
+tap SEL
+spin K1 70
+spin K3 50
 midi 90 30 64
 wait 600
 midi 80 30 00
@@ -58,7 +60,7 @@ wait 1500
 midi c0 1a 00
 wait 300
 tap GLO
-spin K1 100
+spin K2 100
 master 4096
 midi b0 07 7f
 midi b0 66 37
@@ -106,12 +108,18 @@ shot page_mouth.png
 tap LFO
 wait 1500
 shot page_vibe.png
-tap FX
+tap SEL
+wait 1500
+shot page_walls.png
+tap SEL
 wait 1500
 shot page_tears.png
 tap SEL
 wait 1500
-shot page_walls.png
+shot page_copies.png
+tap SEL
+wait 1500
+shot page_dust.png
 tap GLO
 wait 1500
 shot page_mixer.png

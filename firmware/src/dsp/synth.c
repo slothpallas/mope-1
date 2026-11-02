@@ -31,6 +31,9 @@ static const sy_param_t PARAMS[P_NPARAMS] = {
     {"LFO2 rate", 0, 100, 55}, {"LFO2 depth", 0, 100, 0}, {"LFO2 shape", 0, LFO_NSHAPE - 1, LFO_TRI},
     {"LFO2 dest", 0, LD_N - 1, LD_PITCH},
     {"Level", -60, 60, 0},
+    {"Tone", 0, 100, 50}, {"Dark", 0, 100, 50},
+    {"Copy rate", 0, 100, 30}, {"Copy depth", 0, 100, 50}, {"Copy width", 0, 100, 100},
+    {"Crackle", 0, 100, 0}, {"Dust", 0, 100, 0},
 };
 const sy_param_t *sy_param_info(int i) { return &PARAMS[i < 0 ? 0 : i >= P_NPARAMS ? P_NPARAMS - 1 : i]; }
 
@@ -1090,15 +1093,18 @@ static inline float line_read(const float *b, uint32_t mask, uint32_t w, float b
     float f = back - (float)ib;
     return b[i0] + (b[i1] - b[i0]) * f;
 }
-static inline void chorus(float *l, float *r, float amt, const float *d)
+static inline void chorus(float *l, float *r, float amt, const float *d, float narrow)
 {
-    float m = (*l + *r) * 0.5f, tl, tr;
+    float m = (*l + *r) * 0.5f, tl, tr, t;
     ch_buf[ch_w] = m;
     ch_w = (ch_w + 1u) & (CH_N - 1u);
     if (amt <= 0.0f)
         return;
     tl = line_read(ch_buf, CH_N - 1u, ch_w, d[0]) + line_read(ch_buf, CH_N - 1u, ch_w, d[2]) * 0.7f;
     tr = line_read(ch_buf, CH_N - 1u, ch_w, d[1]) + line_read(ch_buf, CH_N - 1u, ch_w, d[3]) * 0.7f;
+    t = tl;                                             /* (Width: the copies drawn together, toward the middle) */
+    tl += (tr - tl) * narrow;
+    tr += (t - tr) * narrow;
     *l = *l * (1.0f - 0.3f * amt) + tl * amt * 0.6f;
     *r = *r * (1.0f - 0.3f * amt) + tr * amt * 0.6f;
 }
@@ -1128,9 +1134,9 @@ static inline float tear_at(const int16_t *line, float back)
     return (a + ((float)line[j] - a) * frac) * (1.0f / (32767.0f * TEAR_IN));
 }
 /* one tear's fall: darker (a low-pass) and thinner (what a one-pole low-pass leaves of the lows, removed) */
-static inline float tear_fall(float x, float *dark, float *thin)
+static inline float tear_fall(float x, float *dark, float *thin, float k)
 {
-    *dark += 0.45f * (x - *dark);
+    *dark += k * (x - *dark);
     *thin += 0.012f * (*dark - *thin);
     return *dark - *thin;
 }
@@ -1138,14 +1144,15 @@ static inline void delay(float in, float *l, float *r)
 {
     if (!tear_odd) {                                    /* the line moves every other sample */
         const float hop = 0.95f * pf(P_FEEDBACK),       /* what each crossing keeps */
-                    want = (60.0f + 640.0f * pf(P_TIME)) * 22.05f;
+                    want = (60.0f + 640.0f * pf(P_TIME)) * 22.05f,
+                    dk = 0.85f - 0.8f * pf(P_DDARK);    /* (Dark: how much each crossing loses of its top) */
         float back, from_l, from_r;
         tear_t += 0.0008f * (want - tear_t);           /* (a new Time glides there) */
         back = tear_t * (1.0f + tear_wob);
         from_l = tear_at(tear_l, back);                /* the echo arriving on the left... */
         from_r = tear_at(tear_r, back);                /* ...and the one on the right */
-        tear_l[tear_w] = tear_pack(0.5f * (in + tear_last_in) + hop * tear_fall(from_r, &tear_dark_r, &tear_thin_r));
-        tear_r[tear_w] = tear_pack(hop * tear_fall(from_l, &tear_dark_l, &tear_thin_l));
+        tear_l[tear_w] = tear_pack(0.5f * (in + tear_last_in) + hop * tear_fall(from_r, &tear_dark_r, &tear_thin_r, dk));
+        tear_r[tear_w] = tear_pack(hop * tear_fall(from_l, &tear_dark_l, &tear_thin_l, dk));
         tear_w = (tear_w + 1u) & (TEAR_N - 1u);
         tear_was_l = tear_out_l;
         tear_was_r = tear_out_r;
@@ -1209,7 +1216,8 @@ _Static_assert(sizeof wt + sizeof pu_buf + sizeof comb_line + sizeof ch_buf + si
 /* the room for a Size 0..1: T60 from about a second (closet) to half a minute (the void) */
 static void room_size(float size)
 {
-    const float s2 = size * size, t60 = mm_expf(1.25f * size + 2.15f * s2 * s2), at_full = 0.25f + 0.6f * size;
+    const float s2 = size * size, t60 = mm_expf(1.25f * size + 2.15f * s2 * s2),
+                at_full = mm_minf((0.25f + 0.6f * size) * (0.5f + pf(P_RTONE)), 0.98f);   /* (Tone: duller, brighter) */
     int i;
     for (i = 0; i < ROOM_N; i++)                        /* -60 dB over t60, whatever each wall's length */
         wall_keep[i] = mm_exp2f(-9.965784f * (float)ROOM_LEN[i] / (t60 * ROOM_RATE));
@@ -1288,6 +1296,32 @@ static void room_init(void)
     for (j = 0; j < 512u; j++)
         room_pre[j] = 0.0f;
     room_w = 0;
+}
+
+/* --------------------------------------------------------------- dust --- */
+/* An old record: Crackle's ticks and hiss, Dust's narrowing band (the top and the bottom go, and some of
+ * the stereo). Off (nothing spent) while both are 0. */
+static float du_lpl, du_lpr, du_hpl, du_hpr, du_crk;
+static inline void dust(float *l, float *r, float c, float u, float lpk, float hpk)
+{
+    float xl, xr, m, n;
+    if (c <= 0.0f && u <= 0.0f)
+        return;
+    if ((rnd() & 65535u) < (uint32_t)(c * c * 90.0f))   /* a tick: a speck in the groove */
+        du_crk = rnds() * (0.12f + 0.4f * c);
+    du_crk *= 0.6f;
+    n = rnds() * c * c * 0.006f;                        /* the hiss */
+    xl = *l + du_crk + n;
+    xr = *r + du_crk * 0.85f + n;
+    m = (xl + xr) * 0.5f;
+    xl += (m - xl) * 0.3f * u;
+    xr += (m - xr) * 0.3f * u;
+    du_lpl += lpk * (xl - du_lpl);
+    du_lpr += lpk * (xr - du_lpr);
+    du_hpl += hpk * (du_lpl - du_hpl);
+    du_hpr += hpk * (du_lpr - du_hpr);
+    *l = du_lpl - du_hpl;
+    *r = du_lpr - du_hpr;
 }
 
 /* --------------------------------------------------------------- tape --- */
@@ -2058,9 +2092,8 @@ static void drain(void)
                 par[c.a] = (int16_t)clampi(c.b, p->lo, p->hi);
                 if (c.a == P_STYLE)
                     dr_pending = (uint8_t)par[P_STYLE];
-                if (c.a == P_SIZE) {
+                if (c.a == P_SIZE || c.a == P_RTONE)
                     room_size(pf(P_SIZE));
-                }
             }
             break;
         case C_ON:
@@ -2140,6 +2173,9 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
     const float tape = pf(P_TAPE), drum_g = pf(P_DRUMS) * 0.5f, bass_g = pf(P_BASS) * 0.55f;
     const float vol = pf(P_VOLUME) * pf(P_VOLUME) * 1.6f * (float)gain_q12 * (1.0f / 4096.0f);
     const float tp_sat = 1.0f + tape * 1.8f, tp_comp = 1.0f / mm_tanhf(tp_sat), tp_lp = 0.95f - 0.6f * tape;
+    const float crackle = pf(P_CRACKLE), dusty = pf(P_DUST), du_lp = 0.94f - 0.55f * dusty, du_hp = 0.0014f + 0.024f * dusty;
+    const float ch_hz = 0.37f * mm_exp2f(5.0f * (pf(P_CHRATE) - 0.3f)), ch_dep = pf(P_CHDEPTH) * 2.0f,
+                ch_narrow = 0.5f * (1.0f - pf(P_CHWIDTH));
     drain();
     if (n > BLK)
         n = BLK;
@@ -2158,12 +2194,12 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
     }
     for (j0 = 0; j0 < n; j0 += 16u) {
         float d[4];
-        ch_ph += 0.37f * 16.0f / SY_SR;
+        ch_ph += ch_hz * 16.0f / SY_SR;
         ch_ph -= (float)(int)ch_ph;
-        d[0] = 441.0f + 180.0f * mm_sin_turns(ch_ph);
-        d[1] = 441.0f + 180.0f * mm_sin_turns(ch_ph + 0.25f);
-        d[2] = 700.0f + 150.0f * mm_sin_turns(ch_ph * 1.7f + 0.5f);
-        d[3] = 700.0f + 150.0f * mm_sin_turns(ch_ph * 1.7f + 0.75f);
+        d[0] = 441.0f + 180.0f * ch_dep * mm_sin_turns(ch_ph);   /* (Depth 100: 801 and 1000 back, inside the 1024) */
+        d[1] = 441.0f + 180.0f * ch_dep * mm_sin_turns(ch_ph + 0.25f);
+        d[2] = 700.0f + 150.0f * ch_dep * mm_sin_turns(ch_ph * 1.7f + 0.5f);
+        d[3] = 700.0f + 150.0f * ch_dep * mm_sin_turns(ch_ph * 1.7f + 0.75f);
         wow_ph += 0.5f * 16.0f / SY_SR;
         wow_ph -= (float)(int)wow_ph;
         flut_ph += 6.5f * 16.0f / SY_SR;
@@ -2174,7 +2210,7 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
         for (j = j0; j < j0 + 16u && j < n; j++) {
             float l = bl[j], r = br[j], el, er, rl, rr, dm, bass;
             fry(&l, &r);
-            chorus(&l, &r, chorus_amt, d);
+            chorus(&l, &r, chorus_amt, d, ch_narrow);
             l *= synth_g;                               /* the mixer: the voices' fader */
             r *= synth_g;
             count_run();
@@ -2202,6 +2238,7 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
                 busy = a > busy ? a : busy;
             }
             gunk(&l, &r, &lv[3]);
+            dust(&l, &r, crackle, dusty, du_lp, du_hp);
             /* tape: a wandering line, saturation, a softer top */
             tp_l[tp_w] = l;
             tp_r[tp_w] = r;

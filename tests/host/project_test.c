@@ -62,6 +62,33 @@ int main(void)
         ok &= proj.par[i] == sy_param_info(i)->def;
     CHECK(ok && proj.seen == 0, "the new settings start at their defaults, nothing seen");
     CHECK(proj.format == PROJ_FORMAT, "it is today's format now");
+    {   /* a format-4 save (0.3: 56 settings, the XP, the pages seen, the loop) keeps all of it */
+        const int n4 = P_LEVEL + 1, at4 = (8 + 2 * n4 + 3) & ~3, at4_loop = at4 + 4 + 28;
+        const uint32_t fmt4 = 4u;
+        const uint8_t seen4 = 0x1D;
+        memset(flash, 0, sizeof flash);
+        memcpy(flash, &magic, 4);
+        memcpy(flash + 4, &fmt4, 4);
+        for (i = 0; i < n4; i++)
+            par[i] = sy_param_info(i)->def;
+        par[P_TABLE] = 9;
+        par[P_LEVEL] = -17;
+        memcpy(flash + 8, par, (size_t)(2 * n4));
+        memcpy(flash + at4, &xp, 4);
+        flash[at4 + 4] = seen4;
+        memcpy(flash + at4_loop, &loop_n, 2);
+        memcpy(flash + at4_loop + 2, ev, sizeof ev);
+        flash_n = at4_loop + 2 + 192 * (int)sizeof(sy_ev_t);
+        CHECK(project_load() == 0, "a format-4 save loads");
+        CHECK(proj.par[P_TABLE] == 9 && proj.par[P_LEVEL] == -17 && proj.xp == xp && proj.seen == seen4,
+              "its settings, XP and pages seen are kept");
+        for (ok = 1, i = 0; i < 3; i++)
+            ok &= proj.loop[i].t == ev[i].t && proj.loop[i].note == ev[i].note;
+        CHECK(proj.loop_n == 3 && ok, "its loop is kept (%d notes)", proj.loop_n);
+        for (ok = 1, i = P_RTONE; i < P_NPARAMS; i++)
+            ok &= proj.par[i] == sy_param_info(i)->def;
+        CHECK(ok, "the effects' new knobs start at their defaults");
+    }
     proj.par[P_BLEVEL] = 66;
     proj.seen = 5;
     project_save();

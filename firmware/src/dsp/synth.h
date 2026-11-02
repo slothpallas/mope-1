@@ -45,6 +45,9 @@ enum {
     P_MATTACK, P_MWAVE,                              /* SIGH: the mod envelope's attack (0: the mouth's), its sweep of the table */
     P_LFO2RATE, P_LFO2DEPTH, P_LFO2SHAPE, P_LFO2DEST, /* TREMBLE: the second LFO */
     P_LEVEL,                                         /* each preset's loudness (+-60: +-14 dB), set by the presets */
+    P_RTONE, P_DDARK,                                /* WALLS: the room's brightness; TEARS: how much darker each echo */
+    P_CHRATE, P_CHDEPTH, P_CHWIDTH,                  /* COPIES: the chorus's speed, its depth, its width */
+    P_CRACKLE, P_DUST,                               /* DUST: a record's crackle and hiss; the band narrowing (old, worn) */
     P_NPARAMS
 };
 typedef struct {

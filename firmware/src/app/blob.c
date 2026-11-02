@@ -1170,53 +1170,94 @@ static void schem_sigh(const drawer_t *p)                /* the second envelope:
 
 static void schem_tears(const drawer_t *p)               /* the delay: the taps, left, right, left, fading */
 {
-    const float fb = pn(P_FEEDBACK) * 0.95f, dly = pn(P_DELAY), time = 0.15f + 0.85f * pn(P_TIME);
+    const float fb = pn(P_FEEDBACK) * 0.95f, dly = pn(P_DELAY), time = 0.15f + 0.85f * pn(P_TIME), dark = pn(P_DDARK);
     const float step = time * 22.0f, h = (float)(p->gy1 - p->gy0);
     float lv = 1.0f, x = (float)p->gx0 + 2.0f;
     int k;
     px_rect(p->gx0 + 1, p->gy1 - (int32_t)h, 2, (int32_t)h, PC_WHITE);   /* the note itself */
     for (k = 0; k < 12 && x + step < (float)p->gx1; k++) {
         const int32_t bh = (int32_t)(h * lv * (0.3f + 0.7f * dly) + 0.5f);
+        const float gone = mm_clampf(dark * (float)k * 0.25f, 0.0f, 1.0f);   /* (Dark: each tear darker, thinner) */
         x += step;
         lv *= k ? fb : 1.0f;
         if (bh < 1 || dly <= 0.0f)
             break;
-        px_rect((int32_t)x, p->gy1 - bh, 2, bh, k & 1 ? PC_GHOST : PC_TEAR);   /* ping, pong */
+        px_rect((int32_t)x, p->gy1 - bh, gone > 0.5f ? 1 : 2, bh,
+                gone > 0.75f ? PC_BLOBD : gone > 0.4f ? PC_RAIN : k & 1 ? PC_GHOST : PC_TEAR);   /* ping, pong */
         if (k == 0 && bs.echo_flash > 0.3f)
             px_rect((int32_t)x - 1, p->gy1 - bh - 1, 4, 1, PC_BLOB2);
     }
-    {   /* the chorus: a wobbling ribbon over the top, wider and busier with more */
-        const float c = pn(P_CHORUS);
-        int32_t xx;
-        if (c > 0.02f)
-            for (xx = p->gx0; xx < p->gx1; xx++)
-                px_pset(xx, p->gy0 + 2 + (int32_t)(c * 2.5f * mm_sin_turns((float)xx * 0.08f + bs.t * 0.7f) +
-                                                    c * 1.5f * mm_sin_turns((float)xx * 0.13f - bs.t * 0.5f)), PC_GHOST);
-    }
 }
 
-static void schem_walls(const drawer_t *p)               /* the room: its tail; the fry: its curve */
+static void schem_walls(const drawer_t *p)               /* the room: its tail, its brightness, its rain */
 {
-    const float rv = pn(P_REVERB), size = pn(P_SIZE), fry = pn(P_FRY), tape = pn(P_TAPE);
-    const int32_t split = p->gx1 - 26;
+    const float rv = pn(P_REVERB), size = pn(P_SIZE), tone = pn(P_RTONE), rain = pn(P_GUNK);
     const float len = 0.15f + 0.85f * size;
-    int32_t x, y;
-    for (x = p->gx0; x < split; x++) {                   /* the impulse, then the tail dying away */
-        const float t = (float)(x - p->gx0) / ((float)(split - p->gx0) * len);
-        const float wob = tape * 1.2f * mm_sin_turns((float)x * 0.05f + bs.t * 0.4f);
-        const float lv = rv * mm_expf(-t * 4.0f) + wob * 0.03f;
+    int32_t x, y, i;
+    for (x = p->gx0; x < p->gx1; x++) {                  /* the impulse, then the tail dying away */
+        const float t = (float)(x - p->gx0) / ((float)(p->gx1 - p->gx0) * len);
+        const float lv = rv * mm_expf(-t * 4.0f);
         const int32_t top = gy_of(p, lv);
         if (t > 1.2f)
             break;
-        for (y = top; y < p->gy1; y++)
-            if (px_dith(x, y, 1 + (y == top ? 3 : 0)))
-                px_pset(x, y, y == top ? PC_BLOB2 : (x + y) % 5 ? PC_RAIN : PC_BLOBD);
+        for (y = top; y < p->gy1; y++)                  /* Tone: a brighter room, a brighter, denser tail */
+            if (px_dith(x, y, 1 + (y == top ? 3 : (int)(tone * 2.0f))))
+                px_pset(x, y, y == top ? (tone > 0.6f ? PC_BLOB3 : PC_BLOB2) : (x + y) % 5 ? PC_RAIN : PC_BLOBD);
     }
     px_rect(p->gx0, p->gy0, 2, p->gy1 - p->gy0, PC_WHITE);
-    /* the fry: what goes in, what comes out */
-    {
+    for (i = 0; i < (int)(rain * 14.0f); i++) {          /* the rain, falling through it */
+        const uint32_t hh = (uint32_t)i * 2654435761u;
+        const int32_t rx = p->gx0 + 4 + (int32_t)(hh % (uint32_t)(p->gx1 - p->gx0 - 6));
+        const float fall = bs.t * (0.9f + (float)((hh >> 8) & 7u) * 0.1f) + (float)((hh >> 12) & 15u) / 15.0f;
+        const int32_t ry = p->gy0 + (int32_t)((fall - mm_floorf(fall)) * (float)(p->gy1 - p->gy0));
+        px_rect(rx, ry, 1, 2, PC_RAIN2);
+    }
+}
+
+static void schem_copies(const drawer_t *p)              /* the chorus: the wave, its see-through copies sliding */
+{
+    const float c = pn(P_CHORUS), rate = pn(P_CHRATE), depth = pn(P_CHDEPTH), width = pn(P_CHWIDTH);
+    const int n = c > 0.02f ? 1 + (int)(c * 3.0f) : 0;
+    const float cx = (float)(p->gx0 + p->gx1) * 0.5f, wv = 40.0f;
+    int k, i;
+    for (k = n; k >= 0; k--)                            /* the far copies first, the wave in front */
+        for (i = 0; i < 40; i++) {
+            const int side = k & 1 ? 1 : -1;
+            const float sway = k ? side * (4.0f + 14.0f * width * (float)((k + 1) / 2)) +
+                                       depth * 5.0f * mm_sin_turns(bs.t * (0.3f + rate * 2.5f) + (float)k * 0.3f)
+                                 : 0.0f;
+            const float y = sy_shape(proj.par[P_TABLE], pn(P_POS), (float)i / 40.0f + (k ? 0.05f * (float)k : 0.0f));
+            const int32_t x = (int32_t)(cx - wv * 0.5f + (float)i + sway), yy = (p->gy0 + p->gy1) / 2 - (int32_t)(y * 7.0f);
+            if (x > p->gx0 && x < p->gx1)
+                px_pset(x, yy, k ? (k > 2 ? PC_BLOBD : PC_GHOST) : PC_BLOB2);
+        }
+}
+
+static void schem_dust(const drawer_t *p)                /* an old record: the band left, the crackle, the warble; the fry */
+{
+    const float tape = pn(P_TAPE), crk = pn(P_CRACKLE), du = pn(P_DUST), fry = pn(P_FRY);
+    const int32_t split = p->gx1 - 26, w = split - p->gx0;
+    const float lo = 0.06f + 0.22f * du, hi = 0.97f - 0.4f * du;   /* where the band starts and stops, across */
+    int32_t x, i;
+    for (x = p->gx0; x < split; x++) {                   /* the band: a hump between its two edges */
+        const float f = (float)(x - p->gx0) / (float)w;
+        float lv = f < lo ? f / lo : f > hi ? 1.0f - (f - hi) / (1.0f - hi + 0.001f) * 3.0f : 1.0f;
+        lv = mm_clampf(lv, 0.0f, 1.0f) * (0.75f + tape * 0.12f * mm_sin_turns(f * 3.0f + bs.t * 0.5f));
+        {
+            const int32_t top = gy_of(p, lv);
+            px_pset(x, top, PC_BLOB2);
+            if (x & 1)
+                px_rect(x, top + 1, 1, p->gy1 - top - 1, PC_BLOBD);
+        }
+    }
+    for (i = 0; i < (int)(crk * 10.0f); i++) {          /* the crackle: specks on it, coming and going */
+        const uint32_t hh = ((uint32_t)i * 2654435761u) ^ (uint32_t)(bs.t * 7.0f) * 40503u;
+        px_pset(p->gx0 + (int32_t)(hh % (uint32_t)w), p->gy0 + 2 + (int32_t)((hh >> 9) % (uint32_t)(p->gy1 - p->gy0 - 3)),
+                PC_EYE);
+    }
+    {   /* the fry: what goes in, what comes out */
         const float g = 1.0f + fry * fry * 24.0f;
-        int32_t lx = 0, ly = 0, i;
+        int32_t lx = 0, ly = 0;
         px_rect(split + 2, p->gy0, 1, p->gy1 - p->gy0, PC_WALL);
         for (i = 0; i <= 20; i++) {
             const float in = (float)i / 10.0f - 1.0f, out = mm_tanhf(in * g) / mm_tanhf(g);
@@ -1280,15 +1321,24 @@ static void schem_deck(const drawer_t *p)                /* the drums: round ste
     }
 }
 
-/* the mixer: four channel strips, each a fader (its level) and a meter (what comes through it now) */
+/* the mixer: the tempo (a pendulum, swinging at it), then three channel strips, each a fader (its level)
+ * and a meter (what comes through it now) */
 static void schem_mix(const drawer_t *p)
 {
-    static const uint8_t CH[4] = {P_SYNTH, P_DRUMS, P_BASS, P_GUNK};
-    static float hold[4];
+    static const uint8_t CH[3] = {P_SYNTH, P_DRUMS, P_BASS};
+    static float hold[3];
     int i;
-    for (i = 0; i < 4; i++) {
-        const int32_t x = 3 + i * 29 + 8, h = p->gy1 - p->gy0;
-        const float lv = mm_clampf(sy_tel.lvl[i] * (i == 3 ? 6.0f : 1.6f), 0.0f, 1.0f);
+    {
+        const int32_t px0 = 3 + 8, top = p->gy0, h = p->gy1 - p->gy0;
+        const float sw = mm_sin_turns(bs.t * (float)proj.par[P_TEMPO] / 120.0f);   /* (one swing a beat) */
+        const int32_t bx = px0 + (int32_t)(sw * 7.0f), by = top + h - 3;
+        px_line(px0, top, bx, by, PC_GRID);
+        px_rect(bx - 1, by - 1, 3, 3, PC_BLOB2);
+        px_rect(px0 - 1, top, 3, 1, PC_WALL);
+    }
+    for (i = 0; i < 3; i++) {
+        const int32_t x = 3 + (i + 1) * 29 + 8, h = p->gy1 - p->gy0;
+        const float lv = mm_clampf(sy_tel.lvl[i] * 1.6f, 0.0f, 1.0f);
         const int32_t fy = gy_of(p, pn(CH[i]));
         int32_t y, mh;
         hold[i] = lv > hold[i] ? lv : hold[i] * 0.94f;
@@ -1297,7 +1347,7 @@ static void schem_mix(const drawer_t *p)
         px_rect(x - 2, fy, 5, 1, PC_BLOB3);
         mh = (int32_t)(hold[i] * (float)h + 0.5f);          /* the meter beside it */
         for (y = 0; y < h; y += 2)
-            px_rect(x + 6, p->gy1 - y - 1, 4, 1, y < mh ? (y > h * 3 / 4 ? PC_SPEC : i == 3 ? PC_GHOST : PC_TEAR) : PC_GRID);
+            px_rect(x + 6, p->gy1 - y - 1, 4, 1, y < mh ? (y > h * 3 / 4 ? PC_SPEC : PC_TEAR) : PC_GRID);
     }
 }
 
@@ -1524,6 +1574,8 @@ static void draw_panel(const geo_t *g)
     case PG_VIBE: schem_vibe(&p); break;
     case PG_TEARS: schem_tears(&p); break;
     case PG_WALLS: schem_walls(&p); break;
+    case PG_COPIES: schem_copies(&p); break;
+    case PG_DUST: schem_dust(&p); break;
     case PG_DECK: schem_deck(&p); break;
     case PG_MIX: schem_mix(&p); break;
     case PG_ARP: schem_arp(&p); break;
