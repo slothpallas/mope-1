@@ -34,7 +34,7 @@ static const sy_param_t PARAMS[P_NPARAMS] = {
 };
 const sy_param_t *sy_param_info(int i) { return &PARAMS[i < 0 ? 0 : i >= P_NPARAMS ? P_NPARAMS - 1 : i]; }
 
-const char *const SY_TABLE_NAME[SY_NTABLE] = {"SIGH", "MOAN", "PULSE", "CRUSH", "WARBLE", "FOLD", "CHURCH", "SYNC",
+const char *const SY_TABLE_NAME[SY_NTABLE] = {"PLAIN", "MOAN", "PULSE", "CRUSH", "WARBLE", "FOLD", "CHURCH", "SYNC",
                                                  "GLASS", "BREATH", "CRY", "HOLLOW", "BEND", "TOY", "ICE", "SAG"};
 
 volatile sy_tel_t sy_tel;
@@ -129,12 +129,19 @@ static float recipe(int t, float m, float x)
 {
     float s = mm_sin_turns(x), y;
     switch (t) {
-    case 0: {                                           /* SIGH: a sine leaning into a soft saw */
-        float sw = 0.0f;
+    case 0: {                                           /* PLAIN: a sine, a square at the middle (frame 4), a saw at the end */
+        const float f = m * 7.0f;
+        float sq = 0.0f, sw = 0.0f;
         int h;
-        for (h = 1; h <= 24; h++)
-            sw += mm_sin_turns(x * (float)h) / (float)h * (h & 1 ? 1.0f : 0.7f);
-        return s * (1.0f - m) + sw * 0.6f * m + 0.25f * m * (1.0f - m) * tri(x);
+        for (h = 1; h <= 48; h++) {
+            const float a = mm_sin_turns(x * (float)h) / (float)h;
+            sw += a;
+            if (h & 1)
+                sq += a;
+        }
+        if (f <= 4.0f)
+            return s + (sq - s) * (f * 0.25f);
+        return sq + (sw - sq) * ((f - 4.0f) * (1.0f / 3.0f));
     }
     case 1: {                                           /* MOAN: a voice from "oo" to "ah" to "ee" */
         static const float F1[3] = {300.0f, 750.0f, 280.0f}, F2[3] = {870.0f, 1150.0f, 2250.0f};
@@ -251,7 +258,7 @@ static void tables_build(void)
         sintab[i] = mm_sin_turns((float)i / (float)SRC_N);
     for (t = 0; t < SY_NTABLE; t++)
         for (f = 0; f < SY_NFRAME; f++) {
-            float pk = 0.0f, g;
+            float pk = 0.0f, g, rms = 0.0f;
             const float mm = (float)f / (float)(SY_NFRAME - 1);
             if (sy_boot_tick)
                 sy_boot_tick();                         /* (the device's watchdog) */
@@ -279,10 +286,16 @@ static void tables_build(void)
                     tmp[i] = v;
                     if (m == 0 && mm_fabsf(v) > pk)
                         pk = mm_fabsf(v);
+                    if (m == 0)
+                        rms += v * v;
                 }
-                if (m == 0)
+                if (m == 0) {
                     pk = pk > 1e-6f ? pk : 1.0f;
+                    rms = mm_sqrtf(rms / (float)n);
+                }
                 g = 30000.0f / pk;
+                if (t == 0 && rms > 1e-6f && 21213.0f / rms < g)
+                    g = 21213.0f / rms;                 /* (PLAIN: as loud as its sine all the way, not just as high) */
                 for (i = 0; i < n; i++) {
                     float v = mm_clampf(tmp[i] * g, -32767.0f, 32767.0f);
                     wt[t][f][MIP_OFF[m] + i] = (int16_t)(v < 0.0f ? v - 0.5f : v + 0.5f);

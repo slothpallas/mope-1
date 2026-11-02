@@ -163,7 +163,7 @@ static int first_echo(int time)
 int main(int argc, char **argv)
 {
     const char *dir = argc > 1 ? argv[1] : ".";
-    int s, t, i;
+    int s, t, i, h;
     sy_init();
 
     printf("styles\n");
@@ -181,6 +181,29 @@ int main(int argc, char **argv)
             mn = x < mn ? x : mn;
         }
         CHECK(mx > 0.3f && mn < -0.3f && mx <= 1.01f, "%s: a full shape (%.2f .. %.2f)", SY_TABLE_NAME[t], (double)mn, (double)mx);
+    }
+
+    printf("plain\n");
+    {   /* table 0: a sine, a square at frame 4, a saw at frame 7 (its harmonics, from a 64-point DFT) */
+        float hm[8][3];
+        const float at[3] = {0.0f, 4.0f / 7.0f, 1.0f};
+        int k, j;
+        for (k = 0; k < 3; k++)
+            for (h = 1; h <= 4; h++) {
+                float re = 0.0f, im = 0.0f;
+                for (j = 0; j < 64; j++) {
+                    const float x = sy_shape(0, at[k], (float)j / 64.0f), ph = (float)(h * j) / 64.0f;
+                    re += x * mm_sin_turns(ph);
+                    im += x * mm_sin_turns(ph + 0.25f);
+                }
+                hm[h][k] = mm_sqrtf(re * re + im * im);
+            }
+        CHECK(hm[2][0] < hm[1][0] * 0.01f && hm[3][0] < hm[1][0] * 0.01f, "PLAIN starts as a sine (h2 %.3f, h3 %.3f of h1)",
+              (double)(hm[2][0] / hm[1][0]), (double)(hm[3][0] / hm[1][0]));
+        CHECK(hm[2][1] < hm[1][1] * 0.03f && hm[3][1] / hm[1][1] > 0.28f && hm[3][1] / hm[1][1] < 0.38f,
+              "...is a square in the middle (h2 %.3f, h3 %.3f)", (double)(hm[2][1] / hm[1][1]), (double)(hm[3][1] / hm[1][1]));
+        CHECK(hm[2][2] / hm[1][2] > 0.42f && hm[2][2] / hm[1][2] < 0.58f, "...and a saw at the end (h2 %.3f)",
+              (double)(hm[2][2] / hm[1][2]));
     }
 
     printf("aliasing\n");
