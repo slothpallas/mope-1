@@ -66,7 +66,9 @@ enum { LFO_SINE, LFO_TRI, LFO_SQUARE, LFO_SAW, LFO_RANDOM,
 float sy_lfo_shape(int shape, float phase, float from, float to);
 enum { ARP_UP, ARP_DOWN, ARP_UPDOWN, ARP_WANDER, ARP_STAB, ARP_NMODE };
 #define ARP_NRATE 6                                 /* 1/4 1/8 1/8T 1/16 1/16T 1/32 */
-enum { LD_POS, LD_CUTOFF, LD_PITCH, LD_VOLUME, LD_SHADOW, LD_N };   /* where an LFO goes */
+/* where an LFO goes: the table's position, the eyes, the pitch, the volume, the shadow; then across the
+ * tables, the detune, and the four effects' amounts */
+enum { LD_POS, LD_CUTOFF, LD_PITCH, LD_VOLUME, LD_SHADOW, LD_TABLE, LD_DETUNE, LD_WALLS, LD_TEARS, LD_COPIES, LD_DUST, LD_N };
 enum { MEET_MIX, MEET_FM, MEET_RING, MEET_SYNC, MEET_N };             /* how oscillator B meets A */
 enum { FT_LOW, FT_BAND, FT_HIGH, FT_NOTCH, FT_COMB, FT_N };           /* the filter's kinds */
 
@@ -140,6 +142,7 @@ typedef struct {
     float shadow;                 /* oscillator B's level now (with the LFOs), 0..1 */
     float wave_env;               /* the loudest voice's sweep of the table (SIGH), -1..1 */
     float wave_pos;               /* where in the table it is now, with every modulation, 0..1 */
+    float wave_tbl;               /* which table, with the LFOs scanning across them (0..15, between two: both) */
     uint8_t amp_stage;            /* the loudest voice's envelope: 0 off, 1 attack, 2 decay, 3 sustain, 4 release */
     float out_peak;               /* the output's peak over the last block, before the limiter */
     float echo;                   /* what the delay is sending back, 0..~1 */

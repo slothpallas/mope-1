@@ -71,6 +71,32 @@ static void run(uint32_t ms)
 
 /* the energy of a sine at hz in a mono capture (Goertzel), relative to the capture's */
 static float cap[8192];
+/* a click in ms of output: the left side's biggest step from one sample to the next, as a multiple of the steps
+ * around it (smooth sound: a few; a jump: many) */
+static float spikiness(uint32_t ms)
+{
+    uint32_t blocks = ms * 441u / 2560u + 1u, b, k;
+    float x[5] = {0, 0, 0, 0, 0}, worst = 0.0f;
+    for (b = 0; b < blocks; b++) {
+        sy_render(blk, 256, 4096);
+        for (k = 0; k < 256; k++) {
+            float d1, d0, d2, d3, around;
+            x[0] = x[1];
+            x[1] = x[2];
+            x[2] = x[3];
+            x[3] = x[4];
+            x[4] = (float)blk[2 * k] / 8388608.0f;
+            d0 = mm_fabsf(x[1] - x[0]);
+            d1 = mm_fabsf(x[2] - x[1]);                 /* (the step in the middle, against the ones beside it) */
+            d2 = mm_fabsf(x[3] - x[2]);
+            d3 = mm_fabsf(x[4] - x[3]);
+            around = (d0 + d2 + d3) / 3.0f + 1e-4f;
+            if (b > 2 && d1 / around > worst)
+                worst = d1 / around;
+        }
+    }
+    return worst;
+}
 static void capture(void)
 {
     uint32_t b, k;
@@ -240,6 +266,52 @@ int main(int argc, char **argv)
         CHECK(worst < sig * 1e-5f, "C7 on %s: aliases %.1f dB under the fundamental", SY_TABLE_NAME[t],
               (double)(10.0f * mm_log2f(worst / sig + 1e-20f) * 0.30103f));
         sy_note_off(96);
+        quiet();
+    }
+
+    printf("lfo destinations\n");
+    {   /* an LFO across the tables, round all sixteen: the wave changes, and it never clicks (no single step out
+         * of line with the ones around it, as a switch from one table to the next without the crossfade is) */
+        float spikes;
+        sy_set(P_POS, 30);
+        sy_set(P_CUTOFF, 100);
+        sy_set(P_SUSTAIN, 100);
+        sy_set(P_DETUNE, 0);
+        sy_set(P_SUB, 0);
+        sy_set(P_TABLE, 8);
+        sy_set(P_LFODEST, LD_TABLE);
+        sy_set(P_LFORATE, 55);
+        sy_set(P_LFOSHAPE, LFO_SINE);
+        sy_set(P_LFODEPTH, 100);
+        sy_note_on(45, 100);
+        run(300);
+        spikes = spikiness(3000);
+        CHECK(sy_tel.wave_tbl != 8.0f, "LFO to the tables: it scans them (at %.2f)", (double)sy_tel.wave_tbl);
+        CHECK(spikes < 8.5f && !bad, "...without a click (worst step %.1fx the ones around it; without the crossfade ~10x)",
+              (double)spikes);
+        sy_note_off(48);
+        sy_note_off(45);
+        sy_set(P_LFODEPTH, 0);
+        quiet();
+    }
+    {   /* an LFO on the walls: the reverb opens with it, though the knob is at 0 */
+        float most = 0.0f;
+        int k;
+        sy_set(P_REVERB, 0);
+        sy_set(P_LFODEST, LD_WALLS);
+        sy_set(P_LFORATE, 30);
+        sy_set(P_LFODEPTH, 100);
+        sy_note_on(60, 100);
+        for (k = 0; k < 40; k++) {
+            run(50);
+            most = sy_tel.verb > most ? sy_tel.verb : most;
+        }
+        sy_note_off(60);
+        CHECK(most > 0.02f, "LFO to the walls: the room opens with it (%.3f)", (double)most);
+        sy_set(P_LFODEPTH, 0);
+        sy_set(P_LFODEST, LD_POS);
+        for (k = 0; k < P_NPARAMS; k++)
+            sy_set(k, sy_param_info(k)->def);
         quiet();
     }
 

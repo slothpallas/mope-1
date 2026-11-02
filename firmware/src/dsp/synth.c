@@ -754,7 +754,10 @@ static float vbl[SUB], vbr[SUB];
 /* what the two LFOs do, summed by destination */
 typedef struct {
     float pos, cut, pitch, vol, shadow;
+    float table, detune, verb, echo, copies, dust;   /* (tables: +-4 at full depth; the rest: added to 0..1) */
+    int scanning;                                    /* an LFO is on the tables: a second read, crossfading */
 } mods_t;
+#define MODS_NONE {0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0}
 static void lfo_into(mods_t *m, float lfo, int depth_p, int dest_p)
 {
     const float depth = pf(depth_p);
@@ -763,7 +766,16 @@ static void lfo_into(mods_t *m, float lfo, int depth_p, int dest_p)
     case LD_CUTOFF: m->cut += lfo * depth * 4.0f; break;
     case LD_PITCH: m->pitch += lfo * depth * 100.0f; break;
     case LD_VOLUME: m->vol *= 1.0f - depth * 0.5f * (1.0f + lfo); break;
-    default: m->shadow += lfo * depth * 0.5f; break;
+    case LD_SHADOW: m->shadow += lfo * depth * 0.5f; break;
+    case LD_TABLE:
+        m->table += lfo * depth * 4.0f;
+        m->scanning |= depth > 0.0f;
+        break;
+    case LD_DETUNE: m->detune += lfo * depth * 0.5f; break;
+    case LD_WALLS: m->verb += lfo * depth; break;
+    case LD_TEARS: m->echo += lfo * depth; break;
+    case LD_COPIES: m->copies += lfo * depth; break;
+    default: m->dust += lfo * depth; break;
     }
 }
 
@@ -818,32 +830,35 @@ static inline float amp_step(voice_t *v, float att, float dec, float sus, float 
     return e;
 }
 
-static void render_voices(float *ol, float *or_, uint32_t n, float lfo, float lfo_b)
+static float tpos_was;                               /* last block's table (the scan glides between blocks) */
+static void render_voices(float *ol, float *or_, uint32_t n, const mods_t *mods)
 {
-    mods_t md = {0.0f, 0.0f, 0.0f, 1.0f, 0.0f};
+    mods_t md = *mods;
     const float att = 1.0f / (knob_s(P_ATTACK) * SY_SR), dec = coef_s(knob_s(P_DECAY) * 0.3f);
     const float rel = coef_s(knob_s(P_RELEASE) * 0.3f), sus = pf(P_SUSTAIN);
     const float mdec = coef_s(knob_s(P_MODDEC) * 0.3f);
     const float matt = par[P_MATTACK] ? 1.0f / (knob_s(P_MATTACK) * SY_SR) : att;   /* (0: with the mouth) */
-    const float det = pf(P_DETUNE) * pf(P_DETUNE) * 40.0f + 2.0f;   /* cents apart, each way */
-    const float spread = 0.15f + 0.35f * pf(P_DETUNE), sub = pf(P_SUB) * 0.8f;
+    const float dtn = mm_clampf(pf(P_DETUNE) + md.detune, 0.0f, 1.0f);
+    const float det = dtn * dtn * 40.0f + 2.0f;         /* cents apart, each way */
+    const float spread = 0.15f + 0.35f * dtn, sub = pf(P_SUB) * 0.8f;
     const float k = 2.0f - 1.94f * pf(P_RESO);          /* the SVF's damping: 1/Q */
     const float glide = par[P_GLIDE] ? 1.0f - mm_expf(-(float)SUB / (0.002f * mm_exp2f(pf(P_GLIDE) * 9.0f) * SY_SR)) : 1.0f;
-    const int tbl = par[P_TABLE], tblb = par[P_BTABLE], meet = par[P_BMEET], ftype = par[P_FTYPE];
+    const int tblb = par[P_BTABLE], meet = par[P_BMEET], ftype = par[P_FTYPE];
+    const float tpos_now = mm_clampf((float)par[P_TABLE] + md.table, 0.0f, (float)(SY_NTABLE - 1)), tpos0 = tpos_was;
     const float b_ratio = mm_exp2f((float)par[P_BTUNE] * (1.0f / 12.0f)), sweep = pf(P_MWAVE);
     const float drive = pf(P_DRIVE), drv_g = 1.0f + 7.0f * drive * drive, drv_back = 1.0f / (1.0f + 1.6f * drive);
     const float band_g = k > 0.35f ? k : 0.35f;         /* (a band-pass's peak at unity, but never silent) */
     float lvl, base_pos, amp_max = 0.0f, menv_max = 0.0f, wave_env = 0.0f, wave_pos = 0.0f;
     int i;
     uint8_t nv = 0, ng = 0, stage = ST_OFF;
-    lfo_into(&md, lfo, P_LFODEPTH, P_LFODEST);
-    lfo_into(&md, lfo_b, P_LFO2DEPTH, P_LFO2DEST);
     md.vol *= mm_exp2f((float)par[P_LEVEL] * 0.04f);   /* the preset's own level */
     lvl = mm_clampf(pf(P_BLEVEL) + md.shadow, 0.0f, 1.0f);
-    const int shadow_on = lvl > 0.0f, plain = !shadow_on && ftype == FT_LOW && drive <= 0.0f;
+    const int scan = md.scanning || tpos0 != tpos_now || tpos_now != (float)(int)tpos_now;
+    const int shadow_on = lvl > 0.0f, plain = !shadow_on && ftype == FT_LOW && drive <= 0.0f && !scan;
     base_pos = pf(P_POS) + md.pos + mod_amt;
     {   /* what a voice of this sound costs on the FM-1 (measured: % of a block): a heavy one, fewer voices */
-        const float cost = 6.6f + (shadow_on ? 2.2f : 0.0f) + (drive > 0.0f ? 1.5f : 0.0f) + (ftype != FT_LOW ? 2.0f : 0.0f);
+        const float cost = 6.6f + (shadow_on ? 2.2f : 0.0f) + (drive > 0.0f ? 1.5f : 0.0f) + (ftype != FT_LOW ? 2.0f : 0.0f) +
+                           (scan ? 2.2f : 0.0f);
         vcap_sound = (int)(52.0f / cost);                 /* (room left for the drums and the bass) */
         vcap_sound = vcap_sound < 3 ? 3 : vcap_sound > SY_NVOICE ? SY_NVOICE : vcap_sound;
         if (voices_kept() > vcap_sound)
@@ -859,8 +874,16 @@ static void render_voices(float *ol, float *or_, uint32_t n, float lfo, float lf
         for (j0 = 0; j0 < n; j0 += SUB) {
             float c, hz, inc[2], incs, incb, cut, g, a1, a2, a3, pos, comb_d = 0.0f, comb_fb = 0.0f;
             uint32_t j;
-            wtsel_t wa, wb;
+            wtsel_t wa, wb, wc;
             const int16_t *wb_t;
+            /* which table: between last block's and this one's (an LFO scanning them glides, no step) */
+            const float tp = tpos0 + (tpos_now - tpos0) * (float)(j0 + SUB) / (float)n;
+            int t0 = (int)tp;
+            float tf = tp - (float)t0;
+            if (t0 >= SY_NTABLE - 1) {
+                t0 = SY_NTABLE - 1;
+                tf = 0.0f;
+            }
             /* pitch: the glide, a slow drift (an old synth's), the bend, the LFOs */
             v->cents += (v->cents_to - v->cents) * glide;
             if ((rnd() & 255u) == 0u)
@@ -870,7 +893,8 @@ static void render_voices(float *ol, float *or_, uint32_t n, float lfo, float lf
             hz = 8.1757989f * mm_exp2f(c * (1.0f / 1200.0f));
             /* where in the table: the knob, the LFOs, the wheel, and this note's sweep (SIGH) */
             pos = mm_clampf(base_pos + v->menv * sweep, 0.0f, 1.0f);
-            wa = wt_pick(tbl, pos, hz * mm_exp2f(det / 1200.0f));
+            wa = wt_pick(t0, pos, hz * mm_exp2f(det / 1200.0f));
+            wc = tf > 0.002f ? wt_pick(t0 + 1, pos, hz * mm_exp2f(det / 1200.0f)) : wa;   /* (the next table, faded in) */
             if (shadow_on)
                 wb = wt_pick(tblb, pos, hz * b_ratio);
             else
@@ -929,16 +953,21 @@ static void render_voices(float *ol, float *or_, uint32_t n, float lfo, float lf
                     v->phb += incb;
                     v->phb -= (float)(int)v->phb;
                 }
-                if (shadow_on && meet == MEET_FM) {     /* B bends A's phase */
-                    const float pm = ob * lvl * 0.8f;
-                    float p0 = v->ph[0] + pm, p1 = v->ph[1] + pm;
-                    p0 -= mm_floorf(p0);
-                    p1 -= mm_floorf(p1);
+                {
+                    float p0 = v->ph[0], p1 = v->ph[1];
+                    if (shadow_on && meet == MEET_FM) { /* B bends A's phase */
+                        const float pm = ob * lvl * 0.8f;
+                        p0 += pm;
+                        p1 += pm;
+                        p0 -= mm_floorf(p0);
+                        p1 -= mm_floorf(p1);
+                    }
                     o0 = wt_read(wa.a, wa.b, wa.fr, wa.len, p0);
                     o1 = wt_read(wa.a, wa.b, wa.fr, wa.len, p1);
-                } else {
-                    o0 = wt_read(wa.a, wa.b, wa.fr, wa.len, v->ph[0]);
-                    o1 = wt_read(wa.a, wa.b, wa.fr, wa.len, v->ph[1]);
+                    if (tf > 0.002f) {                  /* between two tables: both, crossfaded */
+                        o0 += (wt_read(wc.a, wc.b, wc.fr, wc.len, p0) - o0) * tf;
+                        o1 += (wt_read(wc.a, wc.b, wc.fr, wc.len, p1) - o1) * tf;
+                    }
                 }
                 v->ph[0] += inc[0];
                 v->ph[1] += inc[1];
@@ -1044,6 +1073,8 @@ static void render_voices(float *ol, float *or_, uint32_t n, float lfo, float lf
     sy_tel.shadow = lvl;
     sy_tel.wave_env = wave_env;
     sy_tel.wave_pos = nv ? wave_pos : mm_clampf(base_pos, 0.0f, 1.0f);
+    sy_tel.wave_tbl = tpos_now;
+    tpos_was = tpos_now;
 }
 
 /* ---------------------------------------------------------------- fry --- */
@@ -2168,12 +2199,15 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
 {
     uint32_t j0, j;
     float lfo, lfo_b, peak = 0.0f, gr_min = 1.0f, busy = 0.0f, lv[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    float chorus_amt, dsend, rsend;
+    mods_t md = MODS_NONE;
+    static float was_ch, was_dl, was_rv;                 /* last block's effect amounts: this one glides from them */
+    float to_ch, to_dl, to_rv;
     const float synth_g = pf(P_SYNTH) * 1.25f;
-    const float chorus_amt = pf(P_CHORUS), dsend = pf(P_DELAY) * 0.8f, rsend = pf(P_REVERB) * 0.6f;
     const float tape = pf(P_TAPE), drum_g = pf(P_DRUMS) * 0.5f, bass_g = pf(P_BASS) * 0.55f;
     const float vol = pf(P_VOLUME) * pf(P_VOLUME) * 1.6f * (float)gain_q12 * (1.0f / 4096.0f);
     const float tp_sat = 1.0f + tape * 1.8f, tp_comp = 1.0f / mm_tanhf(tp_sat), tp_lp = 0.95f - 0.6f * tape;
-    const float crackle = pf(P_CRACKLE), dusty = pf(P_DUST), du_lp = 0.94f - 0.55f * dusty, du_hp = 0.0014f + 0.024f * dusty;
+    float crackle = pf(P_CRACKLE), dusty, du_lp, du_hp;
     const float ch_hz = 0.37f * mm_exp2f(5.0f * (pf(P_CHRATE) - 0.3f)), ch_dep = pf(P_CHDEPTH) * 2.0f,
                 ch_narrow = 0.5f * (1.0f - pf(P_CHWIDTH));
     drain();
@@ -2185,15 +2219,29 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
     sy_tel.lfo_phase = lfo1.ph;
     sy_tel.lfo2 = lfo_b;
     sy_tel.lfo2_phase = lfo2.ph;
+    lfo_into(&md, lfo, P_LFODEPTH, P_LFODEST);           /* both LFOs, wherever they go: the voices and the effects */
+    lfo_into(&md, lfo_b, P_LFO2DEPTH, P_LFO2DEST);
+    to_ch = mm_clampf(pf(P_CHORUS) + md.copies, 0.0f, 1.0f);
+    to_dl = mm_clampf(pf(P_DELAY) + md.echo, 0.0f, 1.0f) * 0.8f;
+    to_rv = mm_clampf(pf(P_REVERB) + md.verb, 0.0f, 1.0f) * 0.6f;
+    dusty = mm_clampf(pf(P_DUST) + md.dust, 0.0f, 1.0f);
+    du_lp = 0.94f - 0.55f * dusty;
+    du_hp = 0.0014f + 0.024f * dusty;
     for (j = 0; j < n; j++)
         bl[j] = br[j] = 0.0f;
-    render_voices(bl, br, n, lfo, lfo_b);
+    render_voices(bl, br, n, &md);
     for (j = 0; j < SY_SCOPE; j++) {                    /* the voices alone: the blob's outline */
         uint32_t s = j * n / SY_SCOPE;
         sy_tel.scope[j] = (bl[s] + br[s]) * 1.5f;
     }
     for (j0 = 0; j0 < n; j0 += 16u) {
         float d[4];
+        {
+            const float k = (float)(j0 + 16u) / (float)n;
+            chorus_amt = was_ch + (to_ch - was_ch) * k;
+            dsend = was_dl + (to_dl - was_dl) * k;
+            rsend = was_rv + (to_rv - was_rv) * k;
+        }
         ch_ph += ch_hz * 16.0f / SY_SR;
         ch_ph -= (float)(int)ch_ph;
         d[0] = 441.0f + 180.0f * ch_dep * mm_sin_turns(ch_ph);   /* (Depth 100: 801 and 1000 back, inside the 1024) */
@@ -2275,6 +2323,9 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
             }
         }
     }
+    was_ch = to_ch;
+    was_dl = to_dl;
+    was_rv = to_rv;
     sy_tel.out_peak = peak;
     sy_tel.busy = busy;
     sy_tel.loop_ticks = (uint16_t)loop_ticks();
