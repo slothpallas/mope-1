@@ -184,7 +184,9 @@ static const mood_t MOODS[] = {
 /* what a level-up feels like */
 static const char *const LEVEL_UP[] = {"OK.", "COOL. I GUESS.", "LEVEL UP. NOTHING CHANGED.", "+1 SADNESS",
                                        "ACHIEVEMENT: STILL HERE", "GG", "IT LISTENED.", "NEW SKILL: NONE"};
-static const char *const LFO_DEST_NAME[] = {"TO: SHAPE", "TO: EYES", "TO: VOICE", "TO: VOLUME", "TO: SHADOW"};
+static const char *const LFO_DEST_NAME[] = {"TO: SHAPE", "TO: EYES", "TO: VOICE", "TO: VOLUME", "TO: SHADOW",
+                                            "TO: THE TABLES", "TO: DETUNE", "TO: THE WALLS", "TO: THE TEARS",
+                                            "TO: THE COPIES", "TO: THE DUST"};
 _Static_assert(sizeof LFO_DEST_NAME / sizeof LFO_DEST_NAME[0] == LD_N, "a name for each");
 static const char *const MEET_NAME[] = {"MIX: BESIDE IT", "FM: INSIDE IT", "RING: AROUND IT", "SYNC: TIED TO IT"};
 _Static_assert(sizeof MEET_NAME / sizeof MEET_NAME[0] == MEET_N, "a name for each");

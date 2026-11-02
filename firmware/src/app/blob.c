@@ -333,12 +333,16 @@ static float bvx[NV], bvy[NV];
 
 static void body_shape(const geo_t *g, float squash_x, float squash_y, float r_scale, float lag)
 {
-    const int tbl = proj.par[P_TABLE];
+    const float wt = sy_tel.wave_tbl;                  /* (an LFO across the tables: between two, both) */
+    const int tbl = (int)wt < SY_NTABLE ? (int)wt : SY_NTABLE - 1;
+    const float tf = tbl < SY_NTABLE - 1 ? wt - (float)tbl : 0.0f;
     const float pos = pn(P_POS), sub = pn(P_SUB), live = 0.14f + 0.1f * sy_tel.amp_env;
     int k;
     for (k = 0; k < NV; k++) {
         float th = (float)k / (float)NV, sh, sc, r, x, y;
         sh = sy_shape(tbl, pos, th + lag);
+        if (tf > 0.01f)
+            sh += (sy_shape(tbl + 1, pos, th + lag) - sh) * tf;
         sc = sy_tel.scope[k & (SY_SCOPE - 1)];
         sc = sc > 1.0f ? 1.0f : sc < -1.0f ? -1.0f : sc;
         /* lumps that drift (it is never a clean ball) */
@@ -1075,7 +1079,8 @@ static void schem_mouth(const drawer_t *p)               /* the envelope: attack
 /* an LFO (VIBE's, TREMBLE's): its wave, its speed, where it is, where it goes */
 static void schem_lfo(const drawer_t *p, int shape_p, int rate_p, int depth_p, int dest_p, float phase)
 {
-    static const char *const DEST[] = {"SHAPE", "EYES", "PITCH", "VOL", "SHADOW"};
+    static const char *const DEST[] = {"SHAPE", "EYES", "PITCH", "VOL", "SHADOW", "TABLE", "DTUN", "WALLS",
+                                       "TEARS", "COPY", "DUST"};
     _Static_assert(sizeof DEST / sizeof DEST[0] == LD_N, "a name for every LFO destination");
     const int shape = proj.par[shape_p];
     const float cycles = 1.0f + 3.0f * pn(rate_p), depth = 0.15f + 0.85f * pn(depth_p);
