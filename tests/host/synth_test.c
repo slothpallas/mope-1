@@ -540,6 +540,20 @@ int main(int argc, char **argv)
         CHECK(t0 > 600 && t0 < 1600, "a closet: about a second (%d ms)", t0);
         CHECK(t1 > t0 + 500 && t1 < 3500, "a bigger room rings longer (%d ms)", t1);
         CHECK(t2 < 0, "the void: still going after 8 s");
+        {   /* the walls are int16, rounded: a tail must still fade to nothing, not hang on as a hum */
+            float tail;
+            quiet();
+            sy_set(P_SIZE, 50);
+            run(20);
+            for (i = 48; i < 72; i += 4)
+                sy_note_on(i, 127);
+            run(500);
+            for (i = 48; i < 72; i += 4)
+                sy_note_off(i);
+            run(25000);
+            tail = level(500);
+            CHECK(tail < 1e-5f, "the room fades to nothing (%.1e after 25 s)", (double)tail);
+        }
         sy_panic();
         sy_set(P_SIZE, 100);
         sy_set(P_DELAY, 100);

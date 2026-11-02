@@ -111,8 +111,13 @@ static const uint8_t MIP_H[NMIP] = {96, 48, 24, 12, 5};
 static const uint16_t MIP_OFF[NMIP] = {0, 256, 384, 448, 480};
 #define FRAME_N 512                                     /* the five, one after the other */
 static int16_t wt[SY_NTABLE][SY_NFRAME][FRAME_N] SY_POOL;
-static float sintab[SRC_N] SY_POOL;
-static float src[SRC_N] SY_POOL;
+/* the punch's buffer: the last 371 ms of the mix, stereo, at half rate. While the tables build it is
+ * their scratch (a sine and one frame's samples), and cleared after. */
+#define PU_N 8192u
+static int16_t pu_buf[2][PU_N] SY_POOL;
+#define sintab ((float *)(void *)pu_buf)
+#define src ((float *)(void *)pu_buf + SRC_N)
+_Static_assert(2u * SRC_N * sizeof(float) <= sizeof pu_buf, "the tables' scratch fits in the punch's buffer");
 #define WT_S (1.0f / 32767.0f)
 
 static inline float st(int i) { return sintab[i & (SRC_N - 1)]; }
@@ -284,6 +289,8 @@ static void tables_build(void)
                 }
             }
         }
+    for (i = 0; i < (int)PU_N; i++)                     /* (the scratch, given back to the punch) */
+        pu_buf[0][i] = pu_buf[1][i] = 0;
 }
 
 /* one table read: frames f0 and f0+1 mixed by fr, at phase ph, mip m */
@@ -1154,10 +1161,11 @@ static inline void delay(float in, float *l, float *r)
 #define ROOM_RING 2048u
 #define ROOM_PRE 265u                                 /* 12 ms */
 #define ROOM_SWAY 4.5f                                /* how far a breathing wall moves, samples */
+#define ROOM_IN 0.5f                                  /* into the int16 walls, with headroom (+-2) */
 static const uint32_t ROOM_LEN[ROOM_N] = {709, 887, 1051, 1193, 1361, 1499, 1637, 1789};
 static const uint32_t SMEAR_LEN[4] = {57, 83, 121, 167};
 #define SMEAR_RING 256u
-static float room_wall[ROOM_N][ROOM_RING] SY_POOL;
+static int16_t room_wall[ROOM_N][ROOM_RING] SY_POOL;   /* int16: half the memory of float, the noise far under the tail */
 static float room_smear[4][SMEAR_RING] SY_POOL;
 static float room_pre[512] SY_POOL;
 static uint32_t room_w;
@@ -1166,11 +1174,21 @@ static float room_bright = 0.6f, room_out = 0.3f, room_s, room_c = 1.0f, room_pe
 static float room_last_in, room_l, room_r, room_was_l, room_was_r;
 static int room_odd;
 
+/* into a wall and out: rounded (truncating ends the tail early); the hum that rounding could leave is checked gone */
+static inline int16_t wall_pack(float x)
+{
+    x = mm_clampf(x * (ROOM_IN * 32767.0f), -32767.0f, 32767.0f);
+    return (int16_t)(x < 0.0f ? x - 0.5f : x + 0.5f);
+}
+#define WALL_OUT (1.0f / (32767.0f * ROOM_IN))
+static inline float wall_at(int i, uint32_t back) { return (float)room_wall[i][(room_w - back) & (ROOM_RING - 1u)] * WALL_OUT; }
+
 #ifdef OM_HOST
-/* the device's .pool is 0x54000 bytes and the build keeps 8 KiB spare; the screen takes 120 x 120 +
- * 240 x 24 x 2 (blob.c, gfx.c). Checked here because the device build cannot run where the tests do. */
-_Static_assert(sizeof room_wall + sizeof room_smear + sizeof room_pre + sizeof tear_l + sizeof tear_r + sizeof wt + sizeof comb_line +
-                   sizeof sintab + sizeof src + sizeof ch_buf + 2u * 512u * 4u + 120u * 120u + 240u * 24u * 2u <=
+/* the device's .pool is 0x54000 bytes and the build keeps 8 KiB spare; the screen takes 120 x 120
+ * (px.c) + 240 x 32 x 2 (gfx.c, CV_MAX). Checked here because the device build cannot run where the
+ * tests do. Every .pool object is counted: */
+_Static_assert(sizeof wt + sizeof pu_buf + sizeof comb_line + sizeof ch_buf + sizeof tear_l + sizeof tear_r + sizeof room_wall +
+                   sizeof room_smear + sizeof room_pre + 2u * 512u * 4u /* tp_l, tp_r */ + 120u * 120u + 240u * 32u * 2u <=
                    0x54000u - 8192u,
                "the .pool would overflow");
 #endif
@@ -1189,7 +1207,7 @@ static inline float wall_breath(int i, float sway)     /* a breathing wall, read
 {
     const float back = (float)ROOM_LEN[i] + sway;
     const uint32_t k = (uint32_t)back;
-    const float a = room_wall[i][(room_w - k) & (ROOM_RING - 1u)], b = room_wall[i][(room_w - k - 1u) & (ROOM_RING - 1u)];
+    const float a = wall_at(i, k), b = wall_at(i, k + 1u);
     return a + (b - a) * (back - (float)k);
 }
 static void room_step(float in)                        /* one half-rate step */
@@ -1208,13 +1226,13 @@ static void room_step(float in)                        /* one half-rate step */
         room_s = s;
         room_c = c;
     }
-    h[0] = room_wall[0][(room_w - ROOM_LEN[0]) & (ROOM_RING - 1u)];
+    h[0] = wall_at(0, ROOM_LEN[0]);
     h[1] = wall_breath(1, ROOM_SWAY * 0.5f * (1.0f + room_c));
-    h[2] = room_wall[2][(room_w - ROOM_LEN[2]) & (ROOM_RING - 1u)];
+    h[2] = wall_at(2, ROOM_LEN[2]);
     h[3] = wall_breath(3, ROOM_SWAY * 0.5f * (1.0f + room_s));
-    h[4] = room_wall[4][(room_w - ROOM_LEN[4]) & (ROOM_RING - 1u)];
+    h[4] = wall_at(4, ROOM_LEN[4]);
     h[5] = wall_breath(5, ROOM_SWAY * 0.5f * (1.0f - room_c));
-    h[6] = room_wall[6][(room_w - ROOM_LEN[6]) & (ROOM_RING - 1u)];
+    h[6] = wall_at(6, ROOM_LEN[6]);
     h[7] = wall_breath(7, ROOM_SWAY * 0.5f * (1.0f - room_s));
     sum = 0.0f;
     for (i = 0; i < ROOM_N; i++) {
@@ -1224,7 +1242,7 @@ static void room_step(float in)                        /* one half-rate step */
     }
     sum *= 2.0f / ROOM_N;                               /* Householder: each wall gives back what it heard, minus the room's share */
     for (i = 0; i < ROOM_N; i++)
-        room_wall[i][room_w & (ROOM_RING - 1u)] = mm_flush(h[i] - sum + ((i & 1u) ? -x : x));
+        room_wall[i][room_w & (ROOM_RING - 1u)] = wall_pack(h[i] - sum + ((i & 1u) ? -x : x));
     room_w++;
     {
         const float *d = wall_dull;
@@ -1248,7 +1266,7 @@ static void room_init(void)
     uint32_t i, j;
     for (i = 0; i < ROOM_N; i++) {
         for (j = 0; j < ROOM_RING; j++)
-            room_wall[i][j] = 0.0f;
+            room_wall[i][j] = 0;
         wall_dull[i] = 0.0f;
     }
     for (i = 0; i < 4; i++)
