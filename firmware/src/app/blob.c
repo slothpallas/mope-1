@@ -470,7 +470,7 @@ static void shade_px(const shade_t *sh, int32_t x, int32_t y)
             c = rim > 0.9f ? PC_AMBER : PC_ORANGE;
     }
     if (bs.grain > 0.0f) {                               /* GRAIN: falling apart into a cloud of its own pixels */
-        const uint32_t hh = ((uint32_t)x * 73856093u) ^ ((uint32_t)y * 19349663u) ^ ((uint32_t)(bs.t * 9.0f) * 83492791u);
+        const uint32_t hh = ((uint32_t)x * 73856093u) ^ ((uint32_t)y * 19349663u) ^ ((uint32_t)(int32_t)(bs.t * 9.0f) * 83492791u);
         const float spread = sh->rmax * 0.6f * bs.grain;
         if ((float)(hh & 255u) < bs.grain * 170.0f)
             return;
@@ -1024,6 +1024,15 @@ static void schem_eyes(const drawer_t *p)                /* the filter: its curv
                 mag2 = 0.36f * (1.0f + fb * fb + 2.0f * fb * c) / (1.0f + fb * fb - 2.0f * fb * c + 1e-4f) * 0.25f;
                 break;
             }
+            case FT_VOWEL: {                             /* two humps: the formants at this vowel */
+                float f1, f2, m1, m2;
+                const float hz = 20.0f * mm_exp2f((float)i / 55.0f * 10.0f), kv = 0.5f - 0.38f * pn(P_RESO);
+                sy_vowel(oct / 9.3f, &f1, &f2);
+                m1 = hz / f1 - f1 / hz;
+                m2 = hz / f2 - f2 / hz;
+                mag2 = 3.6f * (kv * kv / (m1 * m1 + kv * kv) + 0.36f * kv * kv / (m2 * m2 + kv * kv)) + 1e-4f;
+                break;
+            }
             default: mag2 = 1.0f / den; break;
             }
             (live ? v2 : v)[i] = (10.0f * mm_log2f(mag2 + 1e-9f) * 0.30103f + 36.0f) / 54.0f;
@@ -1094,7 +1103,7 @@ static void schem_mouth(const drawer_t *p)               /* the envelope: attack
 /* an LFO (VIBE's, TREMBLE's): its wave, its speed, where it is, where it goes */
 static void schem_lfo(const drawer_t *p, int shape_p, int rate_p, int depth_p, int dest_p, float phase)
 {
-    static const char *const DEST[] = {"SHAPE", "EYES", "PITCH", "VOL", "SHADOW", "TABLE", "DTUN", "WALLS",
+    static const char *const DEST[] = {"POS", "EYES", "PITCH", "VOL", "SHADOW", "TABLE", "DTUN", "WALLS",
                                        "TEARS", "COPY", "DUST"};
     _Static_assert(sizeof DEST / sizeof DEST[0] == LD_N, "a name for every LFO destination");
     const int shape = proj.par[shape_p];
@@ -1283,7 +1292,7 @@ static void schem_dust(const drawer_t *p)                /* an old record: the b
         }
     }
     for (i = 0; i < (int)(crk * 10.0f); i++) {          /* the crackle: specks on it, coming and going */
-        const uint32_t hh = ((uint32_t)i * 2654435761u) ^ (uint32_t)(bs.t * 7.0f) * 40503u;
+        const uint32_t hh = ((uint32_t)i * 2654435761u) ^ (uint32_t)(int32_t)(bs.t * 7.0f) * 40503u;
         px_pset(p->gx0 + (int32_t)(hh % (uint32_t)w), p->gy0 + 2 + (int32_t)((hh >> 9) % (uint32_t)(p->gy1 - p->gy0 - 3)),
                 PC_EYE);
     }
@@ -1618,7 +1627,7 @@ static void draw_panel(const geo_t *g)
         case PG_SHADOW: what = SY_TABLE_NAME[proj.par[P_BTABLE]]; break;
         case PG_TREMBLE: what = LFO_SHAPE_NAME[proj.par[P_LFO2SHAPE]]; break;
         case PG_EYES: {
-            static const char *const KIND[] = {"LOW", "BAND", "HIGH", "NOTCH", "COMB"};
+            static const char *const KIND[] = {"LOW", "BAND", "HIGH", "NOTCH", "COMB", "VOWEL"};
             _Static_assert(sizeof KIND / sizeof KIND[0] == FT_N, "a name for every filter");
             what = KIND[proj.par[P_FTYPE]];
             break;
@@ -2088,7 +2097,7 @@ static void blob_draw(void)
         }
         tf *= 1.0f - 0.5f * bs.pw[PU_HALF];
         tf *= 1.0f + bs.pw[PU_DOUBLE];
-        tf *= 1.0f - bs.pw[PU_STOP] * (1.0f - sy_tel.punch_k);
+        tf *= 1.0f - bs.pw[PU_STOP] * (1.0f - mm_clampf(sy_tel.punch_k, 0.0f, 1.0f));   /* (scratching: k below 0, still stopped) */
         bs.t += bs.dt * tf;
         if (sy_tel.punch_buf == PU_REPEAT || sy_tel.punch_buf == PU_STUTTER) {   /* round again: so is everything */
             if (sy_tel.punch_ph < bs.last_ph) {

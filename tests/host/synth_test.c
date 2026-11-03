@@ -607,6 +607,38 @@ int main(int argc, char **argv)
         sy_set(P_FTYPE, FT_LOW);
         quiet();
     }
+    {   /* VOWEL: a saw at 110 Hz says A (its 7th harmonic, 770 Hz, up) and then I (its 3rd, 330, and 21st, 2310, up) */
+        float a7, a3, i7, i3, i21, a21;
+        for (i = 0; i < P_NPARAMS; i++)
+            sy_set(i, sy_param_info(i)->def);
+        sy_set(P_GUNK, 0);
+        sy_set(P_REVERB, 0);
+        sy_set(P_DELAY, 0);
+        sy_set(P_CHORUS, 0);
+        sy_set(P_TAPE, 0);
+        sy_set(P_LFODEPTH, 0);
+        sy_set(P_ENVAMT, 0);
+        sy_set(P_SUSTAIN, 100);
+        sy_set(P_POS, 100);                             /* (PLAIN's end: a saw) */
+        sy_set(P_FTYPE, FT_VOWEL);
+        sy_set(P_RESO, 70);
+        sy_set(P_CUTOFF, 7);                            /* (0.07 * 9.3 octaves, less the key's -0.6: A) */
+        quiet();
+        sy_note_on(45, 100);
+        run(400);
+        capture();
+        a7 = goertzel(770.0f), a3 = goertzel(330.0f), a21 = goertzel(2310.0f);
+        sy_set(P_CUTOFF, 57);                           /* (half way: I) */
+        run(300);
+        capture();
+        i7 = goertzel(770.0f), i3 = goertzel(330.0f), i21 = goertzel(2310.0f);
+        sy_note_off(45);
+        CHECK(a7 > a3 * 2.0f && i3 > i7 * 2.0f && i21 > a21 * 2.0f, "VOWEL: A then I (770 Hz %.0f dB over 330; then 330 %.0f dB over 770)",
+              (double)(10.0f * mm_log2f(a7 / a3) * 0.30103f), (double)(10.0f * mm_log2f(i3 / i7) * 0.30103f));
+        sy_set(P_FTYPE, FT_LOW);
+        sy_set(P_RESO, sy_param_info(P_RESO)->def);
+        quiet();
+    }
     {   /* Level: +-50 is +-12 dB */
         float l0, l1;
         for (i = 0; i < P_NPARAMS; i++)                 /* a plain, steady note: no effects (Tape saturates) */
