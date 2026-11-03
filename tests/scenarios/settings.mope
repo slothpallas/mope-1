@@ -61,6 +61,13 @@ spin K2 1
 expect par67 1
 wait 100
 shot 03_bass.png
+# GLIDE: an amount, a slider you can see (lit and not)
+spin K1 -5
+spin K2 6
+wait 100
+shot 04_glide.png
+spin K2 -6
+spin K1 5
 # it stays until HOME
 wait 4000
 expect page 7

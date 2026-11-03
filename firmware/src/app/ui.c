@@ -260,6 +260,7 @@ static struct {
     uint32_t stepped;                  /* keys pressed as the loop's steps (their preview to stop) */
     uint32_t punched;                   /* keys punching (FX held when they went down): up, the punch ends */
     uint32_t modkeys;                   /* white keys beside a punch, held: they change it (no note) */
+    int8_t pk_fx;                       /* the punch the knobs turn (the last one punched), -1 none yet */
     uint8_t loop_bar, step_note;       /* the bar the steps show; the note a new step gets */
     int16_t step_held;                 /* a step key down on a step with notes: let go untouched, they go */
     uint8_t preview;                   /* the note a step key is sounding */
@@ -341,6 +342,19 @@ static const char *set_text(int r)                       /* a row's value in wor
     }
     return 0;
 }
+
+/* the punches' knobs: what each one is (its word, and its symbol around the blob) */
+enum { PK_MIX, PK_DEEP, PK_PITCH, PK_SMEAR, PK_WINDOW, PK_BRAKE, PK_LONG, PK_SLICE, PK_SOFT, PK_FADING, PK_RATE, PK_OPEN,
+       PK_SIZE, PK_SCATTER, PK_BITS, PK_SCREAM, PK_HOLD, PK_DRY, PK_SPEED, PK_FLUTTER, PK_FADEIN, PK_NKIND };
+static const char *const PK_NAME[PK_NKIND] = {"HOW MUCH", "HOW DEEP", "PITCH", "SMEAR", "WINDOW", "BRAKE", "HOW LONG", "SLICE",
+                                              "SOFT", "FADING", "RATE", "HOW OPEN", "GRAIN SIZE", "SCATTER", "BITS", "SCREAM",
+                                              "HOLD", "DRY GONE", "SPEED", "FLUTTER", "FADE IN"};
+static const uint8_t PK_KIND[PU_N][PU_KN] = {
+    {PK_MIX, PK_PITCH, PK_SMEAR, PK_FADEIN},  {PK_MIX, PK_PITCH, PK_WINDOW, PK_FADEIN}, {PK_MIX, PK_BRAKE, PK_LONG, PK_FADEIN},
+    {PK_MIX, PK_SLICE, PK_SOFT, PK_FADEIN},   {PK_MIX, PK_SLICE, PK_FADING, PK_FADEIN}, {PK_MIX, PK_SLICE, PK_FADING, PK_FADEIN},
+    {PK_DEEP, PK_RATE, PK_OPEN, PK_FADEIN},   {PK_MIX, PK_SIZE, PK_SCATTER, PK_FADEIN}, {PK_MIX, PK_BITS, PK_RATE, PK_FADEIN},
+    {PK_MIX, PK_LONG, PK_SCREAM, PK_FADEIN},  {PK_MIX, PK_HOLD, PK_DRY, PK_FADEIN},     {PK_DEEP, PK_SPEED, PK_FLUTTER, PK_FADEIN},
+};
 
 #include "px.c"
 #include "blob.c"
@@ -771,6 +785,32 @@ static const char *const TWIST_SAID[PU_N] = {"A FIFTH DOWN.", "A FIFTH UP.", "AN
 static const char *const PUNCH_SAID[PU_N] = {"HALF.", "TWICE. WHY.", "STOP.", "BACKWARDS.", "AGAIN AGAIN.", "S-S-STUTTER.",
                                              "ON OFF ON OFF.", "FALLING APART.", "CRUSHED.", "MUFFLED.", "WASHED OUT.",
                                              "WARPED."};
+/* the punches' knobs, what each is called (said when turned; the screen shows them as symbols) */
+static void punch_knob(int k, int32_t e)
+{
+    static char b[32];
+    const char *nm;
+    int v, n = 0;
+    if (ui.pk_fx < 0) {
+        ui_caption("PUNCH SOMETHING FIRST.", 1200u);
+        return;
+    }
+    v = project_pk(ui.pk_fx, k) + (int)e;
+    v = v < 0 ? 0 : v > PU_KMAX ? PU_KMAX : v;
+    if (v != project_pk(ui.pk_fx, k)) {
+        project_pk_set(ui.pk_fx, k, v);
+        sy_punch_knob(ui.pk_fx, k, v);
+        mark_dirty();
+    }
+    nm = PK_NAME[PK_KIND[ui.pk_fx][k]];
+    for (; *nm && n < 20; nm++)
+        b[n++] = *nm;
+    for (nm = v == 0 ? ": NONE." : v == PU_KMAX ? ": ALL OF IT." : e > 0 ? ": MORE." : ": LESS."; *nm && n < 31; nm++)
+        b[n++] = *nm;
+    b[n] = 0;
+    ui_caption(b, 900u);
+}
+
 static void key_down(int k)
 {
     int n = KEY0_NOTE + k + 12 * proj.par[P_OCTAVE];
@@ -778,6 +818,7 @@ static void key_down(int k)
     if (punch_mode() && PUNCH_KEY[k] >= 0) {             /* a black key punches (the white ones still play) */
         const int fx = PUNCH_KEY[k];
         ui.punched |= 1u << k;
+        ui.pk_fx = (int8_t)fx;                           /* (the knobs turn this one now) */
         sy_punch(fx, 1 + punch_mods(k));
         ui.btn_used |= 1u << B_FX;
         ui_caption(PUNCH_SAID[fx], 900u);
@@ -860,6 +901,7 @@ static void reset_defaults(void)
     uint32_t xp = proj.xp;                               /* (the levels stay: it remembers) */
     project_defaults();
     proj.xp = xp;
+    project_send_knobs();
     for (i = 0; i < P_NPARAMS; i++)
         sy_set(i, proj.par[i]);
     mark_dirty();
@@ -1158,6 +1200,14 @@ static void input(void)
                 ui.focus_t = ui.act_t = plat_ms();
                 continue;
             }
+            if (ui.panel && ui.page == PG_PUNCH) {       /* PUNCH: the last one punched, its four knobs */
+                punch_knob((int)i, e);
+                ui.touched = (int8_t)i;
+                if (ui.held_btn < 0)
+                    ui.page_until = plat_ms() + STAY_MS;
+                ui.focus_t = ui.act_t = plat_ms();
+                continue;
+            }
             if (ui.page == PG_LOOP && i < 3) {           /* the chosen step (or the whole loop): note, length, velocity */
                 sy_loop_nudge((int)i, e > 0 ? 1 : -1);
                 ui.step_turned = 1;
@@ -1215,6 +1265,7 @@ void ui_init(void)
 {
     memset(&ui, 0, sizeof ui);
     ui.touched = -1;
+    ui.pk_fx = -1;
     ui.page = PG_BODY;
     ui.act_t = ui.focus_t = plat_ms();
     ui.panel = 0;

@@ -387,6 +387,8 @@ static int expect(const char *what, const char *val)
         got = (int)sy_tel.punch_buf;
     else if (!strncmp(what, "punchmod", 8))       /* punchmodN: punch N's PM_* (MORE 1, TWIST 2) */
         got = (int)sy_tel.punch_mod[atoi(what + 8) % PU_N];
+    else if (!strncmp(what, "pk", 2) && strchr(what, '_'))   /* pkF_K: punch F's knob K (0..15) */
+        got = project_pk(atoi(what + 2) % PU_N, atoi(strchr(what, '_') + 1) % PU_KN);
     else if (!strcmp(what, "latch"))
         got = ui.latch;
     else if (!strcmp(what, "leds_dim"))           /* the keys lit dim now (a bit each) */

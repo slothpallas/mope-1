@@ -138,6 +138,11 @@ enum { PU_HALF, PU_DOUBLE, PU_STOP, PU_REVERSE, PU_REPEAT, PU_STUTTER, PU_GATE, 
 /* on: 0 let go; held: 1 + PM_* (the white keys beside its key: MORE, stronger; TWIST, another way) */
 enum { PM_MORE = 1, PM_TWIST = 2 };
 void sy_punch(int fx, int on);
+/* each punch's four knobs, 0..15: 1 how much of it, 2 and 3 its own, 4 how slowly it comes in */
+#define PU_KN 4
+#define PU_KMAX 15
+extern const uint8_t SY_PUNCH_KDEF[PU_N][PU_KN];
+void sy_punch_knob(int fx, int k, int v);
 void sy_fade_in(uint32_t ms);                       /* everything up from silence over ms (power-on) */
 void sy_load(int pct);                              /* the last block's time, % of its budget (the device's): over 88, a voice goes */
 

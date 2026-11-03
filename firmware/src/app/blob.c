@@ -1332,7 +1332,7 @@ static void schem_punch(const drawer_t *p)
         if (on)
             px_rect(x, y, 17, 9, PC_TEAR);
         else {
-            const uint8_t c = waits ? ((plat_ms() / 60u) & 1u ? PC_WHITE : PC_TEAR) : PC_WALL2;
+            const uint8_t c = waits ? ((plat_ms() / 60u) & 1u ? PC_WHITE : PC_TEAR) : fx == ui.pk_fx ? PC_DIM : PC_WALL2;   /* (the knobs': brighter) */
             px_rect(x, y, 17, 1, c);
             px_rect(x, y + 8, 17, 1, c);
             px_rect(x, y, 1, 9, c);
@@ -1618,7 +1618,7 @@ static void draw_panel(const geo_t *g)
             for (i = PU_N - 1; fx < 0 && i > PU_GRAIN; i--)
                 if (sy_tel.punch >> i & 1u)
                     fx = i;
-            what = fx >= 0 ? PUNCH_NAME[fx] : "HOLD + A KEY";
+            what = fx >= 0 ? PUNCH_NAME[fx] : ui.pk_fx >= 0 ? PUNCH_NAME[ui.pk_fx] : "HOLD + A KEY";
             break;
         }
         case PG_VIBE: what = LFO_SHAPE_NAME[proj.par[P_LFOSHAPE]]; break;
@@ -1943,6 +1943,63 @@ static int is_blob(uint8_t c)
 }
 /* the punches, after everything in the room is drawn and before the drawer: mirrored, glitched, gated,
  * crushed, warped, washed */
+/* the punch's four knobs, around the blob (K1 K2 above, K3 K4 below): a little knob each, how far it is
+ * turned lit in its colour, and a symbol for what it does. The one being turned lights up. */
+static const char *const PK_ICON[PK_NKIND][7] = {
+    {"..###..", ".#.###.", "#..####", "#..####", "#..####", ".#.###.", "..###.."},   /* how much: half full */
+    {".#.....", "#.#....", "#.#....", "...#..#", "....#.#", "....#.#", ".....#."},   /* how deep: a big wave */
+    {"...#...", "..###..", ".#.#.#.", "...#...", "...#...", "...#...", "..###.."},   /* pitch: up */
+    {".......", "####...", "..#####", ".......", "#####..", "...####", "......."},   /* smear: streaks */
+    {"##...##", "#.....#", "#.###.#", "#.###.#", "#.###.#", "#.....#", "##...##"},   /* window: brackets */
+    {"###....", "...#...", "....#..", "....#..", ".....#.", ".....#.", "......#"},   /* brake: slowing */
+    {"..###..", ".#.#.#.", "#..#..#", "#..##.#", "#.....#", ".#...#.", "..###.."},   /* how long: a clock */
+    {"#.....#", "#.###.#", "#.###.#", "#.###.#", "#.###.#", "#.....#", "#.....#"},   /* slice: between two marks */
+    {".......", "..###..", ".#...#.", "#.....#", "#.....#", ".......", "#######"},   /* soft: a round hump */
+    {"#......", "#.#....", "#.#.#..", "#.#.#.#", "#.#.#.#", "#.#.#.#", "#.#.#.#"},   /* fading: smaller each */
+    {".......", "##.##.#", "##.##.#", "##.##.#", "##.##.#", ".......", "#######"},   /* rate: pulses */
+    {".......", "####...", "#..#...", "#..#...", "#..####", ".......", "#######"},   /* how open: a wide one */
+    {"...###.", "..#####", "..#####", "...###.", ".......", "#......", "......."},   /* grain size: big, small */
+    {"#...#..", "..#...#", "#...#..", ".#.#...", "...#.#.", "#.....#", "..#.#.."},   /* scatter: dots */
+    {"....###", "....#..", "..###..", "..#....", "###....", "#......", "#......"},   /* bits: stairs */
+    {"...#...", "...#...", "..#.#..", "..#.#..", "##...##", ".......", "#######"},   /* scream: a peak */
+    {"#..#..#", ".#.#.#.", "..###..", "#######", "..###..", ".#.#.#.", "#..#..#"},   /* hold: frozen */
+    {"...#...", "..#.#..", ".#...#.", "#.....#", "#.....#", ".#...#.", "..###.."},   /* dry gone: an empty drop */
+    {"#..#...", ".#..#..", "..#..#.", "...#..#", "..#..#.", ".#..#..", "#..#..."},   /* speed: >> */
+    {".......", "#...#..", ".#.#.#.", "..#...#", ".......", "#.#.#.#", ".#.#.#."},   /* flutter: zigzags */
+    {"......#", ".....##", "....###", "...####", "..#####", ".######", "#######"},   /* fade in: a ramp */
+};
+static void draw_punch_knobs(const geo_t *g)
+{
+    static const int8_t RING[13][3] = {{1, 5, 0}, {0, 4, 3}, {0, 3, 5}, {0, 2, 7}, {1, 1, 10}, {2, 0, 13}, {3, 0, 15},
+                                       {4, 0, 17}, {5, 1, 20}, {6, 2, 23}, {6, 3, 25}, {6, 4, 27}, {5, 5, 30}};   /* x, y, lit from 2v */
+    static const uint8_t KC[PU_KN] = {PC_TEAR, PC_XP, PC_ORANGE, PC_PINK};
+    static const char *const KN[PU_KN] = {"K1", "K2", "K3", "K4"};
+    const int fx = ui.pk_fx;
+    const uint32_t since = plat_ms() - ui.focus_t;
+    int k, j, i;
+    if (fx < 0 || !ui.panel || ui.page != PG_PUNCH || preset_card())
+        return;
+    for (k = 0; k < PU_KN; k++) {
+        const int32_t x = (k & 1) ? PX_W - 31 : 2, y = k < 2 ? 20 : (int32_t)g->drawer - 11;
+        const int v = project_pk(fx, k), hot = ui.touched == k && since < 1500u;
+        const float a = -0.375f + 0.75f * (float)v / (float)PU_KMAX;
+        const char *const *ic = PK_ICON[PK_KIND[fx][k]];
+        if (y < 18)
+            continue;
+        px_rect(x - 1, y - 1, 31, 9, PC_BG0);
+        px_text(x, y, KN[k], hot ? PC_WHITE : PC_DIM);
+        for (j = 0; j < 13; j++)                         /* (the knob: lit as far as it's turned) */
+            px_pset(x + 11 + RING[j][0], y + RING[j][1], RING[j][2] <= 2 * v ? KC[k] : PC_WALL2);
+        px_line(x + 14, y + 3, x + 14 + (int32_t)(mm_sin_turns(a) * 2.6f + (mm_sin_turns(a) < 0.0f ? -0.5f : 0.5f)),
+                y + 3 - (int32_t)(mm_sin_turns(a + 0.25f) * 2.6f + (mm_sin_turns(a + 0.25f) < 0.0f ? -0.5f : 0.5f)),
+                PC_WHITE);
+        for (j = 0; j < 7; j++)                          /* (what it does) */
+            for (i = 0; i < 7; i++)
+                if (ic[j][i] == '#')
+                    px_pset(x + 22 + i, y + j, hot ? PC_WHITE : KC[k]);
+    }
+}
+
 static void punch_post(const geo_t *g)
 {
     const int32_t top = 0, bot = (int32_t)g->drawer < PX_H ? (int32_t)g->drawer : PX_H;
@@ -2096,17 +2153,22 @@ static void draw_settings(void)
         px_text(4, y, SET_ROWS[r].label, on ? PC_BG0 : PC_DIM);
         if (t)
             px_text(PX_W - 4 - px_text_w(t), y, t, on ? PC_BG0 : PC_WHITE);
-        else {                                           /* an amount: a bar (TUNE: from the middle) */
+        else {                                           /* an amount: a slider, outlined, with a handle (TUNE: from the middle) */
             const sy_param_t *p = sy_param_info(SET_ROWS[r].par);
             const float f = (float)(proj.par[SET_ROWS[r].par] - p->lo) / (float)(p->hi - p->lo);
-            const int32_t x0 = PX_W - 44, w = 40;
-            px_rect(x0, y + 2, w, 2, on ? PC_BLOBD : PC_WALL);
+            const int32_t x0 = PX_W - 50, w = 46, at = x0 + 1 + (int32_t)(f * (float)(w - 3) + 0.5f);
+            const uint8_t edge = on ? PC_BG0 : PC_DIM, fill = on ? PC_BG0 : PC_SPEC;
+            px_rect(x0, y, w, 1, edge);                  /* (the box) */
+            px_rect(x0, y + 4, w, 1, edge);
+            px_rect(x0, y, 1, 5, edge);
+            px_rect(x0 + w - 1, y, 1, 5, edge);
             if (p->lo < 0) {
-                const int32_t m = x0 + w / 2, at = x0 + (int32_t)(f * (float)(w - 1));
-                px_rect(at < m ? at : m, y + 2, (at < m ? m - at : at - m) + 1, 2, on ? PC_BG0 : PC_SPEC);
-                px_rect(m, y, 1, 6, on ? PC_BG0 : PC_DIM);
+                const int32_t m = x0 + w / 2;
+                px_rect(at < m ? at : m, y + 2, (at < m ? m - at : at - m) + 1, 1, fill);
+                px_rect(m, y - 1, 1, 7, edge);
             } else
-                px_rect(x0, y + 2, (int32_t)(f * (float)w + 0.5f), 2, on ? PC_BG0 : PC_SPEC);
+                px_rect(x0 + 1, y + 1, at - x0, 3, fill);
+            px_rect(at - 1, y - 1, 3, 7, on ? PC_BG0 : PC_WHITE);   /* (the handle) */
         }
     }
     {   /* the knobs: which does what (as the OP-1's colours do) */
@@ -2305,6 +2367,7 @@ static void blob_draw(void)
     punch_post(&g);
     draw_cassette(&g);
     draw_panel(&g);
+    draw_punch_knobs(&g);
     draw_xp();
     draw_caption();
     px_present();
