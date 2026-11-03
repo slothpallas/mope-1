@@ -369,40 +369,34 @@ int main(int argc, char **argv)
         run(100);
         capture();
         CHECK(goertzel(440.0f) > goertzel(220.0f) * 100.0f && sy_tel.punch == 0, "let go: back to the note as it was");
-        /* the knobs: HALF's pitch (knob 2) up a little; how much (knob 1) none: the note as it was */
-        sy_punch_knob(PU_HALF, 1, PU_KMAX);
+        /* the knobs: HALF's knob 1, how far down: a fourth .. two octaves */
+        sy_punch_knob(PU_HALF, 0, 0);
         sy_punch(PU_HALF, 1);
         run(400);
         capture();
-        CHECK(goertzel(357.0f) > goertzel(220.0f) * 10.0f, "HALF, knob 2 up: not so far down");
+        CHECK(goertzel(330.0f) > goertzel(220.0f) * 10.0f, "HALF, knob 1 down: only a fourth down");
         sy_punch(PU_HALF, 0);
-        sy_punch_knob(PU_HALF, 1, SY_PUNCH_KDEF[PU_HALF][1]);
-        sy_punch_knob(PU_HALF, 0, 0);
+        sy_punch_knob(PU_HALF, 0, PU_KMAX);
         run(100);
         sy_punch(PU_HALF, 1);
         run(400);
         capture();
-        CHECK(goertzel(440.0f) > goertzel(220.0f) * 100.0f, "HALF, knob 1 down: none of it");
+        CHECK(goertzel(110.0f) > goertzel(220.0f) * 10.0f, "HALF, knob 1 up: two octaves down");
         sy_punch(PU_HALF, 0);
         sy_punch_knob(PU_HALF, 0, SY_PUNCH_KDEF[PU_HALF][0]);
         run(100);
-        {   /* GRAIN comes in slowly (knob 4); turned all the way down, at once */
-            float slow, fast;
+        {   /* GRAIN comes in slowly: its first 186 ms against a second on */
+            float slow, full;
             sy_punch(PU_GRAIN, 1);
             capture();
             slow = (goertzel(220.0f) + goertzel(880.0f)) / goertzel(440.0f);
-            sy_punch(PU_GRAIN, 0);
-            run(200);
-            sy_punch_knob(PU_GRAIN, 3, 0);
-            sy_punch(PU_GRAIN, 1);
-            run(10);
+            run(800);
             capture();
-            fast = (goertzel(220.0f) + goertzel(880.0f)) / goertzel(440.0f);
+            full = (goertzel(220.0f) + goertzel(880.0f)) / goertzel(440.0f);
             sy_punch(PU_GRAIN, 0);
-            sy_punch_knob(PU_GRAIN, 3, SY_PUNCH_KDEF[PU_GRAIN][3]);
             run(200);
-            CHECK(fast > slow * 4.0f, "GRAIN: slowly in (its first 186 ms %.3f of the scatter it has at once, %.3f)",
-                  (double)slow, (double)fast);
+            CHECK(full > slow * 4.0f, "GRAIN: slowly in (its first 186 ms %.4f of the scatter it has later, %.3f)",
+                  (double)slow, (double)full);
         }
         /* STOP: slower, then nothing */
         before = level(100);

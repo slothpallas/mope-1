@@ -1943,44 +1943,44 @@ static int is_blob(uint8_t c)
 }
 /* the punches, after everything in the room is drawn and before the drawer: mirrored, glitched, gated,
  * crushed, warped, washed */
-/* the punch's four knobs, around the blob (K1 K2 above, K3 K4 below): a little knob each, how far it is
+/* the punch's two knobs, at the blob's top corners (K1 left, K2 right): a little knob each, how far it is
  * turned lit in its colour, and a symbol for what it does. The one being turned lights up. */
 static const char *const PK_ICON[PK_NKIND][7] = {
-    {"..###..", ".#.###.", "#..####", "#..####", "#..####", ".#.###.", "..###.."},   /* how much: half full */
+    {"..###..", "...#...", "...#...", "...#...", ".#.#.#.", "..###..", "...#..."},   /* how low: down */
+    {"...#...", "..###..", ".#.#.#.", "...#...", "...#...", "...#...", "..###.."},   /* how high: up */
     {".#.....", "#.#....", "#.#....", "...#..#", "....#.#", "....#.#", ".....#."},   /* how deep: a big wave */
-    {"...#...", "..###..", ".#.#.#.", "...#...", "...#...", "...#...", "..###.."},   /* pitch: up */
     {".......", "####...", "..#####", ".......", "#####..", "...####", "......."},   /* smear: streaks */
     {"##...##", "#.....#", "#.###.#", "#.###.#", "#.###.#", "#.....#", "##...##"},   /* window: brackets */
     {"###....", "...#...", "....#..", "....#..", ".....#.", ".....#.", "......#"},   /* brake: slowing */
     {"..###..", ".#.#.#.", "#..#..#", "#..##.#", "#.....#", ".#...#.", "..###.."},   /* how long: a clock */
     {"#.....#", "#.###.#", "#.###.#", "#.###.#", "#.###.#", "#.....#", "#.....#"},   /* slice: between two marks */
+    {"##.##.#", "##.##.#", ".......", "##.##.#", "##.##.#", ".......", "#######"},   /* roll: the same, again */
     {".......", "..###..", ".#...#.", "#.....#", "#.....#", ".......", "#######"},   /* soft: a round hump */
     {"#......", "#.#....", "#.#.#..", "#.#.#.#", "#.#.#.#", "#.#.#.#", "#.#.#.#"},   /* fading: smaller each */
     {".......", "##.##.#", "##.##.#", "##.##.#", "##.##.#", ".......", "#######"},   /* rate: pulses */
-    {".......", "####...", "#..#...", "#..#...", "#..####", ".......", "#######"},   /* how open: a wide one */
     {"...###.", "..#####", "..#####", "...###.", ".......", "#......", "......."},   /* grain size: big, small */
     {"#...#..", "..#...#", "#...#..", ".#.#...", "...#.#.", "#.....#", "..#.#.."},   /* scatter: dots */
     {"....###", "....#..", "..###..", "..#....", "###....", "#......", "#......"},   /* bits: stairs */
     {"...#...", "...#...", "..#.#..", "..#.#..", "##...##", ".......", "#######"},   /* scream: a peak */
-    {"#..#..#", ".#.#.#.", "..###..", "#######", "..###..", ".#.#.#.", "#..#..#"},   /* hold: frozen */
+    {"#..#..#", ".#.#.#.", "..###..", "#######", "..###..", ".#.#.#.", "#..#..#"},   /* hang: frozen */
     {"...#...", "..#.#..", ".#...#.", "#.....#", "#.....#", ".#...#.", "..###.."},   /* dry gone: an empty drop */
     {"#..#...", ".#..#..", "..#..#.", "...#..#", "..#..#.", ".#..#..", "#..#..."},   /* speed: >> */
-    {".......", "#...#..", ".#.#.#.", "..#...#", ".......", "#.#.#.#", ".#.#.#."},   /* flutter: zigzags */
-    {"......#", ".....##", "....###", "...####", "..#####", ".######", "#######"},   /* fade in: a ramp */
 };
+_Static_assert(sizeof PK_ICON / sizeof PK_ICON[0] == PK_NKIND, "a symbol for every kind of knob");
 static void draw_punch_knobs(const geo_t *g)
 {
     static const int8_t RING[13][3] = {{1, 5, 0}, {0, 4, 3}, {0, 3, 5}, {0, 2, 7}, {1, 1, 10}, {2, 0, 13}, {3, 0, 15},
                                        {4, 0, 17}, {5, 1, 20}, {6, 2, 23}, {6, 3, 25}, {6, 4, 27}, {5, 5, 30}};   /* x, y, lit from 2v */
-    static const uint8_t KC[PU_KN] = {PC_TEAR, PC_XP, PC_ORANGE, PC_PINK};
-    static const char *const KN[PU_KN] = {"K1", "K2", "K3", "K4"};
+    static const uint8_t KC[PU_KN] = {PC_TEAR, PC_XP};
+    static const char *const KN[PU_KN] = {"K1", "K2"};
     const int fx = ui.pk_fx;
     const uint32_t since = plat_ms() - ui.focus_t;
     int k, j, i;
+    (void)g;
     if (fx < 0 || !ui.panel || ui.page != PG_PUNCH || preset_card())
         return;
     for (k = 0; k < PU_KN; k++) {
-        const int32_t x = (k & 1) ? PX_W - 31 : 2, y = k < 2 ? 20 : (int32_t)g->drawer - 11;
+        const int32_t x = (k & 1) ? PX_W - 31 : 2, y = 20;
         const int v = project_pk(fx, k), hot = ui.touched == k && since < 1500u;
         const float a = -0.375f + 0.75f * (float)v / (float)PU_KMAX;
         const char *const *ic = PK_ICON[PK_KIND[fx][k]];

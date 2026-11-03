@@ -49,6 +49,12 @@ static int project_valid(int bytes)
     }
     if (proj.loop_n > SY_LOOP_MAX)
         proj.loop_n = 0;
+    for (i = 0; i < (int)sizeof proj.rsv; i++)
+        if (proj.rsv[i]) {                       /* (left by a test build with four knobs a punch: as they come) */
+            memset(proj.pk, 0, sizeof proj.pk);
+            memset(proj.rsv, 0, sizeof proj.rsv);
+            break;
+        }
     if (proj.magic != PROJ_MAGIC || proj.format < 1u || proj.format > PROJ_FORMAT)
         return 0;
     if (have > PROJ_NPAR_OF(proj.format))        /* (its spare bytes, zeros, are not settings) */
