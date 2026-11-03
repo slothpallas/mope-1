@@ -1,0 +1,60 @@
+# The punches' knobs: the last one punched, its four knobs (K1 how much, K2 and K3 its own, K4 how slowly it
+# comes in), shown as symbols around the blob. GRAIN comes in slowly as it comes. Kept over a restart.
+wait 300
+midi 90 30 64
+midi 90 37 64
+midi 90 3c 64
+wait 600
+# FX twice: the punches stay, the hands free for the knobs
+tap FX
+wait 100
+tap FX
+wait 100
+expect latch 1
+# nothing punched yet: the knobs say so
+spin K1 1
+expect pk7_3 12
+# GRAIN: slowly in (its knob 4 well up as it comes)
+key b6 down
+wait 150
+expect punchbuf 7
+shot 00_grain_coming_in.png
+wait 900
+shot 01_grain_in.png
+key b6 up
+wait 200
+# its knobs: fade in all the way down, smaller grains, less scatter
+spin K4 -15
+expect pk7_3 0
+spin K2 -4
+expect pk7_1 4
+spin K3 -6
+expect pk7_2 9
+wait 100
+shot 02_grain_knobs.png
+key b6 down
+wait 300
+shot 03_grain_tight.png
+key b6 up
+# HALF: another punch, its own knobs
+key b0 down
+wait 200
+key b0 up
+spin K2 3
+expect pk0_1 11
+expect pk7_1 4
+wait 100
+shot 04_half_knobs.png
+tap FX
+wait 100
+expect latch 0
+midi 80 30 00
+midi 80 37 00
+midi 80 3c 00
+wait 6000
+reboot
+wait 500
+expect pk7_3 0
+expect pk7_1 4
+expect pk0_1 11
+expect pk3_2 4

@@ -79,9 +79,28 @@ int project_save(void)
     return plat_store_save(OBJ_PROJ, &proj, sizeof proj);
 }
 
+/* the punches' knobs: a nibble each, how far from the knob as it comes (mod 16) */
+int project_pk(int fx, int k)
+{
+    const int i = fx * PU_KN + k, n = proj.pk[i >> 1] >> ((i & 1) * 4) & 15;
+    return (n + SY_PUNCH_KDEF[fx][k]) & 15;
+}
+void project_pk_set(int fx, int k, int v)
+{
+    const int i = fx * PU_KN + k, sh = (i & 1) * 4;
+    proj.pk[i >> 1] = (uint8_t)((proj.pk[i >> 1] & ~(15 << sh)) | ((v - SY_PUNCH_KDEF[fx][k]) & 15) << sh);
+}
+void project_send_knobs(void)
+{
+    int i;
+    for (i = 0; i < PU_N * PU_KN; i++)
+        sy_punch_knob(i / PU_KN, i % PU_KN, project_pk(i / PU_KN, i % PU_KN));
+}
+
 void project_apply(void)
 {
     int i;
+    project_send_knobs();
     for (i = 0; i < P_NPARAMS; i++)
         sy_set(i, proj.par[i]);
     sy_loop_load(proj.loop, proj.loop_n);

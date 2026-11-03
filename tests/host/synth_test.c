@@ -369,6 +369,41 @@ int main(int argc, char **argv)
         run(100);
         capture();
         CHECK(goertzel(440.0f) > goertzel(220.0f) * 100.0f && sy_tel.punch == 0, "let go: back to the note as it was");
+        /* the knobs: HALF's pitch (knob 2) up a little; how much (knob 1) none: the note as it was */
+        sy_punch_knob(PU_HALF, 1, PU_KMAX);
+        sy_punch(PU_HALF, 1);
+        run(400);
+        capture();
+        CHECK(goertzel(357.0f) > goertzel(220.0f) * 10.0f, "HALF, knob 2 up: not so far down");
+        sy_punch(PU_HALF, 0);
+        sy_punch_knob(PU_HALF, 1, SY_PUNCH_KDEF[PU_HALF][1]);
+        sy_punch_knob(PU_HALF, 0, 0);
+        run(100);
+        sy_punch(PU_HALF, 1);
+        run(400);
+        capture();
+        CHECK(goertzel(440.0f) > goertzel(220.0f) * 100.0f, "HALF, knob 1 down: none of it");
+        sy_punch(PU_HALF, 0);
+        sy_punch_knob(PU_HALF, 0, SY_PUNCH_KDEF[PU_HALF][0]);
+        run(100);
+        {   /* GRAIN comes in slowly (knob 4); turned all the way down, at once */
+            float slow, fast;
+            sy_punch(PU_GRAIN, 1);
+            capture();
+            slow = (goertzel(220.0f) + goertzel(880.0f)) / goertzel(440.0f);
+            sy_punch(PU_GRAIN, 0);
+            run(200);
+            sy_punch_knob(PU_GRAIN, 3, 0);
+            sy_punch(PU_GRAIN, 1);
+            run(10);
+            capture();
+            fast = (goertzel(220.0f) + goertzel(880.0f)) / goertzel(440.0f);
+            sy_punch(PU_GRAIN, 0);
+            sy_punch_knob(PU_GRAIN, 3, SY_PUNCH_KDEF[PU_GRAIN][3]);
+            run(200);
+            CHECK(fast > slow * 4.0f, "GRAIN: slowly in (its first 186 ms %.3f of the scatter it has at once, %.3f)",
+                  (double)slow, (double)fast);
+        }
         /* STOP: slower, then nothing */
         before = level(100);
         sy_punch(PU_STOP, 1);
@@ -533,6 +568,23 @@ int main(int argc, char **argv)
             sy_punch(fx, 0);
         run(300);
         CHECK(!bad && peak <= 1.0f && sy_tel.punch == 0, "all twelve at once (all their ways), then none: no NaN, nothing over (peak %.2f)", (double)peak);
+        for (eq = 0; eq < 2; eq++) {                    /* every knob all the way down, then up: each alone, nothing breaks */
+            int kk;
+            for (fx = 0; fx < PU_N; fx++)
+                for (kk = 0; kk < PU_KN; kk++)
+                    sy_punch_knob(fx, kk, eq ? PU_KMAX : 0);
+            bad = 0;
+            peak = 0.0f;
+            for (fx = 0; fx < PU_N; fx++) {
+                sy_punch(fx, 1 + (fx & 3));
+                run(500);
+                sy_punch(fx, 0);
+                run(60);
+            }
+            CHECK(!bad && peak <= 1.0f, "every knob %s, each punch: no NaN, nothing over (peak %.2f)", eq ? "up" : "down", (double)peak);
+        }
+        for (fx = 0; fx < PU_N * PU_KN; fx++)
+            sy_punch_knob(fx / PU_KN, fx % PU_KN, SY_PUNCH_KDEF[fx / PU_KN][fx % PU_KN]);
         sy_note_off(48);
         sy_note_off(55);
         for (k = 0; k < P_NPARAMS; k++)
@@ -609,6 +661,7 @@ int main(int argc, char **argv)
     }
     {   /* VOWEL: a saw at 110 Hz says A (its 7th harmonic, 770 Hz, up) and then I (its 3rd, 330, and 21st, 2310, up) */
         float a7, a3, i7, i3, i21, a21;
+        int k;
         for (i = 0; i < P_NPARAMS; i++)
             sy_set(i, sy_param_info(i)->def);
         sy_set(P_GUNK, 0);
@@ -626,12 +679,19 @@ int main(int argc, char **argv)
         quiet();
         sy_note_on(45, 100);
         run(400);
-        capture();
-        a7 = goertzel(770.0f), a3 = goertzel(330.0f), a21 = goertzel(2310.0f);
+        a7 = a3 = a21 = i7 = i3 = i21 = 0.0f;
+        for (k = 0; k < 10; k++) {                      /* (over whole beats of the voice's two halves, 2 cents apart) */
+            capture();
+            a7 += goertzel(770.0f), a3 += goertzel(330.0f), a21 += goertzel(2310.0f);
+            run(90);
+        }
         sy_set(P_CUTOFF, 57);                           /* (half way: I) */
         run(300);
-        capture();
-        i7 = goertzel(770.0f), i3 = goertzel(330.0f), i21 = goertzel(2310.0f);
+        for (k = 0; k < 10; k++) {
+            capture();
+            i7 += goertzel(770.0f), i3 += goertzel(330.0f), i21 += goertzel(2310.0f);
+            run(90);
+        }
         sy_note_off(45);
         CHECK(a7 > a3 * 2.0f && i3 > i7 * 2.0f && i21 > a21 * 2.0f, "VOWEL: A then I (770 Hz %.0f dB over 330; then 330 %.0f dB over 770)",
               (double)(10.0f * mm_log2f(a7 / a3) * 0.30103f), (double)(10.0f * mm_log2f(i3 / i7) * 0.30103f));

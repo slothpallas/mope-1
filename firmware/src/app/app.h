@@ -22,12 +22,15 @@ typedef struct {
     uint32_t xp;                         /* notes played, ever (the blob's levels) */
     uint8_t seen;                        /* other pages found (SHADOW 1, SIGH 2, TREMBLE 4, SETUP 8, DECK 16, TEARS 32,
                                             COPIES 64, DUST 128): no more nudges */
-    uint8_t rsv[27];                     /* room to grow */
+    uint8_t pk[PU_N * PU_KN / 2];        /* the punches' knobs, a nibble each: how far from SY_PUNCH_KDEF (0: as
+                                            it comes, so older projects get the knobs as they were) */
+    uint8_t rsv[27 - PU_N * PU_KN / 2];  /* room to grow */
     uint16_t loop_n;                     /* the loop's notes (format 3 on) */
     sy_ev_t loop[SY_LOOP_MAX];
 } project_t;
 
 extern project_t proj;
+_Static_assert(PU_KMAX == 15 && PU_N * PU_KN / 2 <= 27, "the punches' knobs: a nibble each, in the spare bytes");
 
 /* Your presets: 16 slots, each a name and a whole sound (every setting kept; a preset loads only the
  * sound's, not the mixer, the tempo or the MIDI). Their own flash object (OBJ_PRESETS). */
@@ -55,6 +58,9 @@ void project_defaults(void);
 int project_load(void);                  /* 0 = loaded; else defaults are in place */
 int project_save(void);                  /* 0 = saved and verified */
 void project_apply(void);                /* every value to the engine (boot, load) */
+int project_pk(int fx, int k);           /* a punch's knob, 0..PU_KMAX */
+void project_pk_set(int fx, int k, int v);
+void project_send_knobs(void);           /* the punches' knobs to the engine */
 
 void ui_init(void);
 void ui_frame(void);
