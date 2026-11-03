@@ -1947,7 +1947,7 @@ static void punch_post(const geo_t *g)
                 continue;
             for (x = 0; x < PX_W; x++)
                 row[x] = px_get(x, ry);
-            for (x = x0; x <= x1; x++)
+            for (x = x0 < 0 ? 0 : x0; x <= (x1 < PX_W - 1 ? x1 : PX_W - 1); x++)   /* (the blob can lean off the screen) */
                 if (is_blob(row[x - sh >= 0 && x - sh < PX_W ? x - sh : x]))
                     px_pset(x, ry, row[x - sh >= 0 && x - sh < PX_W ? x - sh : x]);
         }
