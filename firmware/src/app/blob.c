@@ -2077,6 +2077,48 @@ static void punch_post(const geo_t *g)
     }
 }
 
+/* SETTINGS: the whole screen, a list. The row chosen lit (knob 1 moves it), its value set by knob 2. */
+static void draw_settings(void)
+{
+    int r;
+    px_rect(0, 0, PX_W, PX_H, PC_BG0);
+    px_text(4, 3, "SETTINGS", PC_WHITE);
+#ifdef OM_VERSION
+    px_text(PX_W - 4 - px_text_w(OM_VERSION), 3, OM_VERSION, PC_DIM);
+#endif
+    px_rect(4, 11, PX_W - 8, 1, PC_WALL);
+    for (r = 0; r < NSET; r++) {
+        const int32_t y = 15 + r * 9;
+        const int on = r == ui.set_row;
+        const char *t = set_text(r);
+        if (on)
+            px_rect(2, y - 2, PX_W - 4, 9, PC_TEAR);
+        px_text(4, y, SET_ROWS[r].label, on ? PC_BG0 : PC_DIM);
+        if (t)
+            px_text(PX_W - 4 - px_text_w(t), y, t, on ? PC_BG0 : PC_WHITE);
+        else {                                           /* an amount: a bar (TUNE: from the middle) */
+            const sy_param_t *p = sy_param_info(SET_ROWS[r].par);
+            const float f = (float)(proj.par[SET_ROWS[r].par] - p->lo) / (float)(p->hi - p->lo);
+            const int32_t x0 = PX_W - 44, w = 40;
+            px_rect(x0, y + 2, w, 2, on ? PC_BLOBD : PC_WALL);
+            if (p->lo < 0) {
+                const int32_t m = x0 + w / 2, at = x0 + (int32_t)(f * (float)(w - 1));
+                px_rect(at < m ? at : m, y + 2, (at < m ? m - at : at - m) + 1, 2, on ? PC_BG0 : PC_SPEC);
+                px_rect(m, y, 1, 6, on ? PC_BG0 : PC_DIM);
+            } else
+                px_rect(x0, y + 2, (int32_t)(f * (float)w + 0.5f), 2, on ? PC_BG0 : PC_SPEC);
+        }
+    }
+    {   /* the knobs: which does what (as the OP-1's colours do) */
+        const int32_t y = PX_H - 8;
+        px_rect(4, y + 1, 4, 4, PC_TEAR);
+        px_text(10, y, "MOVE", PC_DIM);
+        px_rect(36, y + 1, 4, 4, PC_SPEC);
+        px_text(42, y, "SET", PC_DIM);
+        px_text(PX_W - 4 - px_text_w("HOME: OUT"), y, "HOME: OUT", PC_DIM);
+    }
+}
+
 static void blob_draw(void)
 {
     const uint32_t now = plat_ms();
@@ -2088,6 +2130,11 @@ static void blob_draw(void)
     if (bs.dt > 0.1f)
         bs.dt = 0.1f;
     bs.last_ms = now;
+    if (ui.panel && ui.page == PG_SETUP) {               /* (the settings: no room, no blob) */
+        draw_settings();                                 /* (no captions here: the list says it all) */
+        px_present();
+        return;
+    }
     {   /* the punches: each one's show follows the engine; some bend time (half, double, stopping, going round) */
         int fx;
         float tf = 1.0f;

@@ -34,6 +34,8 @@ static const sy_param_t PARAMS[P_NPARAMS] = {
     {"Tone", 0, 100, 50}, {"Dark", 0, 100, 50},
     {"Copy rate", 0, 100, 30}, {"Copy depth", 0, 100, 50}, {"Copy width", 0, 100, 100},
     {"Crackle", 0, 100, 0}, {"Dust", 0, 100, 0},
+    {"Voices", 0, VM_N - 1, VM_POLY},
+    {"Tempo is", 0, TM_N - 1, TM_GLOBAL}, {"Room sound", 0, AM_N - 1, AM_RAIN}, {"Auto bass", 0, 1, 1}, {"Bass way", 0, BS_N - 1, BS_BEAT},
 };
 const sy_param_t *sy_param_info(int i) { return &PARAMS[i < 0 ? 0 : i >= P_NPARAMS ? P_NPARAMS - 1 : i]; }
 
@@ -460,11 +462,9 @@ static int voice_find(int note)
     return best;
 }
 
-static void note_on(int note, int vel)
+static void voice_take(int i, int note, int vel, float c, int again)   /* voice i to a note (again: its envelope from the start) */
 {
-    int i = voice_find(note);
     voice_t *v = &vc[i];
-    float c = (float)note * 100.0f;
     if (v->stage == ST_OFF || v->shed > 0.0f) {         /* a fresh voice: from silence, no glide */
         v->shed = 0.0f;
         v->env = 0.0f;
@@ -487,21 +487,73 @@ static void note_on(int note, int vel)
     /* a stolen or repeated voice keeps its level: the attack starts from where it is (no click) */
     v->cents_to = c;
     v->note = (uint8_t)note;
-    v->vel = 0.35f + 0.65f * (float)vel / 127.0f;
     v->gate = 1;
-    v->stage = ST_ATT;
-    v->menv = v->menv > 0.0f ? v->menv : 0.0f;
-    v->mrise = 1;
+    if (again) {
+        v->vel = 0.35f + 0.65f * (float)vel / 127.0f;
+        v->stage = ST_ATT;
+        v->menv = v->menv > 0.0f ? v->menv : 0.0f;
+        v->mrise = 1;
+    }
     v->age = ++age_n;
+}
+
+/* MONO, LEGATO, UNISON: the keys held, newest last; the sound is the newest. LEGATO: a note while one is
+ * held slides there without starting again; letting the newest go goes back to the one before. */
+static uint8_t mono_held[16], mono_n;
+static const float UNI_CENTS[4] = {0.0f, -9.0f, 9.0f, -17.0f};   /* (UNISON: four, spread) */
+static int mono_voices(void) { return par[P_VMODE] == VM_UNISON ? (vcap_sound < 4 ? vcap_sound : 4) : 1; }
+static void mono_play(int note, int vel, int again)
+{
+    const int u = mono_voices();
+    int k;
+    for (k = 0; k < u; k++)
+        voice_take(k, note, vel, (float)note * 100.0f + (u > 1 ? UNI_CENTS[k] : 0.0f), again);
+    for (; k < SY_NVOICE; k++)                          /* (no others: a mode just changed, or fewer voices) */
+        if (vc[k].gate) {
+            vc[k].gate = 0;
+            vc[k].stage = ST_REL;
+        }
+}
+static void note_on(int note, int vel)
+{
+    if (par[P_VMODE] == VM_POLY)
+        voice_take(voice_find(note), note, vel, (float)note * 100.0f, 1);
+    else {
+        int i, j, was = mono_n;
+        for (i = j = 0; i < mono_n; i++)                /* (already held: to the top) */
+            if (mono_held[i] != note)
+                mono_held[j++] = mono_held[i];
+        mono_n = (uint8_t)j;
+        if (mono_n >= 16) {                             /* (full: the oldest forgotten) */
+            for (i = 1; i < mono_n; i++)
+                mono_held[i - 1] = mono_held[i];
+            mono_n--;
+        }
+        mono_held[mono_n++] = (uint8_t)note;
+        mono_play(note, vel, !(par[P_VMODE] == VM_LEGATO && was > 0 && vc[0].gate));
+    }
     sy_tel.notes++;
     sy_tel.last_note = (int16_t)note;
 }
 
 static void note_off(int note)
 {
-    int i;
+    int i, j;
+    if (par[P_VMODE] != VM_POLY && mono_n) {
+        const int top = mono_held[mono_n - 1] == note;
+        for (i = j = 0; i < mono_n; i++)
+            if (mono_held[i] != note)
+                mono_held[j++] = mono_held[i];
+        mono_n = (uint8_t)j;
+        if (top && mono_n) {                            /* back to the one held before */
+            mono_play(mono_held[mono_n - 1], (int)(vc[0].vel * 127.0f), par[P_VMODE] == VM_MONO);
+            return;
+        }
+        if (mono_n)
+            return;
+    }
     for (i = 0; i < SY_NVOICE; i++)
-        if (vc[i].gate && vc[i].note == note) {
+        if (vc[i].gate && (vc[i].note == note || par[P_VMODE] != VM_POLY)) {
             vc[i].gate = 0;
             vc[i].stage = ST_REL;
         }
@@ -668,6 +720,185 @@ static void gunk_chunk(void)
     const float idle = sy_tel.voices || sy_tel.drums_on ? 0.0f : 1.0f;
     gk_idle += (idle - gk_idle) * (idle > gk_idle ? 0.002f : 0.03f);   /* slow back in, quick out */
 }
+/* The other rooms (Room sound, on the settings page). Each sample: a few one-pole filters on noise, a
+ * sine or two, and now and then an event (a bird, a car, a gull, someone typing), counted in samples. */
+static float am_a, am_b, am_c, am_d, am_e;             /* filters */
+static float am_gust, am_gust_to, am_ev, am_evt, am_evph, am_evhz, am_pan, am_hum;
+static uint32_t am_next, am_next2, am_t;
+static int am_evn;
+static float am_ev2t, am_ev2ph;
+static inline float am_dice(float lo, float hi) { return lo + (hi - lo) * rndf(); }
+static void room_other(int kind, float g, float *ol, float *or_)
+{
+    const float n = rnds(), inv = 1.0f / SY_SR;
+    float l = 0.0f, r = 0.0f, x;
+    am_t++;
+    switch (kind) {
+    case AM_FOREST: {   /* wind in the leaves, gusting; a bird now and then; crickets when it is quiet */
+        if ((am_t & 1023u) == 0u) {
+            if (rndf() < 0.01f)
+                am_gust_to = am_dice(0.15f, 1.0f);
+            am_gust += (am_gust_to - am_gust) * 0.03f;
+        }
+        am_a += 0.05f * (n - am_a);                     /* the wind: a soft band of noise */
+        am_b += 0.004f * (am_a - am_b);
+        am_c += 0.5f * (rnds() - am_c);                 /* the leaves: brighter, with the gusts */
+        x = (am_a - am_b) * 1.6f * am_gust + (am_c - am_a) * 0.25f * am_gust * am_gust * (0.6f + 0.4f * rnds());
+        l += x;
+        r += x * 0.8f + (am_c - am_a) * 0.05f * am_gust;
+        if (am_t >= am_next) {                          /* a bird: a phrase of a few chirps */
+            am_evn = 2 + (int)(rnd() % 4u);
+            am_evt = 0.0f;
+            am_evhz = am_dice(2800.0f, 4600.0f);
+            am_pan = am_dice(0.15f, 0.85f);
+            am_next = am_t + (uint32_t)(am_dice(3.0f, 9.0f) * SY_SR);
+        }
+        if (am_evn > 0) {
+            const float T = 0.09f * SY_SR, f = am_evt / T;
+            am_evt += 1.0f;
+            am_evph += am_evhz * (1.0f + 0.35f * f) * inv;  /* (each chirp rises) */
+            am_evph -= (float)(int)am_evph;
+            x = mm_sin_turns(am_evph) * (f < 0.15f ? f / 0.15f : 1.0f - (f - 0.15f) / 0.85f) * 0.22f;
+            l += x * (1.0f - am_pan);
+            r += x * am_pan;
+            if (am_evt >= T * 1.6f) {
+                am_evt = 0.0f;
+                am_evn--;
+                am_evhz *= am_dice(0.9f, 1.12f);
+            }
+        }
+        if (gk_idle > 0.4f) {                           /* crickets: trills of three */
+            const float ph = (float)(am_t % (uint32_t)(0.55f * SY_SR)) / (0.55f * SY_SR);
+            am_ev2ph += 4700.0f * inv;
+            am_ev2ph -= (float)(int)am_ev2ph;
+            if (ph < 0.18f && (int)(ph * 100.0f) % 6 < 3)
+                x = mm_sin_turns(am_ev2ph) * 0.035f * (gk_idle - 0.4f);
+            else
+                x = 0.0f;
+            l += x * 0.6f;
+            r += x;
+        }
+        break;
+    }
+    case AM_URBAN: {    /* the city far off, a car going by, sometimes a siren, the street lamp's buzz */
+        am_a += 0.003f * (n - am_a);                    /* the hum of traffic */
+        am_b += 0.02f * (n - am_b);
+        x = am_a * 9.0f + (am_b - am_a) * 0.4f;
+        l += x;
+        r += x;
+        if (am_t >= am_next) {
+            am_evt = 0.0f;
+            am_ev = am_dice(3.0f, 5.0f) * SY_SR;        /* (how long it takes to pass) */
+            am_evhz = rndf() < 0.5f ? 1.0f : -1.0f;     /* (which way) */
+            am_next = am_t + (uint32_t)(am_dice(6.0f, 14.0f) * SY_SR);
+        }
+        if (am_evt < am_ev) {                           /* a car: up, closest, away; brighter when closest */
+            const float f = am_evt / am_ev, e = mm_sin_turns(f * 0.5f), pan = 0.5f + 0.45f * am_evhz * (2.0f * f - 1.0f);
+            am_evt += 1.0f;
+            am_c += (0.02f + 0.18f * e * e) * (n - am_c);
+            x = am_c * e * e * 1.4f;
+            l += x * (1.0f - pan);
+            r += x * pan;
+        }
+        if (am_t >= am_next2) {
+            am_ev2t = 0.0f;
+            am_next2 = am_t + (uint32_t)(am_dice(35.0f, 70.0f) * SY_SR);
+        }
+        if (am_ev2t < 7.0f * SY_SR) {                   /* a siren, far away: wailing, rising and falling in */
+            const float f = am_ev2t / (7.0f * SY_SR);
+            am_ev2t += 1.0f;
+            am_ev2ph += (720.0f + 260.0f * mm_sin_turns(am_ev2t * inv * 0.3f)) * inv;
+            am_ev2ph -= (float)(int)am_ev2ph;
+            am_d += 0.08f * (mm_sin_turns(am_ev2ph) - am_d);
+            x = am_d * mm_sin_turns(f * 0.5f) * 0.05f;
+            l += x * 0.7f;
+            r += x;
+        }
+        am_hum += 100.0f * inv;                         /* the lamp: 100 Hz and its odd ones, flickering */
+        am_hum -= (float)(int)am_hum;
+        if ((am_t & 4095u) == 0u)
+            am_gust = rndf() < 0.04f ? 0.0f : 1.0f;
+        x = (mm_sin_turns(am_hum) + 0.4f * mm_sin_turns(3.0f * am_hum) + 0.2f * mm_sin_turns(5.0f * am_hum)) * 0.012f * am_gust;
+        l += x;
+        r += x * 0.6f;
+        break;
+    }
+    case AM_OFFICE: {   /* the air conditioning, a tube's hum, someone typing two desks away */
+        am_a += 0.08f * (n - am_a);                     /* the air */
+        am_b += 0.01f * (am_a - am_b);
+        x = (am_a - am_b) * 0.9f;
+        l += x;
+        r += x * 0.9f + am_b * 0.3f;
+        am_hum += 120.0f * inv;
+        am_hum -= (float)(int)am_hum;
+        if ((am_t & 2047u) == 0u)
+            am_gust = rndf() < 0.03f ? 0.2f : 1.0f;     /* (the tube flickers) */
+        x = (mm_sin_turns(am_hum) * 0.6f + mm_sin_turns(2.0f * am_hum) * 0.3f) * 0.014f * am_gust;
+        l += x;
+        r += x;
+        if (am_t >= am_next) {                          /* someone typing: a burst of keys */
+            am_evn = 4 + (int)(rnd() % 18u);
+            am_next = am_t + (uint32_t)(am_dice(2.0f, 7.0f) * SY_SR);
+            am_next2 = am_t;
+        }
+        if (am_evn > 0 && am_t >= am_next2) {
+            am_ev = am_dice(0.4f, 1.0f) * (rndf() < 0.1f ? 1.6f : 1.0f);   /* (now and then the space bar) */
+            am_next2 = am_t + (uint32_t)(am_dice(0.06f, 0.16f) * SY_SR);
+            am_evn--;
+        }
+        am_c += 0.6f * (n - am_c);                      /* a key: a click, high, quickly gone */
+        am_d += 0.25f * (am_c - am_d);
+        x = (am_c - am_d) * am_ev * 0.5f;
+        am_ev *= 0.992f;
+        l += x * 0.4f;
+        r += x;
+        break;
+    }
+    default: {          /* AM_SEA: waves rolling in and drawing back; a gull far off */
+        if (am_t >= am_next) {                          /* a new wave */
+            am_evt = 0.0f;
+            am_ev = am_dice(6.0f, 10.0f) * SY_SR;
+            am_next = am_t + (uint32_t)am_ev;
+        }
+        {
+            const float f = am_ev > 0.0f ? am_evt / am_ev : 1.0f;
+            const float e = f < 0.35f ? f / 0.35f : mm_expf(-(f - 0.35f) * 4.0f);   /* (rising, breaking, drawing back) */
+            am_evt += 1.0f;
+            am_a += (0.01f + 0.25f * e * e) * (n - am_a);
+            am_b += (0.01f + 0.25f * e * e) * (rnds() - am_b);
+            l += am_a * (0.3f + 1.2f * e);
+            r += am_b * (0.3f + 1.2f * e);
+        }
+        if (am_t >= am_next2) {
+            am_evn = 1 + (int)(rnd() % 3u);
+            am_ev2t = 0.0f;
+            am_pan = am_dice(0.2f, 0.8f);
+            am_next2 = am_t + (uint32_t)(am_dice(12.0f, 30.0f) * SY_SR);
+        }
+        if (am_evn > 0) {                               /* a gull: a falling cry */
+            const float T = 0.35f * SY_SR, f = am_ev2t / T;
+            am_ev2t += 1.0f;
+            am_ev2ph += (1900.0f - 700.0f * f + 60.0f * mm_sin_turns(am_ev2t * inv * 28.0f)) * inv;
+            am_ev2ph -= (float)(int)am_ev2ph;
+            am_e += 0.3f * (mm_sin_turns(am_ev2ph) + 0.4f * mm_sin_turns(2.0f * am_ev2ph) - am_e);
+            x = am_e * (f < 0.1f ? f * 10.0f : 1.0f - f) * 0.06f;
+            l += x * (1.0f - am_pan);
+            r += x * am_pan;
+            if (am_ev2t >= T * 1.4f) {
+                am_ev2t = 0.0f;
+                am_evn--;
+            }
+        }
+        break;
+    }
+    }
+    {
+        static const float EVEN[AM_N] = {1.0f, 2.1f, 0.6f, 1.4f, 1.0f};   /* (each as loud as the rain, measured) */
+        g *= EVEN[kind];
+    }
+    *ol = l * g;
+    *or_ = r * g;
+}
 static inline void gunk(float *l, float *r, float *peak)
 {
     const float a = pf(P_GUNK);
@@ -675,6 +906,14 @@ static inline void gunk(float *l, float *r, float *peak)
     if (a <= 0.0f)
         return;
     g = a * a * (0.25f + 0.75f * gk_idle) * 0.12f;
+    if (par[P_AMBI] != AM_RAIN) {                       /* (another room) */
+        room_other(par[P_AMBI], g, &nl, &nr);
+        *l += nl;
+        *r += nr;
+        x = mm_fabsf(nl) + mm_fabsf(nr);
+        *peak = x > *peak ? x : *peak;
+        return;
+    }
     nl = rnds();
     nr = rnds();
     gk_rl += 0.25f * (nl - gk_rl);                      /* rain: soft noise, its top and bottom cut */
@@ -2031,8 +2270,9 @@ typedef struct {
 static osc_t dk, dsn, dp, db;                          /* kick, snare tone, perc, bass */
 static float sn_env, cl_env, cl_t, h_env, oh_env, hp1, hp1x, hp2, hp2x, sn_hp, sn_hpx, cl_bp, crk;
 static float b_target, b_glide, b_gate, b_lp;
+static uint8_t b_hold;                                  /* ROOT: the note rings on while held */
 static uint8_t dr_start;
-#define abass_on (par[P_BASS] > 0)
+#define abass_on (par[P_BASS] > 0 && par[P_BASSON])
 static uint8_t dr_style, dr_pending, dr_step, dr_fired;
 static uint32_t dr_bar;
 static float dr_t, dr_len, dr_jit;
@@ -2076,9 +2316,41 @@ static int bass_root(void)
 static const uint8_t MINOR_SNAP[12] = {0, 0, 2, 3, 3, 5, 5, 7, 8, 8, 10, 10};
 static int minor_of(int semi) { return semi / 12 * 12 + MINOR_SNAP[semi % 12]; }
 
-static void drum_step(void)
+/* the lowest note held (the arpeggiator's chord when it is on), -1 none */
+static int held_low(void)
+{
+    int i, lo = 128;
+    if (arp_on) {
+        for (i = 0; i < arp_nh; i++)
+            lo = arp_held[i] < lo ? arp_held[i] : lo;
+    } else
+        for (i = 0; i < SY_NVOICE; i++)
+            if (vc[i].gate && vc[i].note < lo)
+                lo = vc[i].note;
+    return lo < 128 ? lo : -1;
+}
+/* the bass on a note (slide: glide into it; hold: it rings on, ROOT's way) */
+static void bass_hit(int bn, int slide, int hold)
 {
     const kit_t *k = &KITS[STYLES[dr_style].kit];
+    const float hz = 8.1757989f * mm_exp2f((float)bn * (1.0f / 12.0f));
+    sy_tel.bass_note = (int16_t)bn;
+    b_target = hz;
+    if (!slide || b_gate <= 0.0f) {
+        db.f = k->b_knock > 0.0f ? hz * 1.5f : hz;      /* the log drum falls into its note */
+        db.amp = 1.0f;
+        if (b_gate <= 0.0f)
+            db.ph = 0.0f;
+    }
+    b_glide = slide ? 1.0f - mm_expf(-1.0f / (k->b_glide * 1.6f * SY_SR)) : 1.0f - mm_expf(-1.0f / (0.004f * SY_SR));
+    if (k->b_knock > 0.0f)
+        b_glide = 1.0f - mm_expf(-1.0f / (0.03f * SY_SR));
+    b_gate = 1.0f;
+    b_hold = (uint8_t)hold;
+    sy_tel.bass_n++;
+}
+static void drum_step(void)
+{
     const int fill = (dr_bar & 3u) == 3u;
     uint8_t c;
     float v;
@@ -2116,7 +2388,34 @@ static void drum_step(void)
         sy_tel.perc_n++;
     }
     c = pat[dr_style][TR_BASS][fill][dr_step];
-    if (abass_on && c != '_') {
+    if (abass_on && par[P_BSTYLE] != BS_BEAT) {         /* the bass another way: its own steps, not the beat's line */
+        const int per8 = STYLES[dr_style].steps / 8u ? (int)(STYLES[dr_style].steps / 8u) : 2, st = dr_step;
+        switch (par[P_BSTYLE]) {
+        case BS_ROOT: {                                 /* one long note: again only when the chord changes, or a bar on */
+            const int root = bass_root();
+            if (st == 0 || root != sy_tel.bass_note || b_gate <= 0.0f)
+                bass_hit(root, 0, 1);
+            break;
+        }
+        case BS_PULSE: case BS_OCTAVES:                 /* 8ths, short (OCTAVES: every other one up an octave) */
+            if (st % per8 == 0)
+                bass_hit(bass_root() + (par[P_BSTYLE] == BS_OCTAVES && (st / per8) & 1 ? 12 : 0), 0, 0);
+            else if (st % per8 == per8 / 2 || per8 == 1)
+                b_gate = 0.0f;
+            break;
+        default:                                        /* FOLLOW: your lowest note, as it is, on the kicks */
+            if (hit_vel(pat[dr_style][TR_KICK][fill][dr_step]) > 0.0f) {
+                int n = held_low();
+                n = n >= 0 ? n : sy_tel.last_note >= 0 ? sy_tel.last_note : 36;
+                while (n >= 40)
+                    n -= 12;
+                while (n < 28)
+                    n += 12;
+                bass_hit(n, 0, 0);
+            }
+            break;
+        }
+    } else if (abass_on && c != '_') {
         int semi = -1, slide = 0;
         if (c >= '0' && c <= '9')
             semi = c - '0';
@@ -2128,23 +2427,9 @@ static void drum_step(void)
             semi = c - 'A', slide = 1;
         else if (c == '^')
             semi = 12, slide = 1;
-        if (semi >= 0) {
-            const int bn = bass_root() + minor_of(semi);
-            float hz = 8.1757989f * mm_exp2f((float)bn * (1.0f / 12.0f));
-            sy_tel.bass_note = (int16_t)bn;
-            b_target = hz;
-            if (!slide || b_gate <= 0.0f) {
-                db.f = k->b_knock > 0.0f ? hz * 1.5f : hz;  /* the log drum falls into its note */
-                db.amp = 1.0f;
-                if (b_gate <= 0.0f)
-                    db.ph = 0.0f;
-            }
-            b_glide = slide ? 1.0f - mm_expf(-1.0f / (k->b_glide * 1.6f * SY_SR)) : 1.0f - mm_expf(-1.0f / (0.004f * SY_SR));
-            if (k->b_knock > 0.0f)
-                b_glide = 1.0f - mm_expf(-1.0f / (0.03f * SY_SR));
-            b_gate = 1.0f;
-            sy_tel.bass_n++;
-        } else if (c == '.') {
+        if (semi >= 0)
+            bass_hit(bass_root() + minor_of(semi), slide, 0);
+        else if (c == '.') {
             b_gate = 0.0f;
         }
     }
@@ -2247,7 +2532,7 @@ static inline float drums_sample(float *bass_out)
         x = mm_tanhf(x * k->b_drive * db.amp) / mm_tanhf(k->b_drive);
         b_lp += 0.25f * (x - b_lp);
         *bass_out = b_lp * 0.7f;
-        db.amp -= db.amp * inv * 2.3f / (b_gate > 0.0f ? k->b_dec : 0.04f);
+        db.amp -= db.amp * inv * 2.3f / (b_gate > 0.0f ? (b_hold ? 4.0f : k->b_dec) : 0.04f);
     }
     return o;
 }
@@ -2584,6 +2869,15 @@ static void drain(void)
                     dr_pending = (uint8_t)par[P_STYLE];
                 if (c.a == P_SIZE || c.a == P_RTONE)
                     room_size(pf(P_SIZE));
+                if (c.a == P_VMODE) {                   /* (another way of taking voices: what sounds lets go) */
+                    int i;
+                    for (i = 0; i < SY_NVOICE; i++)
+                        if (vc[i].gate) {
+                            vc[i].gate = 0;
+                            vc[i].stage = ST_REL;
+                        }
+                    mono_n = 0;
+                }
             }
             break;
         case C_ON:
@@ -2631,6 +2925,7 @@ static void drain(void)
         case C_PANIC: {
             int i;
             pu_held = pu_wait = pu_short = 0;
+            mono_n = 0;
             for (i = 0; i < SY_NVOICE; i++) {
                 vc[i].gate = 0;
                 vc[i].stage = ST_OFF;

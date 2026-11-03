@@ -1,0 +1,74 @@
+# SETTINGS (GLO, then GLO again): the whole screen, a list; knob 1 moves, knob 2 sets. It stays until HOME.
+# Voices: POLY, MONO, LEGATO, UNISON (part of the sound). Tempo: one for all (a new beat keeps it) or each
+# beat's own. The room's sound. The auto-bass on or off, and its way. All of it kept over a restart.
+wait 300
+tap GLO
+wait 1000
+tap GLO
+expect page 7
+expect latch 1
+shot 00_settings.png
+# VOICES: MONO, then two notes: one voice
+spin K2 1
+expect par63 1
+midi 90 3c 64
+midi 90 40 64
+wait 200
+expect voices 1
+wait 100
+shot 01_mono.png
+midi 80 40 00
+midi 80 3c 00
+wait 600
+# UNISON: one note, four voices
+spin K2 2
+expect par63 3
+midi 90 3c 64
+wait 200
+expect voices >3
+midi 80 3c 00
+wait 600
+spin K2 1
+expect par63 0
+# TEMPO: one for all: a new beat keeps it
+spin K1 2
+expect par64 0
+spin SELECT 1
+wait 200
+expect par25 84
+spin SELECT -1
+wait 200
+# each beat's own: a new beat brings its tempo
+spin K2 1
+expect par64 1
+spin SELECT 1
+wait 200
+expect par25 !84
+spin K2 1
+expect par64 0
+# ROOM: the city at night
+spin K1 1
+spin K2 2
+expect par65 2
+wait 100
+shot 02_room.png
+# AUTO BASS off, then ROOT
+spin K1 2
+spin K2 1
+expect par66 0
+spin K1 1
+spin K2 1
+expect par67 1
+wait 100
+shot 03_bass.png
+# it stays until HOME
+wait 4000
+expect page 7
+tap HOME
+expect latch 0
+wait 6000
+reboot
+wait 500
+expect par65 2
+expect par66 0
+expect par67 1

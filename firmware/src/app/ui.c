@@ -31,7 +31,7 @@
 
 enum { PG_BODY, PG_EYES, PG_MOUTH, PG_VIBE, PG_TEARS, PG_WALLS, PG_DECK, PG_SETUP, PG_MIX, PG_ARP, PG_LOOP,
        PG_SHADOW, PG_SIGH, PG_TREMBLE, PG_COPIES, PG_DUST, PG_PUNCH, PG_SAVE, NPAGES };
-static const char *const PAGE_NAME[NPAGES] = {"BODY", "EYES", "MOUTH", "VIBE", "TEARS", "WALLS", "TAPE DECK", "SETUP",
+static const char *const PAGE_NAME[NPAGES] = {"BODY", "EYES", "MOUTH", "VIBE", "TEARS", "WALLS", "TAPE DECK", "SETTINGS",
                                               "MIXER", "ARP", "LOOP", "SHADOW", "SIGH", "TREMBLE", "COPIES", "DUST",
                                               "PUNCH", "SAVE AS"};
 /* the button that opens it (PG_SAVE: none, SAVE's own flow opens it) */
@@ -48,8 +48,8 @@ static const uint8_t PAGE_SEEN_BIT[NPAGES] = {0, 0, 0, 0, 32, 0, 16, 8, 0, 0, 0,
 /* the knobs' names, under their meters in the schematic */
 static const char *const PAGE_LABEL[NPAGES][4] = {
     {"WAVE", "POS", "DTUN", "SUB"}, {"CUT", "RES", "TYPE", "DRIV"}, {"ATK", "DEC", "SUS", "REL"},
-    {"RATE", "DPTH", "SHPE", "DEST"}, {"DLY", "TIME", "FDBK", "DARK"}, {"VERB", "SIZE", "TONE", "RAIN"},
-    {"STYL", "BPM", "SWNG", "HUMN"}, {"GLID", "CH", "OUT", "TUNE"}, {"BPM", "VOX", "DRUM", "BASS"},
+    {"RATE", "DPTH", "SHPE", "DEST"}, {"DLY", "TIME", "FDBK", "DARK"}, {"VERB", "SIZE", "TONE", "ROOM"},
+    {"STYL", "BPM", "SWNG", "HUMN"}, {"MOVE", "SET", "", ""}, {"BPM", "VOX", "DRUM", "BASS"},
     {"MODE", "RATE", "OCT", "GATE"}, {"NOTE", "LEN", "VEL", "BARS"},
     {"WAVE", "TUNE", "MEET", "LVL"}, {"ATK", "DEC", "WAVE", "EYES"}, {"RATE", "DPTH", "SHPE", "DEST"},
     {"CHOR", "RATE", "DPTH", "WIDE"}, {"TAPE", "CRKL", "DUST", "FRY"}, {"", "", "", ""}, {"CURS", "CHAR", "NAME", "SLOT"}};
@@ -95,7 +95,7 @@ static const char *const CAT_NAME[] = {"PAD", "KEYS", "PLUCK", "LEAD", "BASS", "
 _Static_assert(sizeof CAT_NAME / sizeof CAT_NAME[0] == NCAT, "a name for each");
 #define MOOD_N (P_TAPE + 1)
 #define MOOD_X (P_LEVEL - P_BTABLE + 1)
-#define MOOD_NN (P_NPARAMS - P_RTONE)
+#define MOOD_NN (P_VMODE - P_RTONE + 1)
 typedef struct {
     const char *name;
     uint8_t cat;
@@ -103,7 +103,7 @@ typedef struct {
     int8_t v[MOOD_N];
     int8_t x[MOOD_X];                    /* the second pages and the level: B table .. LFO2 dest, Level */
     uint8_t hn;                          /* 1: its own newer effect knobs (n); 0: as they come */
-    int8_t n[MOOD_NN];                   /* walls' tone, tears' dark, copies' rate depth width, crackle, dust */
+    int8_t n[MOOD_NN];                   /* walls' tone, tears' dark, copies' rate depth width, crackle, dust, voices */
 } mood_t;
 static const mood_t MOODS[] = {
     {"MONDAY", CAT_PAD, 0, 0, {0, 20, 25, 30, 58, 20, 35, 45, 10, 50, 60, 50, 30, 12, 0, 0, 30, 22, 50, 45, 38, 62, 0, 20},
@@ -185,23 +185,23 @@ static const mood_t MOODS[] = {
     /* 0.4: sounds for the new modulation and effects (LFOs into the tables, the detune, the walls, the
      * tears, the dust; the copies, the dust, the vowel filter) */
     {"RAGE QUIT", CAT_BASS, -1, 0, {0, 100, 75, 40, 42, 30, 30, 35, 1, 45, 85, 20, 15, 20, 0, 1, 15, 0, 40, 0, 10, 30, 10, 15},
-     {0, -12, 0, 0, 0, 45, 0, 0, 12, 45, 0, LD_DETUNE, -14}, 1, {50, 50, 30, 50, 100, 0, 0}},
+     {0, -12, 0, 0, 0, 45, 0, 0, 12, 45, 0, LD_DETUNE, -14}, 1, {50, 50, 30, 50, 100, 0, 0, VM_LEGATO}},
     {"PASSIVE AGGRESSIVE", CAT_BASS, -1, 0, {2, 40, 10, 50, 45, 35, 40, 30, 1, 45, 80, 20, 45, 35, 3, LD_TABLE, 0, 0, 40, 0, 8, 30, 15, 10},
      {0, 0, MEET_FM, 45, 0, 30, 0, 0, 55, 0, 1, 2, -10}, 0, {0}},
     {"OVERDRAFT", CAT_BASS, -1, 0, {0, 100, 10, 40, 50, 30, 55, 30, 1, 40, 75, 15, 25, 30, 0, LD_POS, 0, 0, 40, 0, 8, 30, 20, 10},
      {0, 7, MEET_SYNC, 60, 0, 50, 0, 30, 55, 0, 1, 2, -14}, 0, {0}},
     {"LANDLORD", CAT_BASS, -1, 0, {0, 30, 5, 90, 30, 25, 60, 20, 0, 35, 70, 15, 20, 0, 0, 0, 0, 0, 40, 0, 6, 25, 45, 20},
-     {0, -12, 0, 0, 0, 10, 0, 0, 55, 0, 1, 2, -8}, 1, {50, 50, 30, 50, 100, 10, 20}},
+     {0, -12, 0, 0, 0, 10, 0, 0, 55, 0, 1, 2, -8}, 1, {50, 50, 30, 50, 100, 10, 20, VM_MONO}},
     {"BURNOUT", CAT_BASS, -1, 0, {11, 60, 5, 40, 40, 70, 30, 40, 1, 45, 75, 20, 10, 25, 0, LD_CUTOFF, 0, 0, 40, 0, 8, 30, 20, 10},
      {0, -12, 0, 0, FT_COMB, 25, 0, 0, 55, 0, 1, 2, -7}, 0, {0}},
     {"SCREAM INTO PILLOW", CAT_LEAD, 0, 15, {0, 100, 15, 10, 70, 55, 35, 40, 3, 50, 85, 35, 60, 0, 0, 0, 20, 30, 45, 40, 30, 50, 25, 10},
-     {0, 12, MEET_SYNC, 70, 0, 35, 0, 0, 62, 12, 0, LD_PITCH, -28}, 1, {50, 60, 30, 50, 100, 0, 0}},
+     {0, 12, MEET_SYNC, 70, 0, 35, 0, 0, 62, 12, 0, LD_PITCH, -28}, 1, {50, 60, 30, 50, 100, 0, 0, VM_LEGATO}},
     {"NOISE COMPLAINT", CAT_LEAD, 0, 0, {3, 50, 20, 10, 72, 35, 30, 40, 2, 45, 80, 35, 20, 50, 0, LD_TEARS, 15, 45, 40, 50, 25, 45, 30, 15},
-     {0, 7, MEET_FM, 45, 0, 40, 0, 0, 55, 0, 1, 2, -27}, 1, {50, 70, 30, 50, 100, 0, 0}},
+     {0, 7, MEET_FM, 45, 0, 40, 0, 0, 55, 0, 1, 2, -27}, 1, {50, 70, 30, 50, 100, 0, 0, VM_MONO}},
     {"ALL CAPS", CAT_LEAD, 0, 0, {5, 60, 25, 10, 62, 75, 30, 35, 2, 45, 85, 30, 35, 20, 0, LD_CUTOFF, 20, 25, 45, 35, 25, 45, 35, 10},
      {0, -12, 0, 0, FT_BAND, 60, 0, 0, 55, 0, 1, 2, -17}, 0, {0}},
     {"REPLY ALL", CAT_LEAD, 0, 25, {0, 100, 55, 15, 55, 30, 55, 45, 3, 50, 80, 35, 50, 10, 0, LD_CUTOFF, 50, 25, 45, 40, 30, 50, 0, 15},
-     {0, -12, 0, 0, 0, 0, 0, 0, 55, 0, 1, 2, 2}, 1, {50, 50, 40, 60, 100, 0, 0}},
+     {0, -12, 0, 0, 0, 0, 0, 0, 55, 0, 1, 2, 2}, 1, {50, 50, 40, 60, 100, 0, 0, VM_UNISON}},
     {"CHOIR OF ONE", CAT_VOX, 0, 0, {0, 100, 35, 10, 40, 60, 0, 40, 60, 60, 85, 70, 8, 30, 0, LD_CUTOFF, 40, 15, 55, 40, 60, 70, 0, 20},
      {9, 0, MEET_MIX, 25, FT_VOWEL, 0, 0, 0, 15, 35, 0, LD_COPIES, -10}, 1, {40, 50, 20, 60, 100, 0, 0}},
     {"HUMMING ALONE", CAT_VOX, 0, 0, {0, 40, 10, 30, 85, 45, 0, 40, 20, 50, 90, 55, 20, 10, 6, LD_CUTOFF, 20, 10, 40, 30, 40, 55, 0, 40},
@@ -268,6 +268,7 @@ static struct {
     uint32_t save_t, reset_ask;
     uint32_t last_draw;
     uint8_t naming;                    /* SAVE AS open: the knobs (and typing) edit the name, SAVE keeps it */
+    uint8_t set_row;                   /* SETTINGS: the row chosen (knob 1 moves, knob 2 sets) */
     uint8_t save_slot, cursor;
     char name[PRESET_NAME + 1];
     uint32_t name_dice;
@@ -302,6 +303,45 @@ static int mood_n(void) { return NMOOD + PRESET_SLOTS; }
 static int mood_used(int m) { return m < NMOOD || (m < mood_n() && (presets.used >> (m - NMOOD) & 1u)); }
 static const char *mood_name(int m) { return m < NMOOD ? MOODS[m].name : presets.slot[m - NMOOD].name; }
 static int mood_cat(int m) { return m < NMOOD ? MOODS[m].cat : CAT_MINE; }
+/* ------------------------------------------------------------ settings --- */
+/* SETTINGS (GLO twice): the whole screen, no blob. A list, as on the OP-1's: knob 1 goes up and down it,
+ * knob 2 sets the row chosen. Words for the choices, a bar for the amounts. */
+typedef struct {
+    const char *label;
+    uint8_t par;
+    const char *const *words;           /* 0: a bar (an amount) */
+} set_row_t;
+static const char *const SW_VOICES[] = {"POLY", "MONO", "LEGATO", "UNISON"};
+static const char *const SW_TEMPO[] = {"ONE FOR ALL", "EACH BEAT'S"};
+static const char *const SW_ROOM[] = {"RAIN", "FOREST", "CITY NIGHT", "OFFICE", "SEA"};
+static const char *const SW_ONOFF[] = {"OFF", "ON"};
+static const char *const SW_BASS[] = {"THE BEAT'S", "ROOT", "PULSE", "OCTAVES", "FOLLOW"};
+_Static_assert(sizeof SW_VOICES / sizeof SW_VOICES[0] == VM_N && sizeof SW_TEMPO / sizeof SW_TEMPO[0] == TM_N &&
+               sizeof SW_ROOM / sizeof SW_ROOM[0] == AM_N && sizeof SW_BASS / sizeof SW_BASS[0] == BS_N, "a word for each");
+static const set_row_t SET_ROWS[] = {
+    {"VOICES", P_VMODE, SW_VOICES}, {"GLIDE", P_GLIDE, 0}, {"TEMPO", P_TEMPOMODE, SW_TEMPO}, {"ROOM", P_AMBI, SW_ROOM},
+    {"ROOM LEVEL", P_GUNK, 0},      {"AUTO BASS", P_BASSON, SW_ONOFF}, {"BASS WAY", P_BSTYLE, SW_BASS},
+    {"MIDI IN", P_MIDICH, 0},       {"MIDI OUT", P_MIDIOUT, SW_ONOFF}, {"TUNE", P_TUNE, 0}};
+#define NSET ((int)(sizeof SET_ROWS / sizeof SET_ROWS[0]))
+static const char *set_text(int r)                       /* a row's value in words (0: draw it as a bar) */
+{
+    static char b[8];
+    const set_row_t *w = &SET_ROWS[r];
+    const int v = proj.par[w->par];
+    if (w->words)
+        return w->words[v];
+    if (w->par == P_MIDICH) {                            /* (a channel is a number: that is what it is) */
+        if (!v)
+            return "ALL";
+        b[0] = 'C', b[1] = 'H', b[2] = ' ';
+        b[3] = (char)(v >= 10 ? '1' : '0' + v);
+        b[4] = v >= 10 ? (char)('0' + v - 10) : 0;
+        b[5] = 0;
+        return b;
+    }
+    return 0;
+}
+
 #include "px.c"
 #include "blob.c"
 
@@ -418,14 +458,58 @@ static void say_choice(int k)
     }
 }
 
+/* TEMPO: one for every beat (the setting's default) or each beat its own. One tempo: landing on the beat's
+ * own speed, it says so; a new beat far from its speed, it says that too. */
+static int tempo_home(void) { const int d = proj.par[P_TEMPO] - sy_style_tempo(proj.par[P_STYLE]); return d >= -1 && d <= 1; }
+static void say_tempo_home(void)
+{
+    static char b[40];
+    const char *q, *n = sy_style_name(proj.par[P_STYLE]);
+    int i = 0;
+    for (q = "FINE. THIS IS "; *q; q++)
+        b[i++] = *q;
+    for (; *n && i < 30; n++)
+        b[i++] = *n;
+    for (q = " SPEED."; *q && i < 39; q++)
+        b[i++] = *q;
+    b[i] = 0;
+    ui_caption(b, 1800u);
+}
+static void beat_changed(void)                           /* a new tape */
+{
+    if (proj.par[P_TEMPOMODE] == TM_BEAT)
+        knob_set(P_TEMPO, sy_style_tempo(proj.par[P_STYLE]));   /* (its own tempo) */
+    say_choice(P_STYLE);
+    if (proj.par[P_TEMPOMODE] == TM_GLOBAL) {
+        const int d = proj.par[P_TEMPO] - sy_style_tempo(proj.par[P_STYLE]);
+        static char b[40];
+        const char *q, *n = sy_style_name(proj.par[P_STYLE]);
+        int i = 0;
+        if (d >= -20 && d <= 20)
+            return;
+        for (; *n && i < 24; n++)
+            b[i++] = *n;
+        for (q = d > 0 ? ". TOO FAST." : ". TOO SLOW."; *q; q++)
+            b[i++] = *q;
+        b[i] = 0;
+        ui_caption(b, 1600u);
+    }
+}
 static void turn(int role, int k, int32_t e)
 {
     const sy_param_t *p = sy_param_info(k);
+    const int was_home = k == P_TEMPO && tempo_home();
     if (!e || k == K_NONE)
         return;
     knob_set(k, proj.par[k] + accel(role, e, p->hi - p->lo));
-    if (k == P_STYLE)                                    /* a new tape: its own tempo */
-        knob_set(P_TEMPO, sy_style_tempo(proj.par[P_STYLE]));
+    if (k == P_STYLE) {
+        beat_changed();
+        return;
+    }
+    if (k == P_TEMPO && proj.par[P_TEMPOMODE] == TM_GLOBAL && !was_home && tempo_home()) {
+        say_tempo_home();                                /* (on the beat's own speed) */
+        return;
+    }
     say_choice(k);
 }
 
@@ -443,7 +527,7 @@ static void set_page(int pg)
  * level, the effects' newer knobs), not the mixer, the tempo, the band or the MIDI */
 static int is_sound(int i)
 {
-    return i <= P_TAPE || i == P_GLIDE || i == P_OCTAVE || (i >= P_BTABLE && i <= P_LEVEL) || i >= P_RTONE;
+    return i <= P_TAPE || i == P_GLIDE || i == P_OCTAVE || (i >= P_BTABLE && i <= P_LEVEL) || (i >= P_RTONE && i <= P_VMODE);
 }
 /* the next preset that way (factory, then yours; empty slots skipped) */
 static int mood_step(int from, int dir)
@@ -617,7 +701,7 @@ static void load_mood(int m)
         knob_set(i, MOODS[m].v[i]);
     for (i = 0; i < MOOD_X; i++)
         knob_set(P_BTABLE + i, MOODS[m].x[i]);
-    for (i = P_RTONE; i < P_NPARAMS; i++)                /* (the effects' newer knobs: as they come, unless it says) */
+    for (i = P_RTONE; i <= P_VMODE; i++)                 /* (the effects' newer knobs and the voices: as they come, unless it says) */
         knob_set(i, MOODS[m].hn ? MOODS[m].n[i - P_RTONE] : sy_param_info(i)->def);
     knob_set(P_OCTAVE, MOODS[m].oct);                    /* (basses sit an octave down, some leads glide) */
     knob_set(P_GLIDE, MOODS[m].glide);
@@ -850,6 +934,8 @@ static void button(int b)
             }
             ui.held_btn = (int8_t)b;
             ui.held_t = now;
+            if (pg == PG_SETUP)
+                ui.latch = 1;                            /* (the settings stay until HOME) */
             if (dbl && !ui.latch) {
                 ui.latch = 1;                            /* twice: it stays (other pages too) until HOME */
                 ui_caption(pg == PG_PUNCH ? "PUNCHES STAY. FX: AWAY." : "STAYS OPEN.", 1200u);
@@ -1033,8 +1119,7 @@ static void input(void)
     }
     if ((e = plat_enc(EN_SELECT)) != 0) {                /* the drum tape */
         knob_set(P_STYLE, (proj.par[P_STYLE] + (e > 0 ? 1 : ST_N - 1)) % ST_N);
-        knob_set(P_TEMPO, sy_style_tempo(proj.par[P_STYLE]));
-        say_choice(P_STYLE);
+        beat_changed();
         if (!ui.latch) {
             set_page(PG_DECK);
             ui.touched = 0;
@@ -1055,6 +1140,21 @@ static void input(void)
             if (ui.naming) {
                 name_knob((int)i, e);
                 ui.page_until = plat_ms() + STAY_MS;
+                ui.focus_t = ui.act_t = plat_ms();
+                continue;
+            }
+            if (ui.panel && ui.page == PG_SETUP) {       /* SETTINGS: knob 1 the row, knob 2 its value */
+                if (i == 0)
+                    ui.set_row = (uint8_t)(((ui.set_row + (int)e) % NSET + NSET) % NSET);
+                else if (i == 1) {
+                    const set_row_t *w = &SET_ROWS[ui.set_row];
+                    const sy_param_t *p = sy_param_info(w->par);
+                    const int n = p->hi - p->lo + 1;
+                    if (w->words)                        /* (words go round) */
+                        knob_set(w->par, p->lo + ((proj.par[w->par] - p->lo + (int)e) % n + n) % n);
+                    else
+                        knob_set(w->par, proj.par[w->par] + accel(EN_K2, e, p->hi - p->lo));
+                }
                 ui.focus_t = ui.act_t = plat_ms();
                 continue;
             }
