@@ -1302,6 +1302,7 @@ static void schem_dust(const drawer_t *p)                /* an old record: the b
     }
 }
 
+/* (a punch pressed while the band plays waits for its next step: its pad blinks till then) */
 /* the punch pads, laid out as the black keys are (F#3 .. D#4 above, F#4 .. F#5 below); the ones punching lit,
  * a mark under it for each white beside it held (left: MORE, right: TWIST). STUTTER is REPEAT with MORE. */
 static const char *const PUNCH_PAD[PU_N] = {"1/2", "X2", "STP", "REV", "RPT", "STU", "GAT", "GRN", "CRU", "SWP", "WSH", "WOB"};
@@ -1318,13 +1319,15 @@ static void schem_punch(const drawer_t *p)
         const int32_t x = p->gx0 + COL[i], y = p->gy0 + 1 + (i >= 5 ? 14 : 0);
         const int on = (sy_tel.punch >> fx & 1u) || (fx == PU_REPEAT && (sy_tel.punch >> PU_STUTTER & 1u));
         const int md = on ? sy_tel.punch_mod[fx] : 0;
+        const int waits = (sy_tel.punch_wait >> fx & 1u) != 0;   /* (on the beat: waiting for the step, blinking) */
         if (on)
             px_rect(x, y, 17, 9, PC_TEAR);
         else {
-            px_rect(x, y, 17, 1, PC_WALL2);
-            px_rect(x, y + 8, 17, 1, PC_WALL2);
-            px_rect(x, y, 1, 9, PC_WALL2);
-            px_rect(x + 16, y, 1, 9, PC_WALL2);
+            const uint8_t c = waits ? ((plat_ms() / 60u) & 1u ? PC_WHITE : PC_TEAR) : PC_WALL2;
+            px_rect(x, y, 17, 1, c);
+            px_rect(x, y + 8, 17, 1, c);
+            px_rect(x, y, 1, 9, c);
+            px_rect(x + 16, y, 1, 9, c);
         }
         px_text(x + 9 - px_text_w(PUNCH_PAD[fx]) / 2, y + 2, PUNCH_PAD[fx], on ? PC_BG0 : PC_DIM);
         if (md & PM_MORE)

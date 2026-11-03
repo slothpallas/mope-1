@@ -157,6 +157,7 @@ typedef struct {
     float punch_ph;               /* where in its slice, gate step or stop it is, 0..1 */
     float punch_k;                /* STOP: the speed left; SWEEP: how closed; WASH: how held */
     uint8_t punch_mod[PU_N];      /* each one's PM_* now */
+    uint16_t punch_wait;          /* pressed, waiting for the band's next step (a bit each) */
     float punch_gate;             /* GATE: how open, 0..1 */
     uint8_t amp_stage;            /* the loudest voice's envelope: 0 off, 1 attack, 2 decay, 3 sustain, 4 release */
     float out_peak;               /* the output's peak over the last block, before the limiter */

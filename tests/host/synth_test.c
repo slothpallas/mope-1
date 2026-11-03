@@ -465,6 +465,41 @@ int main(int argc, char **argv)
         sy_set(P_REVERB, 0);
         quiet();
         run(3000);
+        {   /* on the beat: with the band playing a punch waits for the next step; a tap plays one step; stopped: at once */
+            int frames = 0, held = 0, waited;
+            float steplen;
+            sy_set(P_TEMPO, 120);
+            sy_drums(1);
+            run(400);
+            steplen = 44100.0f * 60.0f / 120.0f * 4.0f / (float)(sy_tel.steps ? sy_tel.steps : 16);
+            sy_punch(PU_CRUSH, 1);
+            sy_render(blk, 16, 4096);
+            waited = (sy_tel.punch_wait >> PU_CRUSH & 1u) && !(sy_tel.punch >> PU_CRUSH & 1u);
+            while (!(sy_tel.punch >> PU_CRUSH & 1u) && frames < 44100) {
+                sy_render(blk, 16, 4096);
+                frames += 16;
+            }
+            CHECK(waited && frames <= (int)steplen + 32, "on the beat: it waits for the step (%d frames, a step %.0f)", frames, (double)steplen);
+            sy_punch(PU_CRUSH, 0);
+            run(200);
+            sy_punch(PU_GATE, 1);                       /* a tap, shorter than a step */
+            sy_render(blk, 16, 4096);
+            sy_punch(PU_GATE, 0);
+            for (frames = 0; frames < 44100; frames += 16) {
+                sy_render(blk, 16, 4096);
+                if (sy_tel.punch >> PU_GATE & 1u)
+                    held += 16;
+            }
+            CHECK(held > (int)(steplen * 0.9f) && held < (int)(steplen * 1.1f) + 32, "...a tap: one step of it (%d frames)", held);
+            sy_drums(0);
+            run(200);
+            sy_punch(PU_CRUSH, 1);
+            sy_render(blk, 16, 4096);
+            CHECK(sy_tel.punch >> PU_CRUSH & 1u, "...the band stopped: at once");
+            sy_punch(PU_CRUSH, 0);
+            run(4000);                                  /* (the band's last hits and the limiter: settled) */
+            sy_set(P_TEMPO, sy_param_info(P_TEMPO)->def);
+        }
         /* power-on: up from nothing, slowly */
         sy_note_on(60, 100);
         run(300);
@@ -583,13 +618,16 @@ int main(int argc, char **argv)
         sy_set(P_DELAY, 0);
         sy_set(P_CHORUS, 0);
         sy_set(P_TAPE, 0);
+        sy_set(P_DETUNE, 0);                            /* (one steady tone: no beating to measure across) */
+        sy_set(P_LFO2DEPTH, 0);
+        sy_set(P_SYNTH, 30);                            /* (quiet enough that nothing squashes it) */
         run(1500);
         sy_note_on(60, 100);
         run(600);
-        l0 = level(300);
+        l0 = level(3200);                               /* (the voice's two halves beat ~0.6 Hz even at Detune 0: whole beats) */
         sy_set(P_LEVEL, 25);
         run(300);
-        l1 = level(300);
+        l1 = level(3200);
         sy_set(P_LEVEL, 0);
         sy_note_off(60);
         quiet();

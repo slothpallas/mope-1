@@ -1391,6 +1391,8 @@ static float pu_gate, pu_gate_ph, pu_crush, pu_crush_l, pu_crush_r, pu_crush_n;
 static float pu_sweep, pu_sweep_t, pu_s1[2], pu_s2[2];
 static float pu_wob, pu_wob_ph, pu_wash_t;
 static float pu_sw_a1, pu_sw_a2, pu_sw_a3, pu_sw_k;   /* SWEEP's filter, once a chunk */
+static uint16_t pu_wait, pu_short;                      /* on the beat: waiting for the next step; let go before it came */
+static uint8_t pu_grid;                                 /* a step of the band began (since the last chunk) */
 static uint8_t pu_mod[PU_N], pu_mod_was = 0xFF;          /* each one's PM_*; the buffer one's when it was set up */
 static uint32_t pu_gate_n;                              /* GATE TWIST: which step of its pattern */
 static float pu_crush_hold = 5.0f, pu_pump_ph;          /* CRUSH: samples held; WASH TWIST: where in the beat */
@@ -1443,20 +1445,49 @@ static void pu_start(int fx)                           /* a buffer punch takes o
         break;
     }
 }
-static void pu_press(int fx, int on)
+static void pu_go(int fx)                              /* it starts now */
 {
-    if (on) {
-        pu_mod[fx] = (uint8_t)((on - 1) & 3);
-        if (pu_held >> fx & 1u)
-            return;                                     /* (held already: only its keys beside changed) */
+    {
         pu_held |= (uint16_t)(1u << fx);
         pu_stamp[fx] = ++pu_clock;
         if (fx == PU_SWEEP)
             pu_sweep_t = 0.0f;
-        if (fx == PU_GATE)
+        if (fx == PU_GATE) {
             pu_gate_ph = 0.0f;
-    } else
-        pu_held &= (uint16_t)~(1u << fx);
+            pu_gate_n = 0;
+        }
+    }
+}
+/* With the band playing a punch waits for its next step (on the beat, its slices and gates on the grid);
+ * let go before that, it still plays that one step. Stopped: at once. */
+static uint8_t dr_on;
+static void pu_press(int fx, int on)
+{
+    const uint16_t bit = (uint16_t)(1u << fx);
+    if (on) {
+        pu_mod[fx] = (uint8_t)((on - 1) & 3);
+        pu_short &= (uint16_t)~bit;
+        if ((pu_held | pu_wait) & bit)
+            return;                                     /* (held already: only its keys beside changed) */
+        if (dr_on)
+            pu_wait |= bit;
+        else
+            pu_go(fx);
+    } else if (pu_wait & bit)
+        pu_short |= bit;                                /* (a tap: one step, when it comes) */
+    else
+        pu_held &= (uint16_t)~bit;
+}
+static void pu_grid_step(void)                          /* the band's next step: the waiting ones go, the tapped ones end */
+{
+    int fx;
+    const uint16_t done = (uint16_t)(pu_short & ~pu_wait);
+    pu_held &= (uint16_t)~done;
+    pu_short &= (uint16_t)~done;
+    for (fx = 0; fx < PU_N; fx++)
+        if (pu_wait >> fx & 1u)
+            pu_go(fx);
+    pu_wait = 0;
 }
 /* the buffer punch that should be playing: the newest held, -1 none */
 static int pu_want(void)
@@ -1634,7 +1665,12 @@ static inline void punch(float *l, float *r)
 /* once a 16-frame chunk: what each punch should be doing now (the buffer one's level, the tone ones) */
 static void punch_chunk(void)
 {
-    const int want = pu_want();
+    int want;
+    if (pu_grid || (!dr_on && (pu_wait | pu_short))) {  /* (stopped while waiting: at once) */
+        pu_grid = 0;
+        pu_grid_step();
+    }
+    want = pu_want();
     const float in = 16.0f / (0.002f * SY_SR), out = 16.0f / (0.008f * SY_SR), k16 = 16.0f / SY_SR;
     if (pu_cur >= 0 && want == pu_cur && pu_mod[pu_cur] != pu_mod_was &&
         (pu_cur == PU_REVERSE || pu_cur == PU_REPEAT || pu_cur == PU_STUTTER))
@@ -1925,7 +1961,7 @@ typedef struct {
 static osc_t dk, dsn, dp, db;                          /* kick, snare tone, perc, bass */
 static float sn_env, cl_env, cl_t, h_env, oh_env, hp1, hp1x, hp2, hp2x, sn_hp, sn_hpx, cl_bp, crk;
 static float b_target, b_glide, b_gate, b_lp;
-static uint8_t dr_on, dr_start;
+static uint8_t dr_start;
 #define abass_on (par[P_BASS] > 0)
 static uint8_t dr_style, dr_pending, dr_step, dr_fired;
 static uint32_t dr_bar;
@@ -2156,6 +2192,7 @@ static void drums_tick(void)                           /* one sample of the sequ
         dr_t = 0.0f;
         dr_fired = 0;
         dr_style = dr_pending;
+        pu_grid = 1;                                    /* (the first step: one too) */
     }
     dr_len = SY_SR * 60.0f / (float)par[P_TEMPO] * 4.0f / (float)STYLES[dr_style].steps;
     if (!dr_fired) {
@@ -2176,6 +2213,7 @@ static void drums_tick(void)                           /* one sample of the sequ
     if (dr_t >= dr_len) {
         dr_t -= dr_len;
         dr_fired = 0;
+        pu_grid = 1;                                    /* (a punch waiting starts here) */
         dr_jit = rndf() * pf(P_HUMAN) * 0.07f * dr_len;
         if (++dr_step >= STYLES[dr_style].steps) {
             dr_step = 0;
@@ -2522,7 +2560,7 @@ static void drain(void)
             break;
         case C_PANIC: {
             int i;
-            pu_held = 0;
+            pu_held = pu_wait = pu_short = 0;
             for (i = 0; i < SY_NVOICE; i++) {
                 vc[i].gate = 0;
                 vc[i].stage = ST_OFF;
@@ -2726,6 +2764,7 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
         if (pu_wob > 0.0f)
             m |= 1u << PU_WOBBLE;
         sy_tel.punch = m;
+        sy_tel.punch_wait = pu_wait;
         sy_tel.punch_buf = pu_wet > 0.0f ? pu_cur : -1;
         sy_tel.punch_wet = pu_wet;
         if (pu_cur == PU_REVERSE || pu_cur == PU_REPEAT || pu_cur == PU_STUTTER) {
