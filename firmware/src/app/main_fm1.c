@@ -309,6 +309,7 @@ static void fm1_main(void)
     project_load();                                 /* defaults when nothing (or another format) is saved */
     presets_load();                                 /* your presets (none: empty slots) */
     project_apply();
+    sy_fade_in(3000u);                              /* (up from silence: no burst of rain before the knobs are read) */
     audio_init();
     usb_start();
 #if OM_TRS
@@ -335,7 +336,10 @@ static void fm1_main(void)
         {
             int32_t a = fm1_adc_read(FM1_ADC_MASTER);
             if (a >= 0) {
+                static int read;
                 uint32_t k10;
+                if (!read++)
+                    knob = a * 16;                      /* (the first reading as it is: not from half way) */
                 knob += (a * 16 - knob) / 8;
                 k10 = (uint32_t)(knob / 16);
                 master_q12 = (k10 * k10) >> 8;           /* 0 .. ~4096 */

@@ -1,5 +1,6 @@
-# The punches: hold FX, and a white key punches while it is held (F3 .. C5: HALF DOUBLE STOP REVERSE REPEAT
-# STUTTER GATE GRAIN CRUSH SWEEP WASH WOBBLE); black keys still play. A chord plays under it all.
+# The punches: hold FX, and a black key punches while it is held (F#3 .. F#5: HALF DOUBLE STOP REVERSE REPEAT
+# GATE GRAIN CRUSH SWEEP WASH WOBBLE). The white key below it held too: MORE; above: TWIST. White keys
+# on their own still play. FX pressed twice: the punches stay until FX again. A chord plays under it all.
 wait 300
 midi 90 30 64
 midi 90 37 64
@@ -7,92 +8,137 @@ midi 90 3c 64
 wait 600
 press FX
 expect page 16
-key w0 down
+key b0 down
 wait 300
 expect punch 1
 expect punchbuf 0
+# the whites beside it lit dim (F3, G3), the other black pads dim
+expect leds_dim 38970669
 shot 00_half.png
-key w0 up
+# MORE (F3 below): two octaves down
+key w0 down
 wait 200
+expect punchmod0 1
+expect voices 3
+shot 00b_half_more.png
 key w1 down
+wait 200
+expect punchmod0 3
+key w0 up
+key w1 up
+wait 100
+expect punchmod0 0
+key b0 up
+wait 200
+key b1 down
 wait 300
 expect punchbuf 1
 shot 01_double.png
-key w1 up
+key b1 up
 wait 200
-key w2 down
+key b2 down
 wait 500
 shot 02_stop.png
-key w2 up
+key b2 up
 wait 200
-key w3 down
+key b3 down
 wait 300
 shot 03_reverse.png
-key w3 up
+key b3 up
 wait 200
-key w4 down
-wait 300
+key b4 down
+wait 700
 expect punchbuf 4
 shot 04_repeat.png
+# MORE: the stutter (1/16), more copies
+key w5 down
+wait 500
+expect punchmod4 1
+shot 05_stutter.png
+key w5 up
 # a tone punch on top of a buffer one: both
-key w8 down
+key b7 down
 wait 200
 expect punch 272
 shot 04b_repeat_crush.png
-key w8 up
-key w4 up
+key b7 up
+key b4 up
 wait 200
-key w5 down
-wait 300
-shot 05_stutter.png
-key w5 up
-wait 200
-key w6 down
-wait 300
+key b5 down
+wait 140
 shot 06_gate.png
-key w6 up
-wait 200
-key w7 down
-wait 400
-shot 07_grain.png
-key w7 up
-wait 200
+wait 70
+shot 06b_gate.png
 key w8 down
 wait 300
-shot 08_crush.png
+expect punchmod6 2
+shot 06c_gate_pattern.png
 key w8 up
+key b5 up
 wait 200
-key w9 down
+key b6 down
+wait 400
+shot 07_grain.png
+key b6 up
+wait 200
+key b7 down
+wait 300
+shot 08_crush.png
+key b7 up
+wait 200
+key b8 down
 wait 900
 shot 09_sweep.png
-key w9 up
+key b8 up
 wait 200
-key w10 down
+key b9 down
 wait 800
 shot 10_wash.png
-key w10 up
+key w12 down
+wait 400
+shot 10b_wash_more.png
+key w12 up
+key b9 up
 wait 200
-key w11 down
+key b10 down
 wait 500
 shot 11_wobble.png
 # FX let go, the key still held: still punching
 release FX
 wait 200
 expect punch 2048
-key w11 up
+key b10 up
 wait 600
 expect punch 0
-# a black key with FX held still plays
+# a white key with FX held still plays
 press FX
-key b0 down
+key w2 down
 wait 200
 expect voices >3
-key b0 up
+key w2 up
 release FX
-# and without FX a white key is a note again
-tapkey w2
+# and without FX a black key is a note again
+tapkey b2
 wait 100
 expect punch 0
+# FX twice: the punches stay without holding it
+tap FX
+wait 100
+tap FX
+wait 100
+expect latch 1
+key b0 down
+wait 200
+expect punch 1
+key b0 up
+wait 300
+tap FX
+wait 100
+expect latch 0
+key b0 down
+wait 200
+expect punch 0
+key b0 up
 midi 80 30 00
 midi 80 37 00
 midi 80 3c 00

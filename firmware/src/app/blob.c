@@ -50,6 +50,7 @@ static struct {
     float sigh_due;
     float pw[PU_N];                                     /* each punch, how much of it shows now (0..1) */
     float rep_t, last_ph;                               /* REPEAT / STUTTER: the moment it goes back to, the slice's last phase */
+    int rep_n;                                          /* REPEAT: times round so far (its copies) */
     float eye_close, grey, grain;                       /* the punches' marks on the body: shut eyes, colour gone, dissolving */
     uint32_t rng;
 } bs;
@@ -1301,16 +1302,22 @@ static void schem_dust(const drawer_t *p)                /* an old record: the b
     }
 }
 
-/* the punch pads: twelve, the white keys F3 .. C5, two rows of six; the ones punching lit */
+/* the punch pads, laid out as the black keys are (F#3 .. D#4 above, F#4 .. F#5 below); the ones punching lit,
+ * a mark under it for each white beside it held (left: MORE, right: TWIST). STUTTER is REPEAT with MORE. */
 static const char *const PUNCH_PAD[PU_N] = {"1/2", "X2", "STP", "REV", "RPT", "STU", "GAT", "GRN", "CRU", "SWP", "WSH", "WOB"};
 static const char *const PUNCH_NAME[PU_N] = {"HALF", "DOUBLE", "STOP", "REVERSE", "REPEAT", "STUTTER", "GATE", "GRAIN", "CRUSH",
                                             "SWEEP", "WASH", "WOBBLE"};
 static void schem_punch(const drawer_t *p)
 {
+    static const uint8_t FX[11] = {PU_HALF, PU_DOUBLE, PU_STOP, PU_REVERSE, PU_REPEAT, PU_GATE, PU_GRAIN, PU_CRUSH, PU_SWEEP,
+                                   PU_WASH, PU_WOBBLE};
+    static const uint8_t COL[11] = {0, 18, 36, 56, 74, 0, 18, 36, 56, 74, 94};   /* (the gaps: where E and B are) */
     int i;
-    for (i = 0; i < PU_N; i++) {
-        const int32_t x = p->gx0 + (i % 6) * 19, y = p->gy0 + 1 + (i / 6) * 14;
-        const int on = sy_tel.punch >> i & 1u;
+    for (i = 0; i < 11; i++) {
+        const int fx = FX[i];
+        const int32_t x = p->gx0 + COL[i], y = p->gy0 + 1 + (i >= 5 ? 14 : 0);
+        const int on = (sy_tel.punch >> fx & 1u) || (fx == PU_REPEAT && (sy_tel.punch >> PU_STUTTER & 1u));
+        const int md = on ? sy_tel.punch_mod[fx] : 0;
         if (on)
             px_rect(x, y, 17, 9, PC_TEAR);
         else {
@@ -1319,7 +1326,11 @@ static void schem_punch(const drawer_t *p)
             px_rect(x, y, 1, 9, PC_WALL2);
             px_rect(x + 16, y, 1, 9, PC_WALL2);
         }
-        px_text(x + 9 - px_text_w(PUNCH_PAD[i]) / 2, y + 2, PUNCH_PAD[i], on ? PC_BG0 : PC_DIM);
+        px_text(x + 9 - px_text_w(PUNCH_PAD[fx]) / 2, y + 2, PUNCH_PAD[fx], on ? PC_BG0 : PC_DIM);
+        if (md & PM_MORE)
+            px_rect(x, y + 10, 6, 2, PC_SPEC);
+        if (md & PM_TWIST)
+            px_rect(x + 11, y + 10, 6, 2, PC_PINK);
     }
 }
 
@@ -1936,28 +1947,62 @@ static void punch_post(const geo_t *g)
                     px_pset(m, y, a);
                 }
             }
-    if (bs.pw[PU_REPEAT] > 0.3f || bs.pw[PU_STUTTER] > 0.3f) {   /* REPEAT, STUTTER: rows of it slip sideways */
-        const int n = bs.pw[PU_STUTTER] > 0.3f ? 7 : 4;
-        int i;
-        for (i = 0; i < n; i++) {
-            const uint32_t hh = (uint32_t)i * 2654435761u ^ (uint32_t)(sy_tel.punch_ph * 8.0f) * 40503u;
-            const int32_t ry = y0 + (int32_t)(hh % (uint32_t)(y1 - y0 > 1 ? y1 - y0 : 1)), sh = (int32_t)((hh >> 10) % 7u) - 3;
-            uint8_t row[PX_W];
-            if (ry < top || ry >= bot || sh == 0)
-                continue;
-            for (x = 0; x < PX_W; x++)
-                row[x] = px_get(x, ry);
-            for (x = x0 < 0 ? 0 : x0; x <= (x1 < PX_W - 1 ? x1 : PX_W - 1); x++)   /* (the blob can lean off the screen) */
-                if (is_blob(row[x - sh >= 0 && x - sh < PX_W ? x - sh : x]))
-                    px_pset(x, ry, row[x - sh >= 0 && x - sh < PX_W ? x - sh : x]);
+    if (bs.pw[PU_REPEAT] > 0.3f || bs.pw[PU_STUTTER] > 0.3f) {
+        /* REPEAT: a copy of it left behind each time round, fainter and further (MORE, STUTTER: more of
+         * them, closer, shaking); a bright line runs across it with the slice and jumps back */
+        const int fast = bs.pw[PU_STUTTER] > 0.3f || (sy_tel.punch_mod[PU_REPEAT] & PM_MORE);
+        const int trip = (sy_tel.punch_mod[PU_REPEAT] & PM_TWIST) != 0;
+        const int maxn = fast ? 6 : 4, n = bs.rep_n + 1 < maxn ? bs.rep_n + 1 : maxn;
+        const float step = g->r * (fast ? 0.32f : 0.5f);
+        int k;
+        for (k = n; k >= 1; k--) {                      /* (furthest first; copies land only off the blob) */
+            const int32_t dx = -(int32_t)(step * (float)k + 0.5f) * (k & 1 ? 1 : -1);
+            const int32_t dy = trip ? (int32_t)((k % 3) * 3) - 3 : fast ? (int32_t)((b_rnd() % 3u)) - 1 : 0;
+            const float keep = 1.0f - 0.5f * (float)(k - 1) / (float)maxn;   /* (its outline: the nearer, the more solid) */
+            for (y = y0 < top ? top : y0; y < (y1 < bot ? y1 : bot); y++) {
+                const int32_t sy = y - dy;
+                for (x = 0; x < PX_W; x++) {
+                    const int32_t sx = x - dx;
+                    if (sx < x0 || sx > x1 || !is_blob(px_get(sx, sy)) || is_blob(px_get(x, y)))
+                        continue;
+                    if ((!is_blob(px_get(sx - 1, sy)) || !is_blob(px_get(sx + 1, sy)) || !is_blob(px_get(sx, sy - 1)) ||
+                         !is_blob(px_get(sx, sy + 1))) && px_dith4(x, y) + 0.5f < keep)
+                        px_pset(x, y, k == 1 ? PC_WHITE : k == 2 ? PC_SHEEN : PC_GHOST);
+                }
+            }
+        }
+        {   /* the line running across it: where in the slice it is */
+            const int32_t lx = x0 + (int32_t)(sy_tel.punch_ph * (float)(x1 - x0));
+            for (y = y0 < top ? top : y0; y < (y1 < bot ? y1 : bot); y++)
+                for (x = lx - 1; x <= lx; x++)
+                    if (is_blob(px_get(x, y)))
+                        px_pset(x, y, PC_WHITE);
         }
     }
-    if (bs.pw[PU_GATE] > 0.5f && sy_tel.punch_ph >= 0.55f)   /* GATE shut: only its outline */
-        for (y = y0 < top + 1 ? top + 1 : y0; y < (y1 < bot - 1 ? y1 : bot - 1); y++)
-            for (x = x0 < 1 ? 1 : x0; x < (x1 < PX_W - 1 ? x1 : PX_W - 1); x++)
-                if (is_blob(px_get(x, y)) && is_blob(px_get(x - 1, y)) && is_blob(px_get(x + 1, y)) &&
-                    is_blob(px_get(x, y - 1)) && is_blob(px_get(x, y + 1)))
-                    px_pset(x, y, (x + y) & 3 ? PC_BG0 : PC_BG1);
+    if (bs.pw[PU_GATE] > 0.3f) {
+        /* GATE: a shutter. As it shuts, black bands close over the room from every eighth row; shut, only the
+         * blob's edge is left, lit. */
+        const float shut = (1.0f - sy_tel.punch_gate) * bs.pw[PU_GATE];
+        const int32_t band = (int32_t)(shut * 8.0f + 0.5f);
+        uint8_t prev[PX_W], cur[PX_W];
+        if (band > 0) {
+            for (x = 0; x < PX_W; x++)
+                prev[x] = px_get(x, top - 1);
+            for (y = top; y < bot; y++) {
+                for (x = 0; x < PX_W; x++)
+                    cur[x] = px_get(x, y);
+                if ((y & 7) < band)
+                    for (x = 0; x < PX_W; x++) {
+                        const int in = is_blob(cur[x]);
+                        const int edge = in && (!is_blob(prev[x]) || !is_blob(px_get(x, y + 1)) ||
+                                                (x > 0 && !is_blob(cur[x - 1])) || (x < PX_W - 1 && !is_blob(cur[x + 1])));
+                        px_pset(x, y, edge ? (band >= 7 ? PC_WHITE : PC_TEAR) : PC_BLACK);
+                    }
+                for (x = 0; x < PX_W; x++)
+                    prev[x] = cur[x];
+            }
+        }
+    }
     if (bs.pw[PU_CRUSH] > 0.3f) {                         /* CRUSH: the whole picture in blocks */
         const int32_t b = 2 + (int32_t)(bs.pw[PU_CRUSH] * 2.0f);
         for (y = top; y < bot; y += b)
@@ -1977,11 +2022,47 @@ static void punch_post(const geo_t *g)
             for (x = 0; x < PX_W; x++)
                 px_pset(x, y, row[(x - sh + PX_W) % PX_W]);
         }
-    if (bs.pw[PU_WASH] > 0.05f)                           /* WASH: a bright fog over it all */
-        for (y = top; y < bot; y++)
+    if (bs.pw[PU_WASH] > 0.05f) {
+        /* WASH: it rises off itself like steam, rings of sound spread out through the room, a pale fog over
+         * everything (MORE: the blob itself mostly gone; TWIST: the rings breathe with the beat) */
+        const float w = bs.pw[PU_WASH];
+        const int more = (sy_tel.punch_mod[PU_WASH] & PM_MORE) != 0, twist = (sy_tel.punch_mod[PU_WASH] & PM_TWIST) != 0;
+        const int32_t L = (int32_t)(4.0f + 22.0f * w), drift = (int32_t)(bs.t * 30.0f);
+        int k;
+        if (more)
+            for (y = y0 < top ? top : y0; y < (y1 < bot ? y1 : bot); y++)
+                for (x = x0 < 0 ? 0 : x0; x <= (x1 < PX_W - 1 ? x1 : PX_W - 1); x++)
+                    if (is_blob(px_get(x, y)) && px_dith4(x, y + drift) + 0.5f < 0.7f * w)
+                        px_pset(x, y, px_dith4(x + 1, y) > 0.0f ? PC_GHOST : PC_BG1);
+        for (x = x0 < 0 ? 0 : x0; x <= (x1 < PX_W - 1 ? x1 : PX_W - 1); x++) {   /* (steam: up from each column of it) */
+            int32_t run = 0;
+            for (y = (y1 < bot ? y1 : bot) - 1; y >= top; y--) {
+                const uint8_t c = px_get(x, y);
+                if (is_blob(c))
+                    run = L;
+                else if (run > 0) {
+                    if (px_dith4(x, y + drift) + 0.5f < 0.65f * (float)run / (float)L)
+                        px_pset(x, y, run > L / 2 ? PC_SHEEN : PC_GHOST);
+                    run--;
+                }
+            }
+        }
+        for (k = 0; k < 3; k++) {                       /* rings, outward */
+            float f = (twist ? bs.t * 1.4f : bs.t * 0.45f) + (float)k / 3.0f;
+            float R, a;
+            f -= (float)(int)f;
+            R = g->r * (1.1f + 2.8f * f);
+            for (a = 0.0f; a < 1.0f; a += 0.5f / (6.3f * R)) {
+                const int32_t px = (int32_t)(g->cx + R * mm_sin_turns(a + 0.25f)), py = (int32_t)(g->cy + R * 0.62f * mm_sin_turns(a));
+                if (py >= top && py < bot && !is_blob(px_get(px, py)) && px_dith4(px, py) + 0.5f < (1.0f - f) * w * 0.9f)
+                    px_pset(px, py, f < 0.4f ? PC_WHITE : PC_SHEEN);
+            }
+        }
+        for (y = top; y < bot; y++)                     /* a light fog */
             for (x = 0; x < PX_W; x++)
-                if (px_dith4(x, y) + 0.5f < bs.pw[PU_WASH] * 0.35f)
+                if (px_dith4(x, y) + 0.5f < w * (more ? 0.3f : 0.18f))
                     px_pset(x, y, (x * 7 + y * 3) % 11 ? PC_SHEEN : PC_WHITE);
+    }
 }
 
 static void blob_draw(void)
@@ -2007,13 +2088,16 @@ static void blob_draw(void)
         tf *= 1.0f - bs.pw[PU_STOP] * (1.0f - sy_tel.punch_k);
         bs.t += bs.dt * tf;
         if (sy_tel.punch_buf == PU_REPEAT || sy_tel.punch_buf == PU_STUTTER) {   /* round again: so is everything */
-            if (sy_tel.punch_ph < bs.last_ph)
+            if (sy_tel.punch_ph < bs.last_ph) {
                 bs.t = bs.rep_t;
-            else if (bs.last_ph == 0.0f)
+                bs.rep_n++;
+            } else if (bs.last_ph == 0.0f)
                 bs.rep_t = bs.t;
             bs.last_ph = sy_tel.punch_ph + 1e-4f;
-        } else
+        } else {
             bs.last_ph = 0.0f;
+            bs.rep_n = 0;
+        }
         bs.eye_close = mm_maxf(bs.pw[PU_SWEEP] * sy_tel.punch_k, bs.pw[PU_STOP] * (1.0f - sy_tel.punch_k));
         bs.grey = bs.pw[PU_STOP] * (1.0f - sy_tel.punch_k);
         bs.grain = bs.pw[PU_GRAIN];

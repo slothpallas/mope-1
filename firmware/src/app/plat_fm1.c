@@ -22,7 +22,7 @@ int32_t plat_enc(int role)
     return fm1_enc_take(panel.enc[role]) * panel.dir[role];
 }
 
-static volatile uint32_t master_q12 = 2048;
+static volatile uint32_t master_q12 = 0;           /* (silent until the MASTER pot is read) */
 uint32_t plat_master(void) { return master_q12; }
 
 /* LEDs: the picture is built off-line and copied one byte per column (Felucca: clearing
