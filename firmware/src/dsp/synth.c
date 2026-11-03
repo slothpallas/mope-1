@@ -809,6 +809,16 @@ static inline wtsel_t wt_pick(int table, float pos, float hz_top)
 }
 
 /* the amp envelope, a sample at a time */
+/* FT_VOWEL: a mouth's two formants, sliding A -> E -> I -> O -> U as x goes 0 .. 1 (on octaves between) */
+void sy_vowel(float x, float *f1, float *f2)
+{
+    static const float F1[5] = {760.0f, 500.0f, 290.0f, 520.0f, 320.0f}, F2[5] = {1250.0f, 1900.0f, 2300.0f, 900.0f, 800.0f};
+    const float at = mm_clampf(x, 0.0f, 1.0f) * 4.0f;
+    const int i = at >= 4.0f ? 3 : (int)at;
+    const float f = at - (float)i;
+    *f1 = F1[i] * mm_exp2f(f * mm_log2f(F1[i + 1] / F1[i]));
+    *f2 = F2[i] * mm_exp2f(f * mm_log2f(F2[i + 1] / F2[i]));
+}
 static inline float amp_step(voice_t *v, float att, float dec, float sus, float rel)
 {
     float e = v->env;
@@ -864,7 +874,7 @@ static void render_voices(float *ol, float *or_, uint32_t n, const mods_t *mods)
     const int shadow_on = lvl > 0.0f, plain = !shadow_on && ftype == FT_LOW && drive <= 0.0f && !scan;
     base_pos = pf(P_POS) + md.pos + mod_amt;
     {   /* what a voice of this sound costs on the FM-1 (measured: % of a block): a heavy one, fewer voices */
-        const float cost = 6.6f + (shadow_on ? 2.2f : 0.0f) + (drive > 0.0f ? 1.5f : 0.0f) + (ftype != FT_LOW ? 2.0f : 0.0f) +
+        const float cost = 6.6f + (shadow_on ? 2.2f : 0.0f) + (drive > 0.0f ? 1.5f : 0.0f) + (ftype != FT_LOW ? 2.0f : 0.0f) + (ftype == FT_VOWEL ? 1.0f : 0.0f) +
                            (scan ? 2.2f : 0.0f);
         vcap_sound = (int)((52.0f - fx_cost()) / cost);   /* (room left for the drums, the bass, the effects) */
         vcap_sound = vcap_sound < 3 ? 3 : vcap_sound > SY_NVOICE ? SY_NVOICE : vcap_sound;
@@ -880,6 +890,7 @@ static void render_voices(float *ol, float *or_, uint32_t n, const mods_t *mods)
         ng += v->gate;
         for (j0 = 0; j0 < n; j0 += SUB) {
             float c, hz, inc[2], incs, incb, cut, g, a1, a2, a3, pos, comb_d = 0.0f, comb_fb = 0.0f;
+            float vk = 0.5f, va1[2] = {0.0f, 0.0f}, va2[2] = {0.0f, 0.0f}, va3[2] = {0.0f, 0.0f};   /* (FT_VOWEL) */
             uint32_t j;
             wtsel_t wa, wb, wc;
             const int16_t *wb_t;
@@ -922,6 +933,18 @@ static void render_voices(float *ol, float *or_, uint32_t n, const mods_t *mods)
             if (ftype == FT_COMB) {                     /* the comb rings at the cutoff; Reso is how long */
                 comb_d = mm_clampf(SY_SR / cut, 2.0f, (float)(COMB_N - 2u));
                 comb_fb = 0.35f + 0.6f * pf(P_RESO);
+            } else if (ftype == FT_VOWEL) {             /* the cutoff (with its envelope and LFOs) is the vowel; Reso sharpens it */
+                float f1, f2, gg;
+                sy_vowel(mm_log2f(cut / 30.0f) / 9.3f, &f1, &f2);
+                vk = 0.5f - 0.38f * pf(P_RESO);
+                gg = mm_tanf(MM_PI * f1 / SY_SR);
+                va1[0] = 1.0f / (1.0f + gg * (gg + vk));
+                va2[0] = gg * va1[0];
+                va3[0] = gg * va2[0];
+                gg = mm_tanf(MM_PI * f2 / SY_SR);
+                va1[1] = 1.0f / (1.0f + gg * (gg + vk));
+                va2[1] = gg * va1[1];
+                va3[1] = gg * va2[1];
             }
             if (plain) {                                /* the usual sound: one table, low-pass, no drive */
                 for (j = 0; j < SUB; j++) {
@@ -1017,6 +1040,16 @@ static void render_voices(float *ol, float *or_, uint32_t n, const mods_t *mods)
                     v->comb_w = (uint16_t)((v->comb_w + 1u) & (COMB_N - 1u));
                     y[0] = (in[0] + v->comb_dull) * 0.6f;
                     y[1] = (in[1] + v->comb_dull) * 0.6f;
+                } else if (ftype == FT_VOWEL) {         /* two band-passes on both sides at once, the formants (the voice's two filters) */
+                    const float m = 0.5f * (in[0] + in[1]);
+                    float b[2];
+                    for (q = 0; q < 2; q++) {
+                        float v3 = m - v->s2[q], v1 = va1[q] * v->s1[q] + va2[q] * v3, v2 = v->s2[q] + va2[q] * v->s1[q] + va3[q] * v3;
+                        v->s1[q] = 2.0f * v1 - v->s1[q];
+                        v->s2[q] = 2.0f * v2 - v->s2[q];
+                        b[q] = v1 * vk;
+                    }
+                    y[0] = y[1] = (b[0] + 0.6f * b[1]) * 1.9f;
                 } else if (ftype == FT_LOW)
                     for (q = 0; q < 2; q++) {           /* Simper's SVF, low-pass (the usual: its own loop) */
                         float v3 = in[q] - v->s2[q], v1 = a1 * v->s1[q] + a2 * v3, v2 = v->s2[q] + a2 * v->s1[q] + a3 * v3;
@@ -1412,9 +1445,22 @@ static inline float pu_beat(void) { return 60.0f / (float)par[P_TEMPO]; }   /* s
 static void pu_reslice(int fx)
 {
     const float hr = SY_SR * 0.5f, m = (pu_mod[fx] & PM_MORE) ? 0.5f : 1.0f;
-    if (fx == PU_REVERSE)
-        pu_slice = mm_minf(pu_beat() * 0.25f * hr * m * ((pu_mod[fx] & PM_TWIST) ? 2.0f : 1.0f), 3900.0f);
-    else {
+    if (fx == PU_REVERSE) {
+        /* live: a 1/16 at most the buffer allows (backwards at speed s, the lag grows (1+s)/2 a sample); TWIST:
+         * the moment kept, a 1/8 of it round and round backwards */
+        const float s = (pu_mod[fx] & PM_MORE) ? 0.5f : 1.0f;
+        if (pu_mod[fx] & PM_TWIST) {
+            pu_slice = mm_minf(pu_beat() * 0.5f * SY_SR, 16000.0f / s) * 0.5f;
+            pu_anchor = pu_w;
+            pu_frozen = 1;
+        } else {
+            pu_slice = mm_minf(pu_beat() * 0.25f * SY_SR, 8100.0f / (0.5f * (1.0f + s))) * 0.5f;
+            pu_frozen = 0;
+        }
+        pu_t = 0.0f;
+        (void)hr;
+        (void)m;
+    } else {
         pu_slice = pu_beat() * (fx == PU_REPEAT ? 0.5f : 0.25f) * hr * m * ((pu_mod[fx] & PM_TWIST) ? 2.0f / 3.0f : 1.0f);
         while (pu_slice > 7600.0f)
             pu_slice *= 0.5f;
@@ -1531,26 +1577,37 @@ static inline void pu_read(float *l, float *r)
         }
         break;
     }
-    case PU_STOP: {                                     /* slower and slower, then nothing (MORE: a sudden brake; TWIST: on into a spin backwards) */
+    case PU_STOP: {     /* slower and slower, then nothing. MORE: each press of it, the tape back and braked hard;
+                         * TWIST: the moment kept and scratched, back and forth twice a beat */
         const int md = pu_mod[PU_STOP];
-        const float T = mm_minf(pu_beat(), 0.7f) * SY_SR * ((md & PM_MORE) ? 0.3f : 1.0f);
-        float v = 1.0f - pu_t / T;
-        if (md & PM_TWIST)
-            v = mm_maxf(v, -2.0f);                      /* (past nothing: backwards, up to twice as fast) */
-        else
-            v = mm_maxf(v, 0.0f);
-        pu_stop_v = mm_maxf(v, 0.0f);
-        pu_spin = v < 0.0f ? -v * 0.5f : 0.0f;
-        pu_head[0] = mm_minf(pu_head[0] + hr_step * (1.0f - v), (float)PU_LEN - 4.0f);
-        a = mm_sqrtf(mm_minf(mm_fabsf(v), 1.0f)) * mm_clampf(((float)PU_LEN - 300.0f - pu_head[0]) / 600.0f, 0.0f, 1.0f);
-        *l = pu_at(0, pu_head[0]) * a;
-        *r = pu_at(1, pu_head[0]) * a;
+        if (md & PM_TWIST) {
+            const float ph = pu_t / (pu_beat() * 0.5f * SY_SR), c = mm_sin_turns(ph + 0.25f);
+            const float lag = 300.0f + 2600.0f * (0.5f - 0.5f * c);
+            pu_spin = mm_fabsf(mm_sin_turns(ph));       /* (how fast the record moves under the hand) */
+            pu_stop_v = 0.0f;
+            a = mm_minf(pu_spin * 3.0f, 1.0f);
+            *l = pu_at(0, lag) * a;
+            *r = pu_at(1, lag) * a;
+            break;
+        }
+        {
+            const float T = mm_minf(pu_beat(), 0.7f) * SY_SR * ((md & PM_MORE) ? 0.22f : 1.0f);
+            const float v = mm_maxf(1.0f - pu_t / T, 0.0f);
+            pu_stop_v = v;
+            pu_spin = 0.0f;
+            pu_head[0] = mm_minf(pu_head[0] + hr_step * (1.0f - v), (float)PU_LEN - 4.0f);
+            a = mm_sqrtf(v);
+            *l = pu_at(0, pu_head[0]) * a;
+            *r = pu_at(1, pu_head[0]) * a;
+        }
         break;
     }
-    case PU_REVERSE: {                                  /* each slice backwards: the lag grows twice as fast as time */
+    case PU_REVERSE: {                                  /* each slice backwards (MORE: at half speed, an octave down) */
+        const float s = (pu_mod[PU_REVERSE] & PM_MORE) ? 0.5f : 1.0f;
         const float len = pu_slice * 2.0f, pos = pu_t - mm_floorf(pu_t / len) * len;   /* (full-rate samples into it) */
         const float fade = mm_minf(mm_minf(pos, len - pos) / 130.0f, 1.0f);   /* (3 ms at each seam) */
-        const float lag = pos;                          /* (half-rate lag = full-rate time: back at twice the speed) */
+        const float lag = (pu_mod[PU_REVERSE] & PM_TWIST) ? 8.0f + pos * 0.5f * s      /* (kept: the frozen moment, backwards) */
+                                                          : pos * 0.5f * (1.0f + s);  /* (live: the lag grows as it reads back) */
         *l = pu_at(0, lag) * fade;
         *r = pu_at(1, lag) * fade;
         break;
@@ -1672,9 +1729,22 @@ static void punch_chunk(void)
     }
     want = pu_want();
     const float in = 16.0f / (0.002f * SY_SR), out = 16.0f / (0.008f * SY_SR), k16 = 16.0f / SY_SR;
-    if (pu_cur >= 0 && want == pu_cur && pu_mod[pu_cur] != pu_mod_was &&
-        (pu_cur == PU_REVERSE || pu_cur == PU_REPEAT || pu_cur == PU_STUTTER))
-        pu_reslice(pu_cur);                             /* (its keys beside changed: the slice follows) */
+    if (pu_cur >= 0 && want == pu_cur && pu_mod[pu_cur] != pu_mod_was) {   /* its keys beside changed */
+        if (pu_cur == PU_REVERSE || pu_cur == PU_REPEAT || pu_cur == PU_STUTTER)
+            pu_reslice(pu_cur);                         /* (the slice follows) */
+        else if (pu_cur == PU_STOP) {
+            const int was = pu_mod_was;
+            pu_mod_was = pu_mod[PU_STOP];
+            if ((pu_mod[PU_STOP] & PM_MORE) && !(was & PM_MORE))
+                pu_start(PU_STOP);                      /* (MORE pressed: the tape back, braked hard) */
+            else if (!(pu_mod[PU_STOP] & PM_TWIST) && (was & PM_TWIST))
+                pu_start(PU_STOP);                      /* (the scratching let go: it runs down again) */
+            if (pu_mod[PU_STOP] & PM_TWIST) {
+                pu_frozen = 1;                          /* (scratched: the moment kept) */
+                pu_t = 0.0f;
+            }
+        }
+    }
     if (pu_cur == PU_GRAIN)
         pu_frozen = (pu_mod[PU_GRAIN] & PM_TWIST) != 0;  /* (GRAIN TWIST: the moment kept) */
     if (want != pu_cur) {                               /* another one: the old fades out first (8 ms), then it starts */
@@ -2775,7 +2845,7 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
         for (j = 0; j < (uint32_t)PU_N; j++)
             sy_tel.punch_mod[j] = pu_mod[j];
         sy_tel.punch_gate = pu_gate;
-        sy_tel.punch_k = pu_cur == PU_STOP ? pu_stop_v - pu_spin : (pu_held >> PU_SWEEP & 1u) ?
+        sy_tel.punch_k = pu_cur == PU_STOP ? pu_stop_v : (pu_held >> PU_SWEEP & 1u) ?
                          mm_minf(pu_sweep_t / (2.0f * pu_beat()), 1.0f) : pu_wash;
     }
     sy_tel.out_peak = peak;

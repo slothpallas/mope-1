@@ -70,7 +70,8 @@ enum { ARP_UP, ARP_DOWN, ARP_UPDOWN, ARP_WANDER, ARP_STAB, ARP_NMODE };
  * tables, the detune, and the four effects' amounts */
 enum { LD_POS, LD_CUTOFF, LD_PITCH, LD_VOLUME, LD_SHADOW, LD_TABLE, LD_DETUNE, LD_WALLS, LD_TEARS, LD_COPIES, LD_DUST, LD_N };
 enum { MEET_MIX, MEET_FM, MEET_RING, MEET_SYNC, MEET_N };             /* how oscillator B meets A */
-enum { FT_LOW, FT_BAND, FT_HIGH, FT_NOTCH, FT_COMB, FT_N };           /* the filter's kinds */
+enum { FT_LOW, FT_BAND, FT_HIGH, FT_NOTCH, FT_COMB, FT_VOWEL, FT_N };   /* the filter's kinds (VOWEL: two formants) */
+void sy_vowel(float x, float *f1, float *f2);       /* FT_VOWEL: its formants (Hz) at x 0..1, A E I O U */
 
 /* drum styles: each named after its genre, sadly (Grief drill, Empty city pop, Gloom gabber, Missed phonk
  * call, Jersey cry club, Heartbreakcore, Amapia-no, Cold footwork, Dembow out, Vaporweep, Hyperflop,
