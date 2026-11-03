@@ -385,6 +385,12 @@ static int expect(const char *what, const char *val)
         got = (int)sy_tel.punch;
     else if (!strcmp(what, "punchbuf"))
         got = (int)sy_tel.punch_buf;
+    else if (!strncmp(what, "punchmod", 8))       /* punchmodN: punch N's PM_* (MORE 1, TWIST 2) */
+        got = (int)sy_tel.punch_mod[atoi(what + 8) % PU_N];
+    else if (!strcmp(what, "latch"))
+        got = ui.latch;
+    else if (!strcmp(what, "leds_dim"))           /* the keys lit dim now (a bit each) */
+        got = (int)dim_keys;
     else if (!strcmp(what, "kicks"))
         got = (int)sy_tel.kick_n;
     else if (!strcmp(what, "hats"))

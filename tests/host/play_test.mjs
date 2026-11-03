@@ -15,6 +15,10 @@ const loudest = (pulls) => {
   for (let i = 0; i < pulls; i++) for (const v of new Float32Array(app.memory.buffer, app.play_pull(128), 256)) most = Math.max(most, Math.abs(v));
   return most;
 };
+app.play_hold(0, 1 << 12);                           // switched on, a key straight away: hardly anything yet (it fades in)
+const first = loudest(40);
+app.play_hold(0, 0);
+loudest(900);                                        // (2.6 s: up)
 let scale = 0, litSeen = 0;
 for (const k of WHITE) {
   app.play_hold(0, 1 << k);
@@ -26,6 +30,6 @@ loudest(1500);                                       // let it ring out
 app.play_midi(0x90, 72, 110);
 const midi = loudest(100);
 const st = new Uint32Array(app.memory.buffer, app.play_status(), 7);
-const ok = scale > 0.05 && scale < 1 && midi > 0.05 && st[0] > 10 && litSeen >= 12;
-console.log(`scale peak ${scale.toFixed(3)}, midi peak ${midi.toFixed(3)}, screens ${st[0]}, keys lit ${litSeen}/16: ${ok ? "ok" : "FAIL"}`);
+const ok = first < scale * 0.05 && scale > 0.05 && scale < 1 && midi > 0.05 && st[0] > 10 && litSeen >= 12;
+console.log(`first ${first.toFixed(4)}, scale peak ${scale.toFixed(3)}, midi peak ${midi.toFixed(3)}, screens ${st[0]}, keys lit ${litSeen}/16: ${ok ? "ok" : "FAIL"}`);
 process.exit(ok ? 0 : 1);

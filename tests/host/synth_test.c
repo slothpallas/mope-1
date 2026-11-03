@@ -350,6 +350,23 @@ int main(int argc, char **argv)
             sy_punch(fx, 0);
             run(100);
         }
+        /* the white keys beside: HALF with MORE two octaves down, with TWIST a fifth down; DOUBLE with MORE two up */
+        sy_punch(PU_HALF, 1 + PM_MORE);
+        run(400);
+        capture();
+        CHECK(goertzel(110.0f) > goertzel(220.0f) * 10.0f && sy_tel.punch_mod[PU_HALF] == PM_MORE, "HALF + MORE: two octaves down");
+        sy_punch(PU_HALF, 1 + PM_TWIST);                /* (held already: only its way changes) */
+        run(400);
+        capture();
+        CHECK(goertzel(293.3f) > goertzel(220.0f) * 10.0f, "HALF + TWIST: a fifth down");
+        sy_punch(PU_HALF, 0);
+        run(100);
+        sy_punch(PU_DOUBLE, 1 + PM_MORE);
+        run(400);
+        capture();
+        CHECK(goertzel(1760.0f) > goertzel(880.0f) * 10.0f, "DOUBLE + MORE: two octaves up");
+        sy_punch(PU_DOUBLE, 0);
+        run(100);
         capture();
         CHECK(goertzel(440.0f) > goertzel(220.0f) * 100.0f && sy_tel.punch == 0, "let go: back to the note as it was");
         /* STOP: slower, then nothing */
@@ -372,6 +389,22 @@ int main(int argc, char **argv)
             least = lv < least ? lv : least;
         }
         CHECK(least < most * 0.1f, "GATE: open and shut (%.0f dB between)", (double)(20.0f * mm_log2f(most / (least + 1e-9f)) * 0.30103f));
+        {   /* GATE + MORE: twice as many openings in the same time */
+            int opens[2], m;
+            for (m = 0; m < 2; m++) {
+                int was = 1;
+                sy_punch(PU_GATE, 1 + (m ? PM_MORE : 0));
+                run(60);
+                opens[m] = 0;
+                for (k = 0; k < 200; k++) {             /* (2.9 ms a look, 0.58 s) */
+                    sy_render(blk, 128, 4096);
+                    const int open = sy_tel.punch_gate > 0.5f;
+                    opens[m] += open && !was;
+                    was = open;
+                }
+            }
+            CHECK(opens[1] >= opens[0] * 2 - 1 && opens[0] >= 3, "GATE + MORE: 1/32s (%d openings, then %d)", opens[0], opens[1]);
+        }
         sy_punch(PU_GATE, 0);
         run(100);
         /* CRUSH: the samples held, a fifth of the rate */
@@ -432,6 +465,18 @@ int main(int argc, char **argv)
         sy_set(P_REVERB, 0);
         quiet();
         run(3000);
+        /* power-on: up from nothing, slowly */
+        sy_note_on(60, 100);
+        run(300);
+        before = level(50);
+        sy_fade_in(3000u);
+        after = level(100);
+        run(2900);
+        most = level(100);
+        CHECK(after < before * 0.01f && most > before * 0.7f, "fade in: silent at first (%.4f), all there after 3 s (%.2f)",
+              (double)(after / before), (double)(most / before));
+        sy_note_off(60);
+        quiet();
         /* every one on silence: silence; all of them together: nothing breaks; a wrong one: nothing */
         for (fx = 0; fx < PU_N; fx++) {
             sy_punch(fx, 1);
@@ -445,14 +490,14 @@ int main(int argc, char **argv)
         sy_note_on(48, 127);
         sy_note_on(55, 127);
         for (fx = 0; fx < PU_N; fx++)
-            sy_punch(fx, 1);
+            sy_punch(fx, 4);
         bad = 0;
         peak = 0.0f;
         run(2000);
         for (fx = 0; fx < PU_N; fx++)
             sy_punch(fx, 0);
         run(300);
-        CHECK(!bad && peak <= 1.0f && sy_tel.punch == 0, "all twelve at once, then none: no NaN, nothing over (peak %.2f)", (double)peak);
+        CHECK(!bad && peak <= 1.0f && sy_tel.punch == 0, "all twelve at once (all their ways), then none: no NaN, nothing over (peak %.2f)", (double)peak);
         sy_note_off(48);
         sy_note_off(55);
         for (k = 0; k < P_NPARAMS; k++)

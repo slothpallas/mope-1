@@ -126,7 +126,10 @@ void sy_panic(void);
  * GRAIN) play one at a time (the last one held); the others stack on top. */
 enum { PU_HALF, PU_DOUBLE, PU_STOP, PU_REVERSE, PU_REPEAT, PU_STUTTER, PU_GATE, PU_GRAIN, PU_CRUSH, PU_SWEEP, PU_WASH,
        PU_WOBBLE, PU_N };
+/* on: 0 let go; held: 1 + PM_* (the white keys beside its key: MORE, stronger; TWIST, another way) */
+enum { PM_MORE = 1, PM_TWIST = 2 };
 void sy_punch(int fx, int on);
+void sy_fade_in(uint32_t ms);                       /* everything up from silence over ms (power-on) */
 void sy_load(int pct);                              /* the last block's time, % of its budget (the device's): over 88, a voice goes */
 
 /* the render (audio ISR): n stereo frames, 24-bit in int32; gain Q12 (the MASTER pot) */
@@ -153,6 +156,8 @@ typedef struct {
     float punch_wet;              /* how much of it is heard, 0..1 */
     float punch_ph;               /* where in its slice, gate step or stop it is, 0..1 */
     float punch_k;                /* STOP: the speed left; SWEEP: how closed; WASH: how held */
+    uint8_t punch_mod[PU_N];      /* each one's PM_* now */
+    float punch_gate;             /* GATE: how open, 0..1 */
     uint8_t amp_stage;            /* the loudest voice's envelope: 0 off, 1 attack, 2 decay, 3 sustain, 4 release */
     float out_peak;               /* the output's peak over the last block, before the limiter */
     float echo;                   /* what the delay is sending back, 0..~1 */

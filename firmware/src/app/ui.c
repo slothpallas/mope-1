@@ -222,6 +222,7 @@ static struct {
     uint8_t key_note[NKEYS];           /* the note each key started (its note off) */
     uint32_t stepped;                  /* keys pressed as the loop's steps (their preview to stop) */
     uint32_t punched;                   /* keys punching (FX held when they went down): up, the punch ends */
+    uint32_t modkeys;                   /* white keys beside a punch, held: they change it (no note) */
     uint8_t loop_bar, step_note;       /* the bar the steps show; the note a new step gets */
     int16_t step_held;                 /* a step key down on a step with notes: let go untouched, they go */
     uint8_t preview;                   /* the note a step key is sounding */
@@ -627,7 +628,25 @@ static int white_of(int k)
     return -1;
 }
 
-/* what each punch says when it starts, in its voice (white keys F3 .. C5, PU_* order) */
+/* the punches are on the black keys (FX held, or FX pressed twice: it stays), PU_* each; STUTTER is
+ * REPEAT with MORE. The white key below a punching black key: MORE (stronger); above: TWIST (another way). */
+static const int8_t PUNCH_KEY[NKEYS] = {-1, PU_HALF, -1, PU_DOUBLE, -1, PU_STOP, -1, -1, PU_REVERSE, -1, PU_REPEAT, -1, -1,
+                                        PU_GATE, -1, PU_GRAIN, -1, PU_CRUSH, -1, -1, PU_SWEEP, -1, PU_WASH, -1, -1, PU_WOBBLE, -1};
+static int punch_mode(void) { return (ui.btn >> B_FX & 1u) || (ui.latch && ui.page == PG_PUNCH); }
+static int punch_mods(int k)                             /* a punching key: its whites beside, held */
+{
+    return (k > 0 && (ui.modkeys >> (k - 1) & 1u) ? PM_MORE : 0) | (k < NKEYS - 1 && (ui.modkeys >> (k + 1) & 1u) ? PM_TWIST : 0);
+}
+static void punch_resend(void)                           /* the whites beside changed: every punch hears it */
+{
+    int k;
+    for (k = 0; k < NKEYS; k++)
+        if (ui.punched >> k & 1u)
+            sy_punch(PUNCH_KEY[k], 1 + punch_mods(k));
+}
+static const char *const TWIST_SAID[PU_N] = {"A FIFTH DOWN.", "A FIFTH UP.", "AND BACK.", "LONGER.", "IN THREES.", "IN THREES.",
+                                             "A PATTERN.", "FROZEN.", "WOBBLY BITS.", "UPWARD.", "BREATHING.", "SEASICK."};
+/* what each punch says when it starts, in its voice (PU_* order) */
 static const char *const PUNCH_SAID[PU_N] = {"HALF.", "TWICE. WHY.", "STOP.", "BACKWARDS.", "AGAIN AGAIN.", "S-S-STUTTER.",
                                              "ON OFF ON OFF.", "FALLING APART.", "CRUSHED.", "MUFFLED.", "WASHED OUT.",
                                              "WARPED."};
@@ -635,16 +654,25 @@ static void key_down(int k)
 {
     int n = KEY0_NOTE + k + 12 * proj.par[P_OCTAVE];
     n = n < 0 ? 0 : n > 127 ? 127 : n;
-    if (ui.btn >> B_FX & 1u) {                           /* FX held: the white keys punch (the black ones still play) */
-        const int w = white_of(k);
-        if (w >= 0 && w < PU_N) {
-            sy_punch(w, 1);
-            ui.punched |= 1u << k;
-            ui.btn_used |= 1u << B_FX;
-            ui_caption(PUNCH_SAID[w], 900u);
-            ui.page_until = plat_ms() + STAY_MS;
-            return;
-        }
+    if (punch_mode() && PUNCH_KEY[k] >= 0) {             /* a black key punches (the white ones still play) */
+        const int fx = PUNCH_KEY[k];
+        ui.punched |= 1u << k;
+        sy_punch(fx, 1 + punch_mods(k));
+        ui.btn_used |= 1u << B_FX;
+        ui_caption(PUNCH_SAID[fx], 900u);
+        ui.page_until = plat_ms() + STAY_MS;
+        return;
+    }
+    if (PUNCH_KEY[k] < 0 && ((k > 0 && (ui.punched >> (k - 1) & 1u)) || (k < NKEYS - 1 && (ui.punched >> (k + 1) & 1u)))) {
+        const int above = k > 0 && (ui.punched >> (k - 1) & 1u);   /* a white beside a punch: it changes it */
+        ui.modkeys |= 1u << k;
+        punch_resend();
+        if (above)
+            ui_caption(TWIST_SAID[PUNCH_KEY[k - 1]], 900u);
+        else
+            ui_caption("MORE.", 700u);
+        ui.page_until = plat_ms() + STAY_MS;
+        return;
     }
     if (step_mode()) {                                   /* a white key: that 1/16 step of the bar on show */
         const int w = white_of(k);
@@ -681,7 +709,12 @@ static void key_up(int k)
 {
     if (ui.punched >> k & 1u) {                          /* a punch lasts until its key is up (FX let go or not) */
         ui.punched &= ~(1u << k);
-        sy_punch(white_of(k), 0);
+        sy_punch(PUNCH_KEY[k], 0);
+        return;
+    }
+    if (ui.modkeys >> k & 1u) {
+        ui.modkeys &= ~(1u << k);
+        punch_resend();
         return;
     }
     if (ui.stepped >> k & 1u) {
@@ -726,6 +759,14 @@ static void button(int b)
     }
     if (ui.naming) {                                     /* SAVE AS open: SAVE keeps it, anything else: never mind */
         save_close(b == B_SAVE);
+        return;
+    }
+    if (b == B_FX && ui.latch && ui.page == PG_PUNCH && !(plat_ms() - ui.last_up_t < DOUBLE_MS && ui.last_up_btn == B_FX)) {
+        ui.latch = 0;                                    /* the punches staying: FX again lets them go */
+        ui.held_btn = -1;
+        ui.panel = 0;
+        ui.page = PG_BODY;
+        ui_caption("PUNCHES: AWAY.", 900u);
         return;
     }
     if (b == B_HOME && ui.latch) {                       /* HOME ends a drawer that stays: the blob alone */
@@ -774,7 +815,7 @@ static void button(int b)
             ui.held_t = now;
             if (dbl && !ui.latch) {
                 ui.latch = 1;                            /* twice: it stays (other pages too) until HOME */
-                ui_caption("STAYS OPEN.", 1200u);
+                ui_caption(pg == PG_PUNCH ? "PUNCHES STAY. FX: AWAY." : "STAYS OPEN.", 1200u);
             }
             return;
         }
@@ -934,7 +975,7 @@ static void input(void)
     /* the lowest and the highest key together: it gives up, flat */
     {
         const uint32_t both = 1u | 1u << (NKEYS - 1);
-        uint8_t p = (keys & both) == both && !(btn >> B_FX & 1u);   /* (not while punching) */
+        uint8_t p = (keys & both) == both && !punch_mode();   /* (not while punching) */
         if (p && !ui.pancake)
             ui_caption("SAME.", 2000u);
         ui.pancake = p;
@@ -1009,12 +1050,13 @@ static void leds(void)
         b |= 1u << B_OCTDN | 1u << B_OCTUP;
     else if (proj.par[P_OCTAVE] != 0)                    /* up or down an octave or more: that way lit */
         b |= 1u << (proj.par[P_OCTAVE] > 0 ? B_OCTUP : B_OCTDN);
-    if (ui.btn >> B_FX & 1u) {                           /* FX held: the punch pads dim, the ones punching lit */
+    if (punch_mode() || ui.punched) {                    /* punching: the black pads dim, the whites beside a punch dim too */
         int k;
         for (k = 0; k < NKEYS; k++) {
-            const int w = white_of(k);
-            if (w >= 0 && w < PU_N)
+            if (punch_mode() && PUNCH_KEY[k] >= 0)
                 dim |= 1u << k;
+            if (ui.punched >> k & 1u)
+                dim |= (k > 0 ? 1u << (k - 1) : 0u) | (k < NKEYS - 1 ? 1u << (k + 1) : 0u);
         }
     }
     plat_leds(b, ui.keys | ui.punched, dim & ~ui.punched);

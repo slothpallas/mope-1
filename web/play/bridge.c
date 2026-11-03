@@ -42,7 +42,7 @@ static play_status_t status;
 
 static float pulled[1024 * 2];
 
-EXPORT void play_start(void) { boot(); }
+EXPORT void play_start(void) { boot(); sy_fade_in(2500u); }   /* (switched on: up slowly, as the FM-1 does) */
 
 /* n frames (up to 1024) of sound, interleaved stereo; the FM-1 runs until they exist */
 EXPORT float *play_pull(uint32_t n)
