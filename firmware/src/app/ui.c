@@ -344,16 +344,14 @@ static const char *set_text(int r)                       /* a row's value in wor
 }
 
 /* the punches' knobs: what each one is (its word, and its symbol around the blob) */
-enum { PK_MIX, PK_DEEP, PK_PITCH, PK_SMEAR, PK_WINDOW, PK_BRAKE, PK_LONG, PK_SLICE, PK_SOFT, PK_FADING, PK_RATE, PK_OPEN,
-       PK_SIZE, PK_SCATTER, PK_BITS, PK_SCREAM, PK_HOLD, PK_DRY, PK_SPEED, PK_FLUTTER, PK_FADEIN, PK_NKIND };
-static const char *const PK_NAME[PK_NKIND] = {"HOW MUCH", "HOW DEEP", "PITCH", "SMEAR", "WINDOW", "BRAKE", "HOW LONG", "SLICE",
-                                              "SOFT", "FADING", "RATE", "HOW OPEN", "GRAIN SIZE", "SCATTER", "BITS", "SCREAM",
-                                              "HOLD", "DRY GONE", "SPEED", "FLUTTER", "FADE IN"};
+enum { PK_DOWN, PK_UP, PK_DEEP, PK_SMEAR, PK_WINDOW, PK_BRAKE, PK_LONG, PK_SLICE, PK_ROLL, PK_SOFT, PK_FADING, PK_RATE,
+       PK_SIZE, PK_SCATTER, PK_BITS, PK_SCREAM, PK_HANG, PK_DRY, PK_SPEED, PK_NKIND };
+static const char *const PK_NAME[PK_NKIND] = {"HOW LOW", "HOW HIGH", "HOW DEEP", "SMEAR", "WINDOW", "BRAKE", "HOW LONG", "SLICE",
+                                              "ROLL", "SOFT", "FADE OUT", "RATE", "GRAIN SIZE", "SCATTER", "BITS", "SCREAM",
+                                              "HANG", "DRY GONE", "SPEED"};
 static const uint8_t PK_KIND[PU_N][PU_KN] = {
-    {PK_MIX, PK_PITCH, PK_SMEAR, PK_FADEIN},  {PK_MIX, PK_PITCH, PK_WINDOW, PK_FADEIN}, {PK_MIX, PK_BRAKE, PK_LONG, PK_FADEIN},
-    {PK_MIX, PK_SLICE, PK_SOFT, PK_FADEIN},   {PK_MIX, PK_SLICE, PK_FADING, PK_FADEIN}, {PK_MIX, PK_SLICE, PK_FADING, PK_FADEIN},
-    {PK_DEEP, PK_RATE, PK_OPEN, PK_FADEIN},   {PK_MIX, PK_SIZE, PK_SCATTER, PK_FADEIN}, {PK_MIX, PK_BITS, PK_RATE, PK_FADEIN},
-    {PK_MIX, PK_LONG, PK_SCREAM, PK_FADEIN},  {PK_MIX, PK_HOLD, PK_DRY, PK_FADEIN},     {PK_DEEP, PK_SPEED, PK_FLUTTER, PK_FADEIN},
+    {PK_DOWN, PK_SMEAR}, {PK_UP, PK_WINDOW}, {PK_LONG, PK_BRAKE}, {PK_SLICE, PK_SOFT}, {PK_ROLL, PK_FADING}, {PK_ROLL, PK_FADING},
+    {PK_RATE, PK_DEEP},  {PK_SIZE, PK_SCATTER}, {PK_BITS, PK_RATE}, {PK_LONG, PK_SCREAM}, {PK_HANG, PK_DRY}, {PK_SPEED, PK_DEEP},
 };
 
 #include "px.c"
@@ -1200,7 +1198,9 @@ static void input(void)
                 ui.focus_t = ui.act_t = plat_ms();
                 continue;
             }
-            if (ui.panel && ui.page == PG_PUNCH) {       /* PUNCH: the last one punched, its four knobs */
+            if (ui.panel && ui.page == PG_PUNCH) {       /* PUNCH: the last one punched, its two knobs (3 and 4: nothing) */
+                if (i >= PU_KN)
+                    continue;
                 punch_knob((int)i, e);
                 ui.touched = (int8_t)i;
                 if (ui.held_btn < 0)
