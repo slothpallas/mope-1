@@ -753,6 +753,77 @@ int main(int argc, char **argv)
             sy_tel.bass_note = -1;
         }
     }
+    {   /* the bass's ways: ROOT once a bar (the chord unchanged), PULSE eight a bar, OCTAVES the root and up,
+         * FOLLOW the lowest note held as it is; off: nothing */
+        int w, n;
+        uint32_t hits[BS_N];
+        int16_t lo_note = 127, hi_note = 0, follow = -1;
+        sy_set(P_STYLE, ST_FUNERAL);
+        sy_set(P_TEMPO, 120);                           /* (a bar: 2 s) */
+        for (w = BS_ROOT; w < BS_N; w++) {
+            sy_set(P_BSTYLE, w);
+            sy_note_on(w == BS_FOLLOW ? 64 : 57, 80);  /* A minor (FOLLOW: C major, which the others take as A minor) */
+            sy_note_on(60, 80);
+            run(50);
+            sy_drums(1);
+            run(30);
+            {
+                const uint32_t h0 = sy_tel.bass_n;
+                for (n = 0; n < 345; n++) {             /* (2 s: one bar) */
+                    int32_t b[512];
+                    sy_render(b, 256, 4096);
+                    if (w == BS_OCTAVES && sy_tel.bass_note >= 0) {
+                        lo_note = sy_tel.bass_note < lo_note ? sy_tel.bass_note : lo_note;
+                        hi_note = sy_tel.bass_note > hi_note ? sy_tel.bass_note : hi_note;
+                    }
+                    if (w == BS_FOLLOW && sy_tel.bass_note >= 0)
+                        follow = sy_tel.bass_note;
+                }
+                hits[w] = sy_tel.bass_n - h0;
+            }
+            sy_drums(0);
+            sy_note_off(w == BS_FOLLOW ? 64 : 57);
+            sy_note_off(60);
+            run(300);
+        }
+        CHECK(hits[BS_ROOT] == 1, "bass ROOT: one long note a bar (%u)", (unsigned)hits[BS_ROOT]);
+        CHECK(hits[BS_PULSE] == 8, "bass PULSE: eight a bar (%u)", (unsigned)hits[BS_PULSE]);
+        CHECK(hi_note - lo_note == 12, "bass OCTAVES: the root and an octave up (%d .. %d)", lo_note, hi_note);
+        CHECK(follow == 36, "bass FOLLOW: the lowest note held as it is (C, not A minor: %d)", follow);
+        sy_set(P_BSTYLE, BS_PULSE);
+        sy_set(P_BASSON, 0);
+        sy_note_on(57, 80);
+        sy_drums(1);
+        n = (int)sy_tel.bass_n;
+        run(2000);
+        CHECK((int)sy_tel.bass_n == n, "auto bass off: no bass");
+        sy_drums(0);
+        sy_note_off(57);
+        sy_set(P_BASSON, 1);
+        sy_set(P_BSTYLE, BS_BEAT);
+        run(300);
+    }
+    {   /* voices: MONO one voice, the newest; let go, back to the one before. UNISON: four on one note */
+        sy_set(P_VMODE, VM_MONO);
+        run(20);
+        sy_note_on(60, 90);
+        sy_note_on(64, 90);
+        run(100);
+        CHECK(sy_tel.voices == 1 && sy_tel.last_note == 64, "MONO: one voice, the newest (%d voices)", sy_tel.voices);
+        sy_note_off(64);
+        run(100);
+        CHECK(sy_tel.voices == 1, "...let go: still one, back on the first");
+        sy_note_off(60);
+        run(800);
+        sy_set(P_VMODE, VM_UNISON);
+        run(20);
+        sy_note_on(60, 90);
+        run(100);
+        CHECK(sy_tel.voices == 4, "UNISON: four voices on one note (%d)", sy_tel.voices);
+        sy_note_off(60);
+        sy_set(P_VMODE, VM_POLY);
+        run(800);
+    }
     printf("arpeggiator\n");
     {
         static const int UP[6] = {60, 64, 67, 72, 76, 79};    /* C E G, two octaves */

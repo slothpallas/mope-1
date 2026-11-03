@@ -435,9 +435,9 @@ static int expect(const char *what, const char *val)
         printf("FAIL unknown expect %s\n", what);
         return 1;
     }
-    if (val[0] == '<' || val[0] == '>') {
+    if (val[0] == '<' || val[0] == '>' || val[0] == '!') {   /* (!N: anything but N) */
         int lim = (int)strtol(val + 1, 0, 0);
-        if (val[0] == '<' ? got >= lim : got <= lim) {
+        if (val[0] == '!' ? got == lim : val[0] == '<' ? got >= lim : got <= lim) {
             printf("FAIL expect %s %s, got %d\n", what, val, got);
             return 1;
         }

@@ -48,6 +48,8 @@ enum {
     P_RTONE, P_DDARK,                                /* WALLS: the room's brightness; TEARS: how much darker each echo */
     P_CHRATE, P_CHDEPTH, P_CHWIDTH,                  /* COPIES: the chorus's speed, its depth, its width */
     P_CRACKLE, P_DUST,                               /* DUST: a record's crackle and hiss; the band narrowing (old, worn) */
+    P_VMODE,                                         /* SETTINGS: how notes take voices (VM_*), part of the sound */
+    P_TEMPOMODE, P_AMBI, P_BASSON, P_BSTYLE,         /* SETTINGS: one tempo or each beat's; the room's sound; the auto-bass, its way */
     P_NPARAMS
 };
 typedef struct {
@@ -70,6 +72,12 @@ enum { ARP_UP, ARP_DOWN, ARP_UPDOWN, ARP_WANDER, ARP_STAB, ARP_NMODE };
  * tables, the detune, and the four effects' amounts */
 enum { LD_POS, LD_CUTOFF, LD_PITCH, LD_VOLUME, LD_SHADOW, LD_TABLE, LD_DETUNE, LD_WALLS, LD_TEARS, LD_COPIES, LD_DUST, LD_N };
 enum { MEET_MIX, MEET_FM, MEET_RING, MEET_SYNC, MEET_N };             /* how oscillator B meets A */
+enum { VM_POLY, VM_MONO, VM_LEGATO, VM_UNISON, VM_N };                /* POLY: a voice a note; MONO: one, each note
+                                                                         again; LEGATO: one, held notes slide; UNISON: four on one note */
+enum { TM_GLOBAL, TM_BEAT, TM_N };                                    /* one tempo for every beat, or each beat its own */
+enum { AM_RAIN, AM_FOREST, AM_URBAN, AM_OFFICE, AM_SEA, AM_N };       /* the room's sound (Gunk: how much) */
+enum { BS_BEAT, BS_ROOT, BS_PULSE, BS_OCTAVES, BS_FOLLOW, BS_N };     /* the auto-bass: the beat's own line, one long note
+                                                                         a chord, 8ths, 8ths with the octave, your lowest note on the kicks */
 enum { FT_LOW, FT_BAND, FT_HIGH, FT_NOTCH, FT_COMB, FT_VOWEL, FT_N };   /* the filter's kinds (VOWEL: two formants) */
 void sy_vowel(float x, float *f1, float *f2);       /* FT_VOWEL: its formants (Hz) at x 0..1, A E I O U */
 
