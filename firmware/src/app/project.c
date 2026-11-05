@@ -21,8 +21,8 @@ static int project_valid(int bytes)
     int i, have = (bytes - 8) / 2;               /* the values the saved project holds */
     if (proj.magic == PROJ_MAGIC && proj.format >= 1u && proj.format < PROJ_FORMAT) {
         /* an older format: its XP sat right after its fewer values (4-aligned), then 28 bytes (format 4 on:
-         * the pages seen, then spare), then (format 3 on) the loop. Everything after the values moves up to
-         * where it is now. */
+         * the pages seen; 6 on: the punches' knobs), then (format 3 on) the one loop: pattern 1 now (its
+         * first SY_LOOP_MAX notes). Everything after the values moves up to where it is now. */
         static uint16_t loop_n;
         static sy_ev_t loop[SY_LOOP_MAX];
         const int at = (8 + 2 * PROJ_NPAR_OF(proj.format) + 3) & ~3, at_loop = at + 4 + 28;
@@ -36,28 +36,30 @@ static int project_valid(int bytes)
         if (proj.format >= 6u && bytes >= at + 5 + (int)sizeof pk)   /* (the punches' knobs, format 6 on) */
             memcpy(pk, (const uint8_t *)&proj + at + 5, sizeof pk);
         if (proj.format >= 3u && bytes >= at_loop + 2) {
-            memcpy(&loop_n, (const uint8_t *)&proj + at_loop, 2);
-            if (loop_n > SY_LOOP_MAX || bytes < at_loop + 2 + (int)(loop_n * sizeof(sy_ev_t)))
-                loop_n = 0;
+            uint16_t had;
+            memcpy(&had, (const uint8_t *)&proj + at_loop, 2);
+            if (had > PROJ_OLD_LOOP || bytes < at_loop + 2 + (int)(had * sizeof(sy_ev_t)))
+                had = 0;
+            loop_n = had < SY_LOOP_MAX ? had : SY_LOOP_MAX;
             memcpy(loop, (const uint8_t *)&proj + at_loop + 2, loop_n * sizeof(sy_ev_t));
         }
         memset((uint8_t *)&proj + at, 0, sizeof proj - (uint32_t)at);
         proj.xp = xp;
         proj.seen = seen;
         memcpy(proj.pk, pk, sizeof pk);
-        proj.loop_n = loop_n;
-        memcpy(proj.loop, loop, loop_n * sizeof(sy_ev_t));
-    } else if (bytes < (int)sizeof proj) {           /* (shorter than this one: no loop) */
-        proj.loop_n = 0;
+        proj.pat_n[0] = loop_n;
+        memcpy(proj.pat_ev[0], loop, loop_n * sizeof(sy_ev_t));
+    } else if (bytes < (int)sizeof proj) {           /* (shorter than this one: no patterns) */
+        memset(proj.pat_n, 0, sizeof proj.pat_n);
     }
-    if (proj.loop_n > SY_LOOP_MAX)
-        proj.loop_n = 0;
-    for (i = 0; i < (int)sizeof proj.rsv; i++)
-        if (proj.rsv[i]) {                       /* (left by a test build with four knobs a punch: as they come) */
-            memset(proj.pk, 0, sizeof proj.pk);
-            memset(proj.rsv, 0, sizeof proj.rsv);
-            break;
-        }
+    if (proj.pat >= SY_PATS)
+        proj.pat = 0;
+    for (i = 0; i < SY_PATS; i++) {
+        if (proj.pat_n[i] > SY_LOOP_MAX)
+            proj.pat_n[i] = 0;
+        if (proj.pat_bars[i] > 3)
+            proj.pat_bars[i] = 0;
+    }
     if (proj.magic != PROJ_MAGIC || proj.format < 1u || proj.format > PROJ_FORMAT)
         return 0;
     if (have > PROJ_NPAR_OF(proj.format))        /* (its spare bytes, zeros, are not settings) */
@@ -84,7 +86,8 @@ int project_load(void)
 
 int project_save(void)
 {
-    proj.loop_n = (uint16_t)sy_loop_copy(proj.loop, SY_LOOP_MAX);   /* the loop as it is now */
+    if (sy_tel.pattern == proj.pat && sy_tel.pattern_next < 0)   /* the pattern playing, as it is now (a swap waiting: the engine puts it back) */
+        proj.pat_n[proj.pat] = (uint16_t)sy_loop_copy(proj.pat_ev[proj.pat], SY_LOOP_MAX);
     return plat_store_save(OBJ_PROJ, &proj, sizeof proj);
 }
 
@@ -112,7 +115,8 @@ void project_apply(void)
     project_send_knobs();
     for (i = 0; i < P_NPARAMS; i++)
         sy_set(i, proj.par[i]);
-    sy_loop_load(proj.loop, proj.loop_n);
+    sy_loop_slots(proj.pat_ev, proj.pat_n);
+    sy_loop_swap(SY_PAT_NONE, proj.pat, proj.par[P_LOOPBARS]);   /* (the pattern it was on: in, nothing back) */
 }
 
 /* your presets: a slot's values out of range (or ones it was saved without) take their defaults */

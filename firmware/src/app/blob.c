@@ -2240,22 +2240,36 @@ static void draw_mini_blob(int32_t cx, int32_t cy)
 }
 static void draw_seq(void)
 {
-    static int lo = -1;                                  /* the lowest row's note (the roll scrolls with the cursor) */
-    int n, i, k;
+    static int lo = -1, rows = SQ_ROWS;                  /* the lowest row's note, how many rows (the roll fits the notes) */
+    int n, i, k, nlo = 128, nhi = -1, want, rh;
     const sy_ev_t *ev = sy_loop_events(&n);
     const int lt = sy_tel.loop_ticks ? sy_tel.loop_ticks : SY_TPB, bars = lt / SY_TPB;
     const int bar = ui.loop_bar < bars ? ui.loop_bar : 0, bt = bar * SY_TPB, cs = ui.cur_step, cn = ui.cur_note;
     const int on_note = cs / 16 == bar ? loop_nearest(cs, cn) == cn : 0;
-    const int32_t gx1 = SQ_X + 16 * SQ_CW, gy1 = SQ_Y + SQ_ROWS * SQ_RH;
+    const int32_t gx1 = SQ_X + 16 * SQ_CW, gh = SQ_ROWS * SQ_RH;
+    int32_t gy1;
     px_rect(0, 0, PX_W, PX_H, PC_BG0);
-    if (lo < 0)
-        lo = cn - SQ_ROWS / 2;
+    /* the roll fits the loop's notes and the cursor: few, tall rows (fat notes); many, the cursor leads */
+    for (i = 0; i < n; i++)
+        if ((int)ev[i].t < lt) {
+            nlo = ev[i].note < nlo ? ev[i].note : nlo;
+            nhi = ev[i].note > nhi ? ev[i].note : nhi;
+        }
+    nlo = cn < nlo ? cn : nlo;
+    nhi = cn > nhi ? cn : nhi;
+    want = nhi - nlo + 3;                                /* (a row spare each side) */
+    want = want < 8 ? 8 : want > SQ_ROWS ? SQ_ROWS : want;
+    rows = want;
+    rh = gh / rows;
+    gy1 = SQ_Y + rows * rh;
+    if (rows < SQ_ROWS || lo < 0)
+        lo = (nlo + nhi + 1) / 2 - rows / 2;             /* (it all fits: centred) */
     if (cn < lo + 1)
         lo = cn - 1;
-    if (cn > lo + SQ_ROWS - 2)
-        lo = cn - SQ_ROWS + 2;
-    lo = lo < 0 ? 0 : lo > 127 - SQ_ROWS + 1 ? 127 - SQ_ROWS + 1 : lo;
-    /* the top: what it is doing (or what was just said), the bars, the blob */
+    if (cn > lo + rows - 2)
+        lo = cn - rows + 2;
+    lo = lo < 0 ? 0 : lo > 127 - rows + 1 ? 127 - rows + 1 : lo;
+    /* the top: what was just said, or SEQ, the four patterns, what it is doing, the bars as dots; the blob */
     if (ui.cap[0] && (int32_t)(ui.cap_until - plat_ms()) > 0) {
         char b[19];
         for (i = 0; ui.cap[i] && i < 18; i++)
@@ -2264,54 +2278,64 @@ static void draw_seq(void)
         px_text(3, 4, b, PC_WHITE);
     } else {
         px_text(3, 4, "SEQ", PC_WHITE);
-        px_text(22, 4, sy_tel.rec == 2 ? "REC" : sy_tel.rec == 1 ? "READY" : n ? (on_note ? "THIS NOTE" : "") : "EMPTY",
-                sy_tel.rec ? PC_RED : PC_DIM);
-        for (k = 0; k < bars; k++)                       /* the bars: the one on show lit */
-            px_rect(76 + k * 5, 5, 4, 4, k == bar ? PC_TEAR : PC_WALL2);
+        for (k = 0; k < SY_PATS; k++) {                  /* the patterns: playing filled, waiting blinking, empty dark */
+            const int32_t x = 21 + k * 9;
+            const int playing = k == proj.pat, waiting = k == ui.pat_next && ui.pat_next != proj.pat;
+            const char d[2] = {(char)('1' + k), 0};
+            if (playing || (waiting && (plat_ms() / 150u) & 1u)) {
+                px_rect(x - 1, 2, 8, 9, waiting ? PC_AMBER : PC_TEAR);
+                px_text(x + 1, 4, d, PC_BG0);
+            } else
+                px_text(x + 1, 4, d, proj.pat_n[k] ? PC_DIM : PC_WALL2);
+        }
+        if (sy_tel.rec || !n || on_note)
+            px_text(58, 4, sy_tel.rec == 2 ? "REC" : sy_tel.rec == 1 ? "READY" : n ? "ON" : "EMPTY", sy_tel.rec ? PC_RED : PC_DIM);
+        for (k = 0; k < bars; k++)                       /* the bars: dots, the one on show lit */
+            px_rect(86 + k * 4, 6, 2, 2, k == bar ? PC_WHITE : PC_WALL2);
     }
     draw_mini_blob(109, 8);
     /* the roll: the keyboard down the side, a line on each C, the beats */
-    for (k = 0; k < SQ_ROWS; k++) {
-        const int note = lo + SQ_ROWS - 1 - k, pc = note % 12;
+    for (k = 0; k < rows; k++) {
+        const int note = lo + rows - 1 - k, pc = note % 12;
         const int black = pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10;
-        const int32_t y = SQ_Y + k * SQ_RH;
-        px_rect(0, y, 6, SQ_RH - 1, black ? PC_BG1 : PC_DIM);
+        const int32_t y = SQ_Y + k * rh;
+        px_rect(0, y, 6, rh - 1, black ? PC_BG1 : PC_DIM);
         if (pc == 0)
-            px_rect(SQ_X, y + SQ_RH - 1, gx1 - SQ_X, 1, PC_WALL2);
+            px_rect(SQ_X, y + rh - 1, gx1 - SQ_X, 1, PC_WALL2);
         if (note == cn)                                  /* the cursor's row */
-            px_rect(SQ_X, y, gx1 - SQ_X, SQ_RH - 1, PC_BG1);
+            px_rect(SQ_X, y, gx1 - SQ_X, rh - 1, PC_BG1);
     }
     for (k = 0; k <= 16; k++)
         px_rect(SQ_X + k * SQ_CW - 1, SQ_Y, 1, gy1 - SQ_Y, k % 4 ? PC_BG1 : PC_WALL2);
     if (cs / 16 == bar)                                  /* the cursor's column */
         for (k = SQ_Y; k < gy1; k += 2)
             px_pset(SQ_X + (cs % 16) * SQ_CW + SQ_CW / 2 - 1, k, PC_WALL);
-    for (i = 0; i < n; i++) {                            /* the notes of the bar on show */
+    for (i = 0; i < n; i++) {                            /* the notes of the bar on show: fat bars, a shade under */
         const sy_ev_t *e = &ev[i];
-        const int at = (int)e->t - bt;
+        const int at = (int)e->t - bt, here = (int)e->t / 12 == cs;
         int32_t x, w, y;
-        uint8_t c;
         if (at < 0 || at >= SY_TPB || (int)e->t >= lt)
             continue;
         x = SQ_X + at * SQ_CW / 12;
         w = (int32_t)e->len * SQ_CW / 12;
         w = w < 3 ? 3 : x + w > gx1 ? gx1 - x : w;
-        if (e->note < lo || e->note > lo + SQ_ROWS - 1) { /* out of sight: a mark at the edge, that way */
+        if (e->note < lo || e->note > lo + rows - 1) {   /* out of sight: a mark at the edge, that way */
             px_rect(x, e->note < lo ? gy1 - 1 : SQ_Y, 3, 1, PC_DIM);
             continue;
         }
-        y = SQ_Y + (lo + SQ_ROWS - 1 - e->note) * SQ_RH;
-        c = (int)e->t / 12 == cs ? (e->note == cn ? PC_WHITE : PC_TEAR) : (e->flags & 1u) ? PC_BLOB3 : PC_BLOB2;
-        px_rect(x, y, w, SQ_RH - 1, c);
-        px_rect(x, y + SQ_RH - 2, w, 1, (int)e->t / 12 == cs ? (e->note == cn ? PC_SPEC : PC_TEAR2) : PC_BLOBD);
+        y = SQ_Y + (lo + rows - 1 - e->note) * rh;
+        px_rect(x, y, w, rh - 1, here ? (e->note == cn ? PC_WHITE : PC_TEAR) : (e->flags & 1u) ? PC_BLOB3 : PC_BLOB2);
+        px_rect(x, y + rh - 2, w, 1, here ? (e->note == cn ? PC_SPEC : PC_TEAR2) : PC_BLOBD);
+        if (rh >= 7)
+            px_rect(x, y, 1, rh - 1, here ? PC_SPEC : PC_BLOB3);   /* (tall: its start marked) */
     }
-    if (cs / 16 == bar && cn >= lo && cn <= lo + SQ_ROWS - 1) {   /* the cursor: a box, blinking a little */
-        const int32_t x = SQ_X + (cs % 16) * SQ_CW - 1, y = SQ_Y + (lo + SQ_ROWS - 1 - cn) * SQ_RH - 1;
+    if (cs / 16 == bar && cn >= lo && cn <= lo + rows - 1) {   /* the cursor: a box, blinking a little */
+        const int32_t x = SQ_X + (cs % 16) * SQ_CW - 1, y = SQ_Y + (lo + rows - 1 - cn) * rh - 1;
         const uint8_t c = (plat_ms() / 400u) & 1u ? PC_ORANGE : PC_AMBER;
         px_rect(x, y, SQ_CW + 1, 1, c);
-        px_rect(x, y + SQ_RH, SQ_CW + 1, 1, c);
-        px_rect(x, y, 1, SQ_RH + 1, c);
-        px_rect(x + SQ_CW, y, 1, SQ_RH + 1, c);
+        px_rect(x, y + rh, SQ_CW + 1, 1, c);
+        px_rect(x, y, 1, rh + 1, c);
+        px_rect(x + SQ_CW, y, 1, rh + 1, c);
     }
     if (sy_tel.drums_on && sy_tel.loop_pos / SY_TPB == (uint16_t)bar) {   /* the playhead */
         const int32_t x = SQ_X + ((int)sy_tel.loop_pos - bt) * SQ_CW / 12;
@@ -2326,7 +2350,7 @@ static void draw_seq(void)
         px_text_c((SQ_X + gx1) / 2, (SQ_Y + gy1) / 2 + 2, "OR REC", PC_DIM, PC_BG0);
     }
     {   /* every bar, small: a dot a note, the one on show outlined, the playhead */
-        const int32_t y = gy1 + 3, w = gx1 - SQ_X;
+        const int32_t y = SQ_Y + gh + 3, w = gx1 - SQ_X;
         px_rect(SQ_X + bar * w / bars, y - 1, w / bars, 1, PC_TEAR);
         px_rect(SQ_X + bar * w / bars, y + 5, w / bars, 1, PC_TEAR);
         for (i = 0; i < n; i++)
@@ -2335,13 +2359,67 @@ static void draw_seq(void)
         if (sy_tel.drums_on)
             px_rect(SQ_X + (int32_t)sy_tel.loop_pos * w / lt, y - 1, 1, 7, PC_SPEC);
     }
-    {   /* the knobs (in their colours, as the OP-1's) */
+    {   /* the bottom: the knob being turned and what it says (its colour, as the OP-1's); untouched, the mutes */
         static const char *const KN[4] = {"STEP", "NOTE", "LEN", "BARS"};
         static const uint8_t KC[4] = {PC_TEAR, PC_XP, PC_ORANGE, PC_PINK};
         const int32_t y = PX_H - 8;
-        for (k = 0; k < 4; k++) {
-            px_rect(3 + k * 29, y + 1, 4, 4, KC[k]);
-            px_text(9 + k * 29, y, KN[k], ui.touched == k && plat_ms() - ui.focus_t < 1500u ? PC_WHITE : PC_DIM);
+        if (ui.touched >= 0 && ui.touched < 4 && plat_ms() - ui.focus_t < 1500u) {
+            static const char *const NN[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+            char v[12];
+            int m = 0, len = -1;
+            const char *q;
+            for (i = 0; i < n; i++)
+                if ((int)ev[i].t / 12 == cs && ev[i].note == cn)
+                    len = ev[i].len;
+            switch (ui.touched) {
+            case 0:
+                k = cs % 16 + 1;
+                if (k >= 10)
+                    v[m++] = '1';
+                v[m++] = (char)('0' + k % 10);
+                v[m++] = '/';
+                v[m++] = '1';
+                v[m++] = '6';
+                break;
+            case 1:
+                for (q = NN[cn % 12]; *q; q++)
+                    v[m++] = *q;
+                v[m++] = (char)('0' + (cn / 12 - 1 + 10) % 10);
+                break;
+            case 2:
+                if (len < 0) {
+                    for (q = "NONE"; *q; q++)
+                        v[m++] = *q;
+                } else {
+                    k = (len + 6) / 12;                  /* (in 1/16s) */
+                    if (k >= 10)
+                        v[m++] = (char)('0' + k / 10);
+                    v[m++] = (char)('0' + k % 10);
+                    v[m++] = '/';
+                    v[m++] = '1';
+                    v[m++] = '6';
+                }
+                break;
+            default:
+                v[m++] = (char)('0' + bars);
+                for (q = bars == 1 ? " BAR" : " BARS"; *q; q++)
+                    v[m++] = *q;
+                break;
+            }
+            v[m] = 0;
+            px_rect(3, y + 1, 4, 4, KC[ui.touched]);
+            px_text(10, y, KN[ui.touched], PC_DIM);
+            px_text(10 + px_text_w(KN[ui.touched]) + 5, y, v, PC_WHITE);
+        } else {
+            static const char *const MN[3] = {"DRUMS", "BASS", "LOOP"};
+            int32_t x = 3;
+            for (k = 0; k < 3; k++) {
+                const int quiet = ui.mute >> k & 1u;
+                px_text(x, y, MN[k], quiet ? PC_WALL2 : PC_DIM);
+                if (quiet)
+                    px_rect(x - 1, y + 2, px_text_w(MN[k]) + 2, 1, PC_RED);   /* (struck out: quiet) */
+                x += px_text_w(MN[k]) + 7;
+            }
         }
     }
 }

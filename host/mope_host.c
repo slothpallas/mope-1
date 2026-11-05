@@ -17,6 +17,7 @@
  *   master N                     MASTER pot 0..4096
  *   midi B0 B1 B2                incoming USB MIDI message (hex bytes)
  *   clockin BPM                  a MIDI clock coming in at BPM, from now (0: it stops)
+ *   mark                         counters from here (expect kicks_new)
  *   wav FILE | wavstop           start / stop recording the output
  *   peakreset                    restart the output peak (expect peak_db_min / peak_db_max)
  *   shot FILE.png                save the screen
@@ -304,6 +305,7 @@ static void boot(void)
     ui_init();
 }
 
+static uint32_t mark_kicks;                   /* "mark": counters from here */
 static double clockin_bpm, clockin_due;       /* a MIDI clock coming in ("clockin BPM"; 0 stops it) */
 static void midi_push(uint32_t s, uint32_t d1, uint32_t d2)
 {
@@ -439,8 +441,21 @@ static int expect(const char *what, const char *val)
         got = ui.latch;
     else if (!strcmp(what, "leds_lit"))           /* the keys lit now (a bit each) */
         got = (int)lit_keys;
-    else if (!strcmp(what, "leds_dim"))           /* the keys lit dim now (a bit each) */
+    else if (!strcmp(what, "leds_steps")) {        /* the white keys lit now (SEQ's steps; a bit each, by key) */
+        int w2;
+        got = 0;
+        for (w2 = 0; w2 < 16; w2++)
+            got |= (int)(lit_keys & 1u << WHITE_K[w2]);
+    } else if (!strcmp(what, "leds_dim"))           /* the keys lit dim now (a bit each) */
         got = (int)dim_keys;
+    else if (!strcmp(what, "pattern"))              /* the pattern playing (0..3) */
+        got = sy_tel.pattern;
+    else if (!strcmp(what, "pattern_next"))         /* the one waiting for the bar, -1 none */
+        got = sy_tel.pattern_next;
+    else if (!strcmp(what, "mute"))
+        got = sy_tel.mute;
+    else if (!strcmp(what, "kicks_new"))            /* kicks since "mark" */
+        got = (int)(sy_tel.kick_n - mark_kicks);
     else if (!strcmp(what, "kicks"))
         got = (int)sy_tel.kick_n;
     else if (!strcmp(what, "hats"))
@@ -594,6 +609,8 @@ int main(int argc, char **argv)
             master = (uint32_t)atoi(a);
         else if (!strcmp(cmd, "midi")) {
             midi_push((uint32_t)strtoul(a, 0, 16), (uint32_t)strtoul(b, 0, 16), (uint32_t)strtoul(c, 0, 16));
+        } else if (!strcmp(cmd, "mark")) {
+            mark_kicks = sy_tel.kick_n;
         } else if (!strcmp(cmd, "clockin")) {
             clockin_bpm = atof(a);
             clockin_due = (double)now_ms;

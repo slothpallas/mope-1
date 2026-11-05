@@ -12,9 +12,10 @@
 #endif
 #define PROJ_MAGIC 0x45504F4Du           /* "MOPE": never a FiMba-1 or FoMni project */
 /* Add a setting at the end of P_*, bump the format, and add its count here. */
-#define PROJ_FORMAT 7u                    /* 7: the clock, aftertouch; 6: the settings page (voices, tempo, room, bass); 5: the effects' new knobs; 4: the shadow, the filter kinds, the sigh, the tremble; 3: the loop; ... */
+#define PROJ_FORMAT 8u                    /* 8: four patterns; 7: the clock, aftertouch; 6: the settings page (voices, tempo, room, bass); 5: the effects' new knobs; 4: the shadow, the filter kinds, the sigh, the tremble; 3: the loop; ... */
 #define PROJ_NPAR_OF(f) ((f) == 1u ? P_VOLUME + 1 : (f) == 2u ? P_ARPGATE + 1 : (f) == 3u ? P_LOOPBARS + 1 : \
                          (f) == 4u ? P_LEVEL + 1 : (f) == 5u ? P_DUST + 1 : (f) == 6u ? P_BSTYLE + 1 : P_NPARAMS)
+#define PROJ_OLD_LOOP 192                 /* a loop's notes up to format 7 (one loop) */
 
 typedef struct {
     uint32_t magic, format;
@@ -24,13 +25,16 @@ typedef struct {
                                             COPIES 64, DUST 128): no more nudges */
     uint8_t pk[PU_N * PU_KN / 2];        /* the punches' knobs, a nibble each: how far from SY_PUNCH_KDEF (0: as
                                             it comes, so older projects get the knobs as they were) */
-    uint8_t rsv[27 - PU_N * PU_KN / 2];  /* room to grow */
-    uint16_t loop_n;                     /* the loop's notes (format 3 on) */
-    sy_ev_t loop[SY_LOOP_MAX];
+    uint8_t pat;                         /* the pattern playing (format 8 on) */
+    uint8_t pat_bars[SY_PATS];           /* each one's bars: P_LOOPBARS + 1 (0: as the one playing) */
+    uint8_t rsv[22 - PU_N * PU_KN / 2];  /* room to grow */
+    uint16_t pat_n[SY_PATS];             /* the patterns: their notes (up to format 7: one loop, here) */
+    sy_ev_t pat_ev[SY_PATS][SY_LOOP_MAX];
 } project_t;
 
 extern project_t proj;
-_Static_assert(PU_KMAX == 15 && PU_N * PU_KN / 2 <= 27, "the punches' knobs: a nibble each, in the spare bytes");
+_Static_assert(PU_KMAX == 15 && PU_N * PU_KN / 2 <= 22, "the punches' knobs: a nibble each, in the spare bytes");
+_Static_assert(sizeof(project_t) <= PLAT_STORE_MAX, "a project fits its flash object");
 
 /* Your presets: 16 slots, each a name and a whole sound (every setting kept; a preset loads only the
  * sound's, not the mixer, the tempo or the MIDI). Their own flash object (OBJ_PRESETS). */
