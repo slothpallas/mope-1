@@ -47,7 +47,7 @@ volatile sy_tel_t sy_tel;
 
 /* ----------------------------------------------------------- commands --- */
 enum { C_SET, C_ON, C_OFF, C_BEND, C_MOD, C_DRUMS, C_ARP, C_PANIC, C_REC, C_LUNDO, C_LCLEAR, C_LSTEP, C_LNUDGE, C_LLOAD, C_LSEL,
-       C_PUNCH, C_PUNCHK, C_LNOTE, C_LLEN, C_SUS, C_PRESS, C_CKBPM, C_CKPOS, C_CKSTART };
+       C_PUNCH, C_PUNCHK, C_LNOTE, C_LLEN, C_SUS, C_PRESS, C_CKBPM, C_CKPOS, C_CKSTART, C_LSWAP, C_MUTE };
 typedef struct {
     uint8_t c;
     int16_t a, b;
@@ -105,6 +105,15 @@ void sy_loop_load(const sy_ev_t *ev, int n)
     post(C_LLOAD, clampi(n, 0, SY_LOOP_MAX), 0);
 }
 void sy_panic(void) { post(C_PANIC, 0, 0); }
+static sy_ev_t (*pat_ev)[SY_LOOP_MAX];
+static uint16_t *pat_n;
+void sy_loop_slots(sy_ev_t (*ev)[SY_LOOP_MAX], uint16_t *n)
+{
+    pat_ev = ev;
+    pat_n = n;
+}
+void sy_loop_swap(int out, int in, int bars) { post(C_LSWAP, (out & 15) << 4 | (in & 15), clampi(bars, 0, 2)); }
+void sy_mute(int mask) { post(C_MUTE, mask & 7, 0); }
 int sy_queue_room(void) { return (int)(QN - (q_w - q_r)); }
 void sy_punch(int fx, int on)
 {
@@ -2652,6 +2661,9 @@ static float sn_env, cl_env, cl_t, h_env, oh_env, hp1, hp1x, hp2, hp2x, sn_hp, s
 static float b_target, b_glide, b_gate, b_lp;
 static uint8_t b_hold;                                  /* ROOT: the note rings on while held */
 static uint8_t dr_start;
+static uint32_t loop_b0;                                /* the band's bar a pattern came in on: its first bar */
+static uint8_t mute, sw_pend, sw_slots, sw_bars;        /* SY_MUTE_*; a pattern waiting for the bar: out << 4 | in, bars */
+static void loop_swap(void);
 #define abass_on (par[P_BASS] > 0 && par[P_BASSON])
 static uint8_t dr_style, dr_pending, dr_step, dr_fired;
 static uint32_t dr_bar;
@@ -2714,6 +2726,8 @@ static void bass_hit(int bn, int slide, int hold)
 {
     const kit_t *k = &KITS[STYLES[dr_style].kit];
     const float hz = 8.1757989f * mm_exp2f((float)bn * (1.0f / 12.0f));
+    if (mute & SY_MUTE_BASS)                            /* (muted: none) */
+        return;
     sy_tel.bass_note = (int16_t)bn;
     b_target = hz;
     if (!slide || b_gate <= 0.0f) {
@@ -2757,44 +2771,46 @@ static void drum_step(void)
     uint8_t c;
     float v;
     mo_drums_off();                                     /* (out there: last step's hits end)  */
-    if ((v = hv(pat[dr_style][TR_KICK][fill][dr_step])) > 0.0f) {
-        dk.amp = v;
-        dk.pe = 1.0f;
-        dk.ph = 0.0f;
-        sy_tel.kick_n++;
-        mo_drum_hit(0, v);
-    }
-    if ((v = hv(pat[dr_style][TR_SNARE][fill][dr_step])) > 0.0f) {
-        sn_env = v;
-        dsn.amp = v;
-        dsn.pe = 1.0f;
-        dsn.ph = 0.0f;
-        sy_tel.snare_n++;
-        mo_drum_hit(1, v);
-    }
-    if ((v = hv(pat[dr_style][TR_CLAP][fill][dr_step])) > 0.0f) {
-        cl_env = v;
-        cl_t = 0.0f;
-        sy_tel.snare_n++;
-        mo_drum_hit(2, v);
-    }
-    if ((v = hv(pat[dr_style][TR_HAT][fill][dr_step])) > 0.0f) {
-        h_env = v * 0.8f;
-        oh_env = 0.0f;                                  /* the closed hat chokes the open one */
-        sy_tel.hat_n++;
-        mo_drum_hit(3, v);
-    }
-    if ((v = hv(pat[dr_style][TR_OHAT][fill][dr_step])) > 0.0f) {
-        oh_env = v * 0.7f;
-        sy_tel.hat_n++;
-        mo_drum_hit(4, v);
-    }
-    if ((v = hv(pat[dr_style][TR_PERC][fill][dr_step])) > 0.0f) {
-        dp.amp = v;
-        dp.pe = 1.0f;
-        dp.ph = 0.0f;
-        sy_tel.perc_n++;
-        mo_drum_hit(5, v);
+    if (!(mute & SY_MUTE_DRUMS)) {                      /* (muted: the steps go by, nothing hit) */
+        if ((v = hv(pat[dr_style][TR_KICK][fill][dr_step])) > 0.0f) {
+            dk.amp = v;
+            dk.pe = 1.0f;
+            dk.ph = 0.0f;
+            sy_tel.kick_n++;
+            mo_drum_hit(0, v);
+        }
+        if ((v = hv(pat[dr_style][TR_SNARE][fill][dr_step])) > 0.0f) {
+            sn_env = v;
+            dsn.amp = v;
+            dsn.pe = 1.0f;
+            dsn.ph = 0.0f;
+            sy_tel.snare_n++;
+            mo_drum_hit(1, v);
+        }
+        if ((v = hv(pat[dr_style][TR_CLAP][fill][dr_step])) > 0.0f) {
+            cl_env = v;
+            cl_t = 0.0f;
+            sy_tel.snare_n++;
+            mo_drum_hit(2, v);
+        }
+        if ((v = hv(pat[dr_style][TR_HAT][fill][dr_step])) > 0.0f) {
+            h_env = v * 0.8f;
+            oh_env = 0.0f;                              /* the closed hat chokes the open one */
+            sy_tel.hat_n++;
+            mo_drum_hit(3, v);
+        }
+        if ((v = hv(pat[dr_style][TR_OHAT][fill][dr_step])) > 0.0f) {
+            oh_env = v * 0.7f;
+            sy_tel.hat_n++;
+            mo_drum_hit(4, v);
+        }
+        if ((v = hv(pat[dr_style][TR_PERC][fill][dr_step])) > 0.0f) {
+            dp.amp = v;
+            dp.pe = 1.0f;
+            dp.ph = 0.0f;
+            sy_tel.perc_n++;
+            mo_drum_hit(5, v);
+        }
     }
     c = pat[dr_style][TR_BASS][fill][dr_step];
     if (abass_on && par[P_BSTYLE] != BS_BEAT) {         /* the bass another way: its own steps, not the beat's line */
@@ -3012,6 +3028,9 @@ static void drums_tick(void)                           /* one sample of the sequ
         dr_fired = 0;
         dr_style = dr_pending;
         pu_grid = 1;                                    /* (the first step: one too) */
+        loop_b0 = 0;
+        if (sw_pend)
+            loop_swap();
         if (par[P_CLOCK] == CK_LEAD) {                  /* (leading: Start, and the first clock with it) */
             mo_send(0xFAu, 0, 0);
             ck_out_t = 1.0f;
@@ -3042,6 +3061,8 @@ static void drums_tick(void)                           /* one sample of the sequ
             dr_step = 0;
             dr_bar++;
             dr_style = dr_pending;                      /* a new tape waits for the bar */
+            if (sw_pend)                                /* so does a new pattern */
+                loop_swap();
         }
     }
 }
@@ -3068,7 +3089,7 @@ static float loop_now(void)                             /* the playhead, ticks (
         return 0.0f;
     {
     const float inbar = ((float)dr_step + mm_clampf(dr_t / dr_len, 0.0f, 1.0f)) * tps;
-    return (float)((int)(dr_bar % (uint32_t)(loop_ticks() / SY_TPB)) * SY_TPB) + inbar;
+    return (float)((int)((dr_bar - loop_b0) % (uint32_t)(loop_ticks() / SY_TPB)) * SY_TPB) + inbar;
     }
 }
 static void loop_snapshot(void)
@@ -3154,7 +3175,7 @@ static void loop_tick(int p)                            /* one tick of the playh
             e->flags &= (uint8_t)~EV_FRESH;
             continue;
         }
-        if ((e->flags & EV_HELD) || e->len == 0)
+        if ((e->flags & EV_HELD) || e->len == 0 || (mute & SY_MUTE_LOOP))
             continue;
         if (e->flags & EV_PLAYING)
             band_off(e->note);
@@ -3216,6 +3237,39 @@ static inline float click_sample(void)
     x = mm_sin_turns(click_ph) * click_env * 0.35f;
     click_env *= 0.9985f;
     return x;
+}
+static void loop_swap(void)                             /* the pattern waiting: in, now (the one playing: back to its slot) */
+{
+    const int out = sw_slots >> 4, in = sw_slots & 15;
+    int i, n = 0;
+    sw_pend = 0;
+    if (rec_state)
+        rec_end();
+    loop_all_off();
+    if (pat_ev && out < SY_PATS) {
+        for (i = 0; i < loop_n; i++)
+            if (loop_ev[i].len > 0) {
+                pat_ev[out][n] = loop_ev[i];
+                pat_ev[out][n].flags = 0;
+                n++;
+            }
+        pat_n[out] = (uint16_t)n;
+    }
+    loop_n = 0;
+    if (pat_ev && in < SY_PATS)
+        for (i = 0; i < pat_n[in] && i < SY_LOOP_MAX; i++)
+            if ((int)pat_ev[in][i].t < SY_TPB * 4 && pat_ev[in][i].len > 0) {
+                loop_ev[loop_n] = pat_ev[in][i];
+                loop_ev[loop_n].flags = 0;
+                loop_n++;
+            }
+    loop_undo_n = 0;
+    par[P_LOOPBARS] = (int16_t)sw_bars;
+    loop_b0 = dr_bar;
+    loop_last = -1;
+    sy_tel.pattern = (uint8_t)in;
+    sy_tel.pattern_next = -1;
+    loop_changed();
 }
 static void loop_cmd(const cmd_t *c)
 {
@@ -3518,6 +3572,24 @@ static void drain(void)
         case C_REC: case C_LUNDO: case C_LCLEAR: case C_LSTEP: case C_LNUDGE: case C_LLOAD: case C_LSEL: case C_LNOTE: case C_LLEN:
             loop_cmd(&c);
             break;
+        case C_LSWAP:                                   /* a pattern: on the next bar (stopped: now) */
+            sw_slots = (uint8_t)c.a;
+            sw_bars = (uint8_t)c.b;
+            sw_pend = 1;
+            sy_tel.pattern_next = (int8_t)(c.a & 15);
+            if (!dr_on)
+                loop_swap();
+            break;
+        case C_MUTE:
+            if ((c.a & ~mute & SY_MUTE_LOOP))
+                loop_all_off();
+            if ((c.a & ~mute & SY_MUTE_BASS)) {
+                b_gate = 0.0f;
+                mo_bass_off();
+            }
+            mute = (uint8_t)c.a;
+            sy_tel.mute = mute;
+            break;
         case C_ARP: arp_set(c.a); break;
         case C_PUNCH:
             pu_press(c.a, c.b);
@@ -3797,6 +3869,8 @@ void sy_init(void)
     dr_style = dr_pending = (uint8_t)par[P_STYLE];
     sy_tel.last_note = -1;
     sy_tel.bass_note = -1;
+    sy_tel.pattern = SY_PAT_NONE;
+    sy_tel.pattern_next = -1;
     sy_tel.arp_note = -1;
     sy_tel.steps = STYLES[dr_style].steps;
     sy_tel.style = dr_style;

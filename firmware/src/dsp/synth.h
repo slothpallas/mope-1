@@ -128,7 +128,7 @@ int sy_arp_held(uint8_t *out, int max);
  * bar (a 1/16 is 12); 1, 2 or 4 bars (P_LOOPBARS). REC while stopped: a bar's count-in, then it records;
  * while playing: it records at once, on top (overdub). Notes snap to the 1/16 grid. */
 #define SY_TPB 192                                  /* ticks a bar */
-#define SY_LOOP_MAX 192                             /* notes in the loop */
+#define SY_LOOP_MAX 150                             /* notes in the loop (a pattern: four are saved) */
 typedef struct {
     uint16_t t;                                     /* where it starts, ticks from the loop's start */
     uint8_t note, vel, len, flags;                  /* len: ticks (up to 255), flags: the engine's */
@@ -145,6 +145,16 @@ void sy_loop_note(int step, int note);              /* one note at a step: there
 void sy_loop_len(int step, int note, int delta);    /* that one note longer or shorter */
 void sy_loop_load(const sy_ev_t *ev, int n);        /* from a saved project (ev stays valid until drained) */
 int sy_loop_copy(sy_ev_t *dst, int max);            /* into a project, to save */
+/* PATTERNS: the saved loops, the engine's to swap (where they live: set once). A swap waits for the bar
+ * with the band playing (at once when stopped): the loop playing goes back into slot out (SY_PAT_NONE: it
+ * is dropped), slot in comes in from its first bar, with its bars (P_LOOPBARS' 0..2) */
+#define SY_PATS 4
+#define SY_PAT_NONE 15
+void sy_loop_slots(sy_ev_t (*ev)[SY_LOOP_MAX], uint16_t *n);
+void sy_loop_swap(int out, int in, int bars);
+/* MUTES (live, not saved): a bit each, the drums, the bass, the loop */
+enum { SY_MUTE_DRUMS = 1, SY_MUTE_BASS = 2, SY_MUTE_LOOP = 4 };
+void sy_mute(int mask);
 const sy_ev_t *sy_loop_events(int *n);              /* for the screen: read-only, may change under you */             /* the notes it is cycling, low to high (for the screen) */
 int sy_arp_note(int held_n, int seq);               /* the note it plays at step seq over held_n notes (-1: a rest; STAB: the lowest) */
 void sy_panic(void);
@@ -220,6 +230,9 @@ typedef struct {
     uint16_t loop_n;              /* notes in it */
     int16_t loop_sel;             /* the last stepped step (1/16s), -1 none */
     uint32_t loop_ver;            /* changes whenever the loop does (to save it) */
+    uint8_t pattern;              /* the pattern playing (SY_PAT_NONE: none yet) */
+    int8_t pattern_next;          /* the one waiting for the bar, -1 none */
+    uint8_t mute;                 /* SY_MUTE_* */
     uint16_t ext_bpm;             /* following a MIDI clock: its tempo x 10, 0 not */
     float clock_err;              /* following one: how far the band is from it, ms (+ behind) */
     uint32_t clocks_out;          /* MIDI clocks sent (counter) */

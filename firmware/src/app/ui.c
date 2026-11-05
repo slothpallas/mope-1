@@ -273,6 +273,8 @@ static struct {
     uint32_t last_draw;
     uint8_t naming;                    /* SAVE AS open: the knobs (and typing) edit the name, SAVE keeps it */
     uint8_t set_row;                   /* SETTINGS: the row chosen (knob 1 moves, knob 2 sets) */
+    uint8_t mute;                      /* SY_MUTE_*: the drums, the bass, the loop quiet (not saved) */
+    int8_t pat_next;                   /* a pattern asked for, waiting for the bar (-1 none) */
     uint8_t tap_n, tap_skip;           /* tap tempo: HOME taps so far (on the tempo pages); a HOME let through */
     uint32_t tap_last, tap_iv[3];      /* the last tap, the intervals between the last few */
     uint8_t save_slot, cursor;
@@ -789,6 +791,8 @@ static void stop(int n)
 }
 
 static const uint8_t WHITE_K[16] = {0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26};   /* (the white keys, F3 up) */
+/* SEQ's black keys: the first four the patterns, the three from F#4 the mutes (drums, bass, loop) */
+static const uint8_t PAT_K[SY_PATS] = {1, 3, 5, 8}, MUTE_K[3] = {13, 15, 17};
 static int white_of(int k)
 {
     int i;
@@ -876,6 +880,35 @@ static void punch_knob(int k, int32_t e)
     ui_caption(b, 900u);
 }
 
+/* PATTERNS: one of four, on the next bar (the one playing goes back to its slot as it is) */
+static void pattern_pick(int p)
+{
+    static char cap[28];
+    const int cur = proj.pat;
+    int bars, i = 0;
+    const char *q;
+    proj.pat_bars[cur] = (uint8_t)(proj.par[P_LOOPBARS] + 1);
+    bars = proj.pat_bars[p] ? proj.pat_bars[p] - 1 : proj.par[P_LOOPBARS];
+    sy_loop_swap(cur, p, bars);
+    ui.pat_next = (int8_t)p;
+    for (q = "PATTERN "; *q; q++)
+        cap[i++] = *q;
+    cap[i++] = (char)('1' + p);
+    for (q = p == cur ? ": STAYS." : sy_tel.drums_on ? " NEXT BAR" : proj.pat_n[p] ? "." : ": EMPTY."; *q; q++)
+        cap[i++] = *q;
+    cap[i] = 0;
+    ui_caption(cap, 1200u);
+    ui.page_until = plat_ms() + STAY_MS;
+}
+static void mute_toggle(int j)
+{
+    static const char *const NAME[3][2] = {{"DRUMS: BACK.", "DRUMS: QUIET."}, {"BASS: BACK.", "BASS: QUIET."},
+                                           {"LOOP: BACK.", "LOOP: QUIET."}};
+    ui.mute ^= (uint8_t)(1u << j);
+    sy_mute(ui.mute);
+    ui_caption(NAME[j][ui.mute >> j & 1u], 900u);
+    ui.page_until = plat_ms() + STAY_MS;
+}
 static void key_down(int k)
 {
     int n = KEY0_NOTE + k + 12 * proj.par[P_OCTAVE];
@@ -904,6 +937,13 @@ static void key_down(int k)
     if (step_mode()) {   /* a white key: that 1/16 step of the bar on show. Another step: the cursor goes there (on its
                           * nearest note; none, one comes). The cursor's step again: its note goes, or one comes. */
         const int w = white_of(k);
+        int j;
+        for (j = 0; j < SY_PATS; j++)
+            if (k == PAT_K[j])
+                pattern_pick(j);
+        for (j = 0; j < 3; j++)
+            if (k == MUTE_K[j])
+                mute_toggle(j);
         if (w >= 0) {
             const int st = ui.loop_bar * 16 + w, near = loop_nearest(st, ui.cur_note);
             if (st != ui.cur_step && near >= 0) {
@@ -946,9 +986,11 @@ static void key_up(int k)
 static void reset_defaults(void)
 {
     int i;
-    uint32_t xp = proj.xp;                               /* (the levels stay: it remembers) */
-    project_defaults();
-    proj.xp = xp;
+    for (i = 0; i < P_NPARAMS; i++)                      /* the settings back as they come (the levels and */
+        proj.par[i] = sy_param_info(i)->def;             /* the patterns stay: it remembers) */
+    proj.seen = 0;
+    memset(proj.pk, 0, sizeof proj.pk);
+    memset(proj.pat_bars, 0, sizeof proj.pat_bars);
     project_send_knobs();
     for (i = 0; i < P_NPARAMS; i++)
         sy_set(i, proj.par[i]);
@@ -1441,15 +1483,26 @@ static void leds(void)
     }
     if (step_mode()) {   /* SEQ: the cursor's step lit (where a tap lands), the bar's steps with notes dim */
         int i, n;
+        uint32_t b2 = 0u;
         const sy_ev_t *ev = sy_loop_events(&n);
         for (i = 0; i < n; i++)
             if (ev[i].t / 192 == ui.loop_bar)
                 dim |= 1u << WHITE_K[ev[i].t / 12 % 16];
-        if (ui.cur_step / 16 == ui.loop_bar) {
-            const uint32_t at = 1u << WHITE_K[ui.cur_step % 16];
-            plat_leds(b, ui.keys | at, dim & ~at);
-            return;
+        for (i = 0; i < SY_PATS; i++) {                  /* the patterns: playing lit, waiting blinking, with notes dim */
+            if (i == proj.pat && ui.pat_next < 0)
+                b2 |= 1u << PAT_K[i];
+            else if (i == ui.pat_next)
+                b2 |= (plat_ms() / 150u) & 1u ? 1u << PAT_K[i] : 0u;
+            else if (proj.pat_n[i])
+                dim |= 1u << PAT_K[i];
         }
+        for (i = 0; i < 3; i++)                          /* the mutes: lit while it plays */
+            if (!(ui.mute >> i & 1u))
+                b2 |= 1u << MUTE_K[i];
+        if (ui.cur_step / 16 == ui.loop_bar)
+            b2 |= 1u << WHITE_K[ui.cur_step % 16];
+        plat_leds(b, ui.keys | b2, dim & ~b2);
+        return;
     }
     plat_leds(b, ui.keys | ui.punched, dim & ~ui.punched);
 }
@@ -1481,6 +1534,7 @@ void ui_init(void)
     ui.step_note = 60;
     ui.step_held = -1;
     ui.cur_note = 60;
+    ui.pat_next = -1;
     px_init();
     blob_init();
 }
@@ -1520,6 +1574,15 @@ void ui_frame(void)
     while ((c = plat_text()) != 0)                       /* typing: into the name, while SAVE AS is open */
         if (ui.naming)
             name_type(c);
+    if (sy_tel.pattern < SY_PATS && sy_tel.pattern != proj.pat && sy_tel.pattern_next < 0) {   /* a new pattern came in */
+        proj.pat = sy_tel.pattern;
+        knob_set(P_LOOPBARS, proj.pat_bars[proj.pat] ? proj.pat_bars[proj.pat] - 1 : proj.par[P_LOOPBARS]);
+        ui.loop_bar = 0;
+        ui.cur_step = 0;
+        mark_dirty();
+    }
+    if (sy_tel.pattern_next < 0)
+        ui.pat_next = -1;
     if (sy_tel.loop_ver != ui.loop_ver) {                /* the loop changed: it wants saving */
         ui.loop_ver = sy_tel.loop_ver;
         if (plat_ms() > 1500u)

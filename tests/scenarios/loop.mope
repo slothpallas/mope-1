@@ -38,7 +38,7 @@ expect curstep 8
 expect lnote3 72
 # the cursor's step: its key lit (w8: key 14), so you know where a tap lands
 wait 100
-expect leds_lit 16384
+expect leds_steps 16384
 # a chord, a note at a time: knob 2 up to an empty note, the step again: another comes
 turn K2 4
 tapkey w8
@@ -69,7 +69,7 @@ shot 05_note_gone.png
 turn K1 -8
 wait 100
 expect curstep 0
-expect leds_lit 1
+expect leds_steps 1
 tapkey w8
 wait 100
 expect loopn 5

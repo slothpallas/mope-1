@@ -1,0 +1,73 @@
+# SEQ: four patterns on its first black keys (on the next bar while the band plays), the drums, the bass
+# and the loop quiet on the next three; the roll fits the notes; the knob being turned says what it is.
+wait 300
+tap SEQ
+wait 200
+expect page 10
+# pattern 1: two notes
+tapkey w0
+tapkey w4
+wait 100
+expect loopn 2
+expect pattern 0
+shot 00_pattern1.png
+# pattern 2 (stopped: at once), empty; a note in it
+tapkey b1
+wait 100
+expect pattern 1
+expect loopn 0
+tapkey w2
+wait 100
+expect loopn 1
+# playing: pattern 1 waits for the bar, then comes in from its first bar
+tap PLAY
+wait 300
+tapkey b0
+wait 50
+expect pattern 1
+expect pattern_next 0
+shot 01_waiting.png
+wait 3000
+expect pattern 0
+expect pattern_next -1
+expect loopn 2
+# the knob being turned, and what it says
+spin K2 3
+wait 50
+shot 02_knob_note.png
+wait 1600
+# the drums quiet: the steps go on, nothing is hit
+tapkey b5
+wait 100
+expect mute 1
+mark
+wait 2000
+expect kicks_new 0
+shot 03_drums_quiet.png
+tapkey b5
+wait 100
+expect mute 0
+mark
+wait 2000
+expect kicks_new >0
+# the loop and the bass quiet, and back
+tapkey b7
+tapkey b6
+wait 100
+expect mute 6
+tapkey b7
+tapkey b6
+wait 100
+expect mute 0
+# kept: after a restart, the pattern it was on and the others as they were
+tap PLAY
+wait 5500
+reboot
+wait 500
+expect pattern 0
+expect loopn 2
+tap SEQ
+wait 200
+tapkey b1
+wait 100
+expect loopn 1

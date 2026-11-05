@@ -56,8 +56,8 @@ int main(void)
     CHECK(proj.par[P_TABLE] == 11 && proj.par[P_CUTOFF] == 33 && proj.par[P_LOOPBARS] == 2, "its settings are kept");
     CHECK(proj.xp == xp, "its XP is kept (%u)", (unsigned)proj.xp);
     for (i = 0; i < 3; i++)
-        ok &= proj.loop[i].t == ev[i].t && proj.loop[i].note == ev[i].note && proj.loop[i].len == ev[i].len;
-    CHECK(proj.loop_n == 3 && ok, "its loop is kept (%d notes)", proj.loop_n);
+        ok &= proj.pat_ev[0][i].t == ev[i].t && proj.pat_ev[0][i].note == ev[i].note && proj.pat_ev[0][i].len == ev[i].len;
+    CHECK(proj.pat_n[0] == 3 && ok, "its loop is kept (%d notes)", proj.pat_n[0]);
     for (ok = 1, i = P_BTABLE; i < P_NPARAMS; i++)
         ok &= proj.par[i] == sy_param_info(i)->def;
     CHECK(ok && proj.seen == 0, "the new settings start at their defaults, nothing seen");
@@ -83,8 +83,8 @@ int main(void)
         CHECK(proj.par[P_TABLE] == 9 && proj.par[P_LEVEL] == -17 && proj.xp == xp && proj.seen == seen4,
               "its settings, XP and pages seen are kept");
         for (ok = 1, i = 0; i < 3; i++)
-            ok &= proj.loop[i].t == ev[i].t && proj.loop[i].note == ev[i].note;
-        CHECK(proj.loop_n == 3 && ok, "its loop is kept (%d notes)", proj.loop_n);
+            ok &= proj.pat_ev[0][i].t == ev[i].t && proj.pat_ev[0][i].note == ev[i].note;
+        CHECK(proj.pat_n[0] == 3 && ok, "its loop is kept (%d notes)", proj.pat_n[0]);
         for (ok = 1, i = P_RTONE; i < P_NPARAMS; i++)
             ok &= proj.par[i] == sy_param_info(i)->def;
         CHECK(ok, "the effects' new knobs start at their defaults");
@@ -112,14 +112,47 @@ int main(void)
         CHECK(proj.par[P_MIDIOUT] == MO_KEYS && proj.par[P_BSTYLE] == BS_PULSE && proj.seen == 0x21 && proj.xp == xp,
               "its settings are kept (MIDI out on: the keys)");
         CHECK(proj.pk[0] == 0x3A && proj.pk[sizeof proj.pk - 1] == 0x07, "the punches' knobs are kept");
-        CHECK(proj.loop_n == 3 && proj.loop[2].note == ev[2].note, "its loop is kept");
+        CHECK(proj.pat_n[0] == 3 && proj.pat_ev[0][2].note == ev[2].note, "its loop is kept");
         CHECK(proj.par[P_CLOCK] == CK_OWN && proj.par[P_PRESS] == AT_VIBRATO, "the clock and aftertouch at their defaults");
     }
+    {   /* a format-7 save with a full loop (192 notes): pattern 1 keeps its first SY_LOOP_MAX */
+        const int n7 = P_NPARAMS, at7 = (8 + 2 * n7 + 3) & ~3, at7_loop = at7 + 4 + 28;
+        const uint32_t fmt7 = 7u;
+        const uint16_t full = 192;
+        static uint8_t big[4096];
+        sy_ev_t e;
+        memset(big, 0, sizeof big);
+        memcpy(big, &magic, 4);
+        memcpy(big + 4, &fmt7, 4);
+        for (i = 0; i < n7; i++)
+            par[i] = sy_param_info(i)->def;
+        memcpy(big + 8, par, (size_t)(2 * n7));
+        memcpy(big + at7, &xp, 4);
+        memcpy(big + at7_loop, &full, 2);
+        for (i = 0; i < 192; i++) {
+            e.t = (uint16_t)(i * 4);
+            e.note = (uint8_t)(40 + i % 50);
+            e.vel = 100;
+            e.len = 6;
+            e.flags = 0;
+            memcpy(big + at7_loop + 2 + i * (int)sizeof e, &e, sizeof e);
+        }
+        memcpy(flash, big, sizeof flash);
+        flash_n = at7_loop + 2 + 192 * (int)sizeof(sy_ev_t);
+        CHECK(project_load() == 0 && proj.pat == 0, "a format-7 save loads, on pattern 1");
+        CHECK(proj.pat_n[0] == SY_LOOP_MAX && proj.pat_ev[0][SY_LOOP_MAX - 1].t == (SY_LOOP_MAX - 1) * 4 &&
+              proj.pat_n[1] == 0 && proj.pat_n[3] == 0, "its loop is pattern 1 (its first %d notes), the rest empty", SY_LOOP_MAX);
+    }
+    proj.pat = 2;
+    proj.pat_bars[2] = 3;
+    proj.pat_n[3] = 1;
+    proj.pat_ev[3][0].note = 77;
     proj.par[P_BLEVEL] = 66;
     proj.seen = 5;
     project_save();
     memset(&proj, 0, sizeof proj);
     CHECK(project_load() == 0 && proj.par[P_BLEVEL] == 66 && proj.seen == 5 && proj.xp == xp, "today's save round-trips");
+    CHECK(proj.pat == 2 && proj.pat_bars[2] == 3 && proj.pat_n[3] == 1 && proj.pat_ev[3][0].note == 77, "with its patterns");
     printf(fails ? "PROJECT TESTS FAILED (%d)\n" : "project: all passed\n", fails);
     return fails != 0;
 }

@@ -108,7 +108,10 @@ As on X0X, Melodee and JIANT FM: **PLAY**, **REC** and **SEQ** do what they say.
 - **REC while playing**: it records at once, on top of what's there (overdub). **REC** again stops recording; the loop keeps playing with the band.
 - **HOME + REC** undoes the last take. **SAVE + REC** clears the loop.
 - **SEQ** (press it twice to keep it open): the loop as a piano roll, and while it is open the **16 white keys are the steps** of one bar (not while recording: then they play). Press a step to **choose** it and hear it; an empty step gets the last note you played. Turn **NOTE, LEN, VEL** to edit the chosen step. **Tap** a step without turning a knob to remove its notes. With no step chosen (the drawer says ALL) the knobs edit the **whole loop**: transpose it, make it longer or shorter, louder or softer. **OCT− / OCT+** go to the other bars.
-- The loop is saved with your sound (up to 192 notes).
+- **Patterns:** four loops, saved with your sound (up to 150 notes each). On the SEQ screen the first four **black keys** (F#3, G#3, A#3, C#4) pick one: lit is playing, blinking is waiting. With the band playing it comes in on the next bar, from its first bar; stopped, at once. Each keeps its own length.
+- **Mutes:** on the SEQ screen the next three black keys (F#4, G#4, A#4) silence the **drums**, the **bass** and the **loop** (lit: playing). The steps keep going; unmuted, it is back on the next hit. Not saved.
+- The roll fits itself to your notes (fewer notes: taller rows). Turning a knob shows only that knob and its value (the step, the note, the length, the bars); untouched, the bottom line shows the mutes.
+- Changing the drum style while playing also waits for the bar.
 - REC used to be "hold"; that's gone.
 - **OCT− / OCT+**: octave. The 27 keys play F3 to G5.
 - **SAVE**: saves (it also saves by itself when quiet). Hold for 1.5 s, then press SAVE again, to reset everything. The blob keeps its level.
