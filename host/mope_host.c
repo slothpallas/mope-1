@@ -14,6 +14,8 @@
  *   (the keys are not velocity sensitive: a key plays at 100)
  *   turn ENC N [MS]              (ENC: SELECT ALGO PRESET K1 K2 K3 K4; N detents, MS apart, default 80)
  *   spin ENC N                   N detents at once, exactly N (no acceleration)
+ *   type "TEXT"                  typed, as on the web player's keyboard (into SAVE AS's name; \b backspace,
+ *                                \< \> the cursor, \n enter: keep, \e escape: never mind)
  *   master N                     MASTER pot 0..4096
  *   midi B0 B1 B2                incoming USB MIDI message (hex bytes)
  *   clockin BPM                  a MIDI clock coming in at BPM, from now (0: it stops)
@@ -25,7 +27,7 @@
  *   leds                         print the lit buttons and keys
  *   expect WHAT VALUE            check state: exit 1 on mismatch; VALUE "<N" / ">N" is a bound
  *                                (WHAT: page dirty store_writes midi_out voices gates drums style steals punch punchbuf
- *                                 dropped rec loopn arp arpseq latch xp parN (parameter N, synth.h P_*) kicks hats
+ *                                 dropped rec loopn arp arpseq latch naming presets_used save_slot mood xp parN (parameter N, synth.h P_*) kicks hats
  *                                 lumaY (brightness 0..255 of the screen at x 2, row Y)
  *                                 pixRGB X Y (not here: see shot) peak_db_max peak_db_min)
  *   reboot                       re-run boot from the simulated flash (persistence test)
@@ -439,6 +441,14 @@ static int expect(const char *what, const char *val)
         got = project_pk(atoi(what + 2) % PU_N, atoi(strchr(what, '_') + 1) % PU_KN);
     else if (!strcmp(what, "latch"))
         got = ui.latch;
+    else if (!strcmp(what, "naming"))             /* SAVE AS open */
+        got = ui.naming;
+    else if (!strcmp(what, "presets_used"))       /* your preset slots filled (a bit each) */
+        got = presets.used;
+    else if (!strcmp(what, "save_slot"))          /* the slot SAVE AS would keep it in */
+        got = ui.save_slot;
+    else if (!strcmp(what, "mood"))               /* the preset playing (factory first, then yours) */
+        got = ui.mood;
     else if (!strcmp(what, "leds_lit"))           /* the keys lit now (a bit each) */
         got = (int)lit_keys;
     else if (!strcmp(what, "leds_steps")) {        /* the white keys lit now (SEQ's steps; a bit each, by key) */
@@ -605,6 +615,17 @@ int main(int argc, char **argv)
             accel_off = 1;
             run_ms(1);
             accel_off = 0;
+        } else if (!strcmp(cmd, "type")) {               /* "TEXT": each character typed, a few ms apart */
+            const char *q = strchr(line, '"');
+            for (q = q ? q + 1 : ""; *q && *q != '"'; q++) {
+                int ch = (unsigned char)*q;
+                if (ch == '\\' && q[1]) {                  /* \b backspace  \< left  \> right  \n enter  \e escape */
+                    q++;
+                    ch = *q == 'b' ? 8 : *q == '<' ? 1 : *q == '>' ? 2 : *q == 'n' ? 13 : *q == 'e' ? 27 : (unsigned char)*q;
+                }
+                type_char(ch);
+                run_ms(20);
+            }
         } else if (!strcmp(cmd, "master"))
             master = (uint32_t)atoi(a);
         else if (!strcmp(cmd, "midi")) {
