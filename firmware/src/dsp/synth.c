@@ -158,6 +158,9 @@ static inline float pf(int p) { return (float)par[p] * 0.01f; }        /* a 0..1
  * slower until the band is where the clock is (ck_rate) */
 static float ck_bpm, ck_rate = 1.0f;
 static inline float bpm(void) { return ck_bpm > 0.0f ? ck_bpm * ck_rate : (float)par[P_TEMPO]; }
+/* the tempo as the per-sample clocks want it, worked out once a block (tempo_block): a beat in samples, its
+ * inverse, the clock out's step. (A division every sample, five times over, cost the FM-1 a few %.) */
+static float beat_n = SY_SR * 60.0f / 84.0f, beat_inv = 84.0f / (SY_SR * 60.0f), ck_out_inc;
 /* a time knob: 1 ms .. ~8 s, doubling every 7.7 steps */
 static inline float knob_s(int p) { return 0.001f * mm_exp2f(pf(p) * 13.0f); }
 static inline float coef_s(float s) { return 1.0f - mm_expf(-1.0f / (s * SY_SR)); }
@@ -795,7 +798,6 @@ static void arp_tick(void)                             /* one sample */
 {
     if (!arp_on)
         return;
-    arp_len = SY_SR * 60.0f / bpm() / ARP_DIV[par[P_ARPRATE]];
     if (!arp_nh) {
         if (arp_cur != -1)
             arp_release();
@@ -1894,7 +1896,7 @@ static inline float pu_mono(uint32_t lag)               /* (the splice's search:
     const uint32_t p = (pu_w - 1u - lag) & (PU_LEN - 1u);
     return (float)pu_buf[0][p] + (float)pu_buf[1][p];
 }
-static inline float pu_beat(void) { return 60.0f / bpm(); }   /* seconds */
+static inline float pu_beat(void) { return beat_n * (1.0f / SY_SR); }   /* seconds (this block's tempo) */
 static inline float pkf(int fx, int k) { return (float)pu_k[fx][k] * (1.0f / (float)PU_KMAX); }   /* 0..1 */
 static inline float pke(int fx, int k, float mid, float per)   /* 2^((knob - mid) / per) */
 {
@@ -2076,7 +2078,7 @@ static int pu_want(void)
     int fx, best = -1;
     uint32_t newest = 0;
     for (fx = PU_HALF; fx <= PU_GRAIN; fx++)
-        if ((pu_held >> fx & 1u) && pu_stamp[fx] >= newest) {
+        if (PU_IS_BUF(fx) && (pu_held >> fx & 1u) && pu_stamp[fx] >= newest) {
             newest = pu_stamp[fx];
             best = fx;
         }
@@ -2467,15 +2469,18 @@ static void punch_chunk(void)
     pu_rates();
 }
 
-/* what the punches and the dust cost now (% of a block, a guess to be measured on the FM-1) */
+/* what the punches and the dust cost now (% of a block over the plain sound, measured on the FM-1: two
+ * voices of MONDAY, each punch held, fm1_load.py --punch; the buffer's half-band is in the plain sound) */
+static const float PU_COST[PU_N] = {10.0f, 10.5f, 8.5f, 7.0f, 5.0f, 5.0f, 0.2f, 12.5f, 1.2f, 2.5f, 1.0f, 0.3f};
 static float fx_cost(void)
 {
-    float c = 0.0f;
-    c += 0.5f;                                          /* (the buffer's half-band, always) */
-    if (pu_cur >= 0)                                    /* (cubic reads, the splice's search, the way-out filter) */
-        c += pu_cur == PU_GRAIN ? 4.0f : pu_cur == PU_HALF || pu_cur == PU_DOUBLE ? 3.0f : 2.0f;
-    c += (pu_crush > 0.0f ? 0.3f : 0.0f) + (pu_sweep > 0.0f ? 1.0f : 0.0f) + (pu_wob > 0.0f ? 1.0f : 0.0f) +
-         (pu_held >> PU_GATE & 1u ? 0.1f : 0.0f) + (par[P_DUST] || par[P_CRACKLE] ? 1.0f : 0.0f);
+    float c = par[P_DUST] || par[P_CRACKLE] ? 1.0f : 0.0f;
+    int fx;
+    if (pu_cur >= 0)                                    /* (the buffer one: still costing while it fades out) */
+        c += PU_COST[pu_cur];
+    for (fx = 0; fx < PU_N; fx++)                       /* (the others, while held) */
+        if (!PU_IS_BUF(fx) && (pu_held >> fx & 1u))
+            c += PU_COST[fx];
     return c;
 }
 
@@ -2706,7 +2711,12 @@ static void loop_swap(void);
 #define abass_on (par[P_BASS] > 0 && par[P_BASSON])
 static uint8_t dr_style, dr_pending, dr_step, dr_fired;
 static uint32_t dr_bar;
-static float dr_t, dr_len, dr_jit;
+static float dr_t, dr_len, dr_inv, dr_jit;
+static void dr_len_set(int steps)                       /* a step's length in samples, at the tempo (and its inverse) */
+{
+    dr_len = beat_n * 4.0f / (float)steps;
+    dr_inv = 1.0f / dr_len;
+}
 
 static float hit_vel(uint8_t c) { return c == 'x' ? 1.0f : c == 'o' ? 0.7f : c == '-' ? 0.35f : 0.0f; }
 static float hv(uint8_t c) { return hit_vel(c) * (1.0f - pf(P_HUMAN) * 0.35f * rndf()); }   /* Human: uneven hands */
@@ -3009,7 +3019,7 @@ static inline void clock_tick(void)
 {
     if (par[P_CLOCK] != CK_LEAD)
         return;
-    ck_out_t += bpm() * (24.0f / 60.0f / SY_SR);
+    ck_out_t += ck_out_inc;
     if (ck_out_t >= 1.0f) {
         ck_out_t -= 1.0f;
         if (ck_out_t >= 1.0f)
@@ -3034,9 +3044,19 @@ static void drums_to(float beat)                       /* the band, at once at t
     st = (b - 4.0f * (float)bar) * (float)steps * 0.25f;
     dr_bar = bar;
     dr_step = (uint8_t)clampi((int)st, 0, steps - 1);
-    dr_len = SY_SR * 60.0f / bpm() * 4.0f / (float)steps;
+    dr_len_set(steps);
     dr_t = mm_clampf(st - (float)dr_step, 0.0f, 0.999f) * dr_len;
     dr_fired = dr_t > 0.0f;                             /* (inside a step: that one has gone by) */
+}
+static void tempo_block(void)                           /* the tempo, for this block's per-sample clocks */
+{
+    const float b = bpm();
+    beat_n = SY_SR * 60.0f / b;
+    beat_inv = 1.0f / beat_n;
+    ck_out_inc = b * (24.0f / 60.0f / SY_SR);
+    arp_len = beat_n / ARP_DIV[par[P_ARPRATE]];
+    if (dr_on && !dr_start)
+        dr_len_set(STYLES[dr_style].steps);
 }
 static void clock_follow(uint32_t n)                   /* once a block */
 {
@@ -3046,7 +3066,7 @@ static void clock_follow(uint32_t n)                   /* once a block */
         ck_age += n;
         return;
     }
-    own = (float)(dr_bar % 256u) * 4.0f + ((float)dr_step + mm_clampf(dr_t / dr_len, 0.0f, 1.0f)) * 4.0f / (float)STYLES[dr_style].steps;
+    own = (float)(dr_bar % 256u) * 4.0f + ((float)dr_step + mm_clampf(dr_t * dr_inv, 0.0f, 1.0f)) * 4.0f / (float)STYLES[dr_style].steps;
     err = ck_beat + (float)ck_age * ck_bpm * (1.0f / 60.0f / SY_SR) - own;
     err -= 1024.0f * (float)(int)(err * (1.0f / 1024.0f) + (err < 0.0f ? -0.5f : 0.5f));
     sy_tel.clock_err = err * 60000.0f / ck_bpm;
@@ -3074,8 +3094,8 @@ static void drums_tick(void)                           /* one sample of the sequ
             mo_send(0xFAu, 0, 0);
             ck_out_t = 1.0f;
         }
+        dr_len_set(STYLES[dr_style].steps);
     }
-    dr_len = SY_SR * 60.0f / bpm() * 4.0f / (float)STYLES[dr_style].steps;
     if (!dr_fired) {
         /* the style's own swing plus Swing (up to 60% of a step late), plus Human's stumble */
         const float sw = ((dr_step & 1u) ? mm_minf((float)STYLES[dr_style].swing + 40.0f * pf(P_SWING), 60.0f) * 0.01f * dr_len : 0.0f) + dr_jit;
@@ -3127,7 +3147,7 @@ static float loop_now(void)                             /* the playhead, ticks (
     if (dr_len <= 0.0f)                                 /* (before the drums' first sample) */
         return 0.0f;
     {
-    const float inbar = ((float)dr_step + mm_clampf(dr_t / dr_len, 0.0f, 1.0f)) * tps;
+    const float inbar = ((float)dr_step + mm_clampf(dr_t * dr_inv, 0.0f, 1.0f)) * tps;
     return (float)((int)((dr_bar - loop_b0) % (uint32_t)(loop_ticks() / SY_TPB)) * SY_TPB) + inbar;
     }
 }
@@ -3245,17 +3265,17 @@ static void loop_run(void)                              /* one sample, after the
 /* the count-in: a bar of clicks, then the band starts and it records */
 static void count_run(void)
 {
-    const float beat = SY_SR * 60.0f / bpm();
-    const int b = (int)(cnt_t / beat);
+    int b;
     if (!cnt_on)
         return;
-    if (cnt_t == 0.0f || (int)((cnt_t - 1.0f) / beat) != b) {
+    b = (int)(cnt_t * beat_inv);
+    if (cnt_t == 0.0f || (int)((cnt_t - 1.0f) * beat_inv) != b) {
         click_env = b == 0 ? 1.0f : 0.6f;               /* (the one is louder) */
         click_ph = 0.0f;
         sy_tel.count = (uint8_t)b;
     }
     cnt_t += 1.0f;
-    if (cnt_t >= 4.0f * beat) {
+    if (cnt_t >= 4.0f * beat_n) {
         cnt_on = 0;
         dr_on = 1;
         dr_start = 1;
@@ -3690,7 +3710,9 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
     drain();
     if (n > BLK)
         n = BLK;
+    tempo_block();                                      /* (before the clock's jump, which reads it, and after its nudge) */
     clock_follow(n);
+    tempo_block();
     lfo = lfo_tick(&lfo1, P_LFORATE, P_LFOSHAPE, n);
     lfo_b = lfo_tick(&lfo2, P_LFO2RATE, P_LFO2SHAPE, n);
     sy_tel.lfo = lfo;

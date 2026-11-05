@@ -1677,8 +1677,8 @@ static void draw_panel(const geo_t *g)
         case PG_BODY: what = SY_TABLE_NAME[proj.par[P_TABLE]]; break;
         case PG_PUNCH: {                                 /* the buffer one playing, else the newest tone one, else how */
             int fx = sy_tel.punch_buf;
-            for (i = PU_N - 1; fx < 0 && i > PU_GRAIN; i--)
-                if (sy_tel.punch >> i & 1u)
+            for (i = PU_N - 1; fx < 0 && i >= 0; i--)
+                if (!PU_IS_BUF(i) && (sy_tel.punch >> i & 1u))
                     fx = i;
             what = fx >= 0 ? PUNCH_NAME[fx] : ui.pk_fx >= 0 ? PUNCH_NAME[ui.pk_fx] : "HOLD + A KEY";
             break;
@@ -2494,7 +2494,7 @@ static void blob_draw(void)
         int fx;
         float tf = 1.0f;
         for (fx = 0; fx < PU_N; fx++) {
-            const float want = (sy_tel.punch >> fx & 1u) ? (fx <= PU_GRAIN ? sy_tel.punch_wet : 1.0f) : 0.0f;
+            const float want = (sy_tel.punch >> fx & 1u) ? (PU_IS_BUF(fx) ? sy_tel.punch_wet : 1.0f) : 0.0f;
             bs.pw[fx] = approach(bs.pw[fx], want, bs.dt * 14.0f);
         }
         tf *= 1.0f - 0.5f * bs.pw[PU_HALF];
