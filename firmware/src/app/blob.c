@@ -765,7 +765,13 @@ static void draw_cassette(const geo_t *g)
         }
     /* the label: off-white paper, a red stripe, the name rolling past */
     px_rect(x + 3, y + 2, 28, 7, PC_EYE);
-    px_rect(x + 3, y + 8, 28, 1, sy_tel.rec ? PC_RED : on ? PC_TEAR : PC_DIM);
+    if (on && sy_tel.steps) {                            /* the stripe: the bar's four beats, the one now lit */
+        const int beat = sy_tel.step * 4 / sy_tel.steps;
+        int b;
+        for (b = 0; b < 4; b++)
+            px_rect(x + 3 + b * 7, y + 8, 6, 1, b == beat ? (sy_tel.rec ? PC_RED : PC_WHITE) : sy_tel.rec ? PC_EMBER : PC_TEAR);
+    } else
+        px_rect(x + 3, y + 8, 28, 1, sy_tel.rec ? PC_RED : PC_DIM);
     {
         const int32_t len = px_text_w(name), win = 26;
         const int32_t off = len > win ? ((int32_t)(bs.t * 9.0f) % (len + 14)) - 7 : -(win - len) / 2;
@@ -787,6 +793,8 @@ static void draw_cassette(const geo_t *g)
         px_ellipse((float)(x + 11), (float)(y + 13) + 0.5f, rl, mm_minf(rl, 3.4f), PC_SPOOL);
         px_ellipse((float)(x + 23), (float)(y + 13) + 0.5f, rr, mm_minf(rr, 3.4f), PC_SPOOL);
         px_line(x + 11, y + 16, x + 23, y + 16, PC_SPOOL);    /* the tape running between them, below */
+        if (on && sy_tel.steps)                             /* where in the bar: a mark running along it */
+            px_rect(x + 11 + (int32_t)sy_tel.step * 12 / sy_tel.steps, y + 16, 2, 1, PC_WHITE);
         for (k = 0; k < 2; k++) {                           /* the hubs: white teeth, turning */
             const float hx = (float)(x + 11 + k * 12), hy = (float)(y + 13), a = bs.reel + (float)k * 0.13f;
             px_pset((int32_t)hx, (int32_t)hy, PC_SMOKE);
@@ -1315,32 +1323,62 @@ static void schem_dust(const drawer_t *p)                /* an old record: the b
 static const char *const PUNCH_PAD[PU_N] = {"1/2", "X2", "STP", "REV", "RPT", "STU", "GAT", "GRN", "CRU", "SWP", "WSH", "WOB"};
 static const char *const PUNCH_NAME[PU_N] = {"HALF", "DOUBLE", "STOP", "REVERSE", "REPEAT", "STUTTER", "GATE", "GRAIN", "CRUSH",
                                             "SWEEP", "WASH", "WOBBLE"};
+/* each punch's symbol, 5 x 5, on its black key */
+static const char *const PUNCH_ICON[PU_N][5] = {
+    {"..#..", "..#..", "#.#.#", ".###.", "..#.."},   /* HALF: down */
+    {"..#..", ".###.", "#.#.#", "..#..", "..#.."},   /* DOUBLE: up */
+    {".....", ".###.", ".###.", ".###.", "....."},   /* STOP: a square */
+    {"..#..", ".##..", "#####", ".##..", "..#.."},   /* REVERSE: back */
+    {"##.##", "##.##", "##.##", "##.##", "##.##"},   /* REPEAT: again */
+    {"#.#.#", "#.#.#", "#.#.#", "#.#.#", "#.#.#"},   /* STUTTER: again, faster */
+    {"###.#", "#.#.#", "#.#.#", "#.#.#", "#.###"},   /* GATE: open, shut */
+    {"#...#", "..#..", "#...#", ".#.#.", "#...."},   /* GRAIN: dust */
+    {"...##", "...#.", ".###.", ".#...", "##..."},   /* CRUSH: stairs */
+    {"##...", "..#..", "...#.", "....#", "....#"},   /* SWEEP: closing */
+    {"#.#.#", ".###.", "#####", ".###.", "#.#.#"},   /* WASH: frozen */
+    {".....", ".#...", "#.#.#", "...#.", "....."},   /* WOBBLE: a wave */
+};
+/* PUNCH: the keyboard as it is, F3 up; on each black key its punch's symbol (lit while it plays, blinking
+ * while it waits for the step); the whites beside a punch light when they change it (left MORE, right TWIST) */
 static void schem_punch(const drawer_t *p)
 {
-    static const uint8_t FX[11] = {PU_HALF, PU_DOUBLE, PU_STOP, PU_REVERSE, PU_REPEAT, PU_GATE, PU_GRAIN, PU_CRUSH, PU_SWEEP,
-                                   PU_WASH, PU_WOBBLE};
-    static const uint8_t COL[11] = {0, 18, 36, 56, 74, 0, 18, 36, 56, 74, 94};   /* (the gaps: where E and B are) */
-    int i;
-    for (i = 0; i < 11; i++) {
-        const int fx = FX[i];
-        const int32_t x = p->gx0 + COL[i], y = p->gy0 + 1 + (i >= 5 ? 14 : 0);
-        const int on = (sy_tel.punch >> fx & 1u) || (fx == PU_REPEAT && (sy_tel.punch >> PU_STUTTER & 1u));
-        const int md = on ? sy_tel.punch_mod[fx] : 0;
-        const int waits = (sy_tel.punch_wait >> fx & 1u) != 0;   /* (on the beat: waiting for the step, blinking) */
-        if (on)
-            px_rect(x, y, 17, 9, PC_TEAR);
-        else {
-            const uint8_t c = waits ? ((plat_ms() / 60u) & 1u ? PC_WHITE : PC_TEAR) : fx == ui.pk_fx ? PC_DIM : PC_WALL2;   /* (the knobs': brighter) */
-            px_rect(x, y, 17, 1, c);
-            px_rect(x, y + 8, 17, 1, c);
-            px_rect(x, y, 1, 9, c);
-            px_rect(x + 16, y, 1, 9, c);
+    static const int8_t KEYFX[NKEYS] = {-1, PU_HALF, -1, PU_DOUBLE, -1, PU_STOP, -1, -1, PU_REVERSE, -1, PU_REPEAT, -1, -1,
+                                        PU_GATE, -1, PU_GRAIN, -1, PU_CRUSH, -1, -1, PU_SWEEP, -1, PU_WASH, -1, -1, PU_WOBBLE, -1};
+    const int32_t x0 = p->gx0, y0 = p->gy0, h = p->gy1 - p->gy0, bh = h * 3 / 5;
+    int k, w = 0, r, c;
+    for (k = 0; k < NKEYS; k++) {                        /* the whites */
+        const int pc = (5 + k) % 12, black = pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10;
+        uint8_t col = PC_WALL2;
+        if (black)
+            continue;
+        if (k > 0 && KEYFX[k - 1] >= 0 && (sy_tel.punch_mod[KEYFX[k - 1]] & PM_TWIST) && (sy_tel.punch >> KEYFX[k - 1] & 1u))
+            col = PC_PINK;
+        if (k < NKEYS - 1 && KEYFX[k + 1] >= 0 && (sy_tel.punch_mod[KEYFX[k + 1]] & PM_MORE) && (sy_tel.punch >> KEYFX[k + 1] & 1u))
+            col = PC_SPEC;
+        px_rect(x0 + w * 7, y0, 6, h, col);
+        w++;
+    }
+    for (k = 0, w = 0; k < NKEYS; k++) {                 /* the blacks, over them */
+        const int pc = (5 + k) % 12, black = pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10;
+        int fx, on, waits;
+        int32_t x;
+        uint8_t fill, ink;
+        if (!black) {
+            w++;
+            continue;
         }
-        px_text(x + 9 - px_text_w(PUNCH_PAD[fx]) / 2, y + 2, PUNCH_PAD[fx], on ? PC_BG0 : PC_DIM);
-        if (md & PM_MORE)
-            px_rect(x, y + 10, 6, 2, PC_SPEC);
-        if (md & PM_TWIST)
-            px_rect(x + 11, y + 10, 6, 2, PC_PINK);
+        fx = KEYFX[k];
+        x = x0 + w * 7 - 4;
+        on = fx >= 0 && (sy_tel.punch >> fx & 1u);
+        waits = fx >= 0 && (sy_tel.punch_wait >> fx & 1u);
+        fill = on ? PC_TEAR : waits && (plat_ms() / 60u) & 1u ? PC_WHITE : PC_BG0;
+        ink = on || (waits && fill == PC_WHITE) ? PC_BG0 : fx == ui.pk_fx ? PC_WHITE : PC_DIM;
+        px_rect(x, y0, 7, bh, fill);
+        if (fx >= 0)
+            for (r = 0; r < 5; r++)
+                for (c = 0; c < 5; c++)
+                    if (PUNCH_ICON[fx][r][c] == '#')
+                        px_pset(x + 1 + c, y0 + bh - 7 + r, ink);
     }
 }
 
@@ -1738,16 +1776,40 @@ static void draw_xp(void)
 }
 
 
+/* CAPTIONS: in their own band at the top (right of the cassette when it is up), dark, a line under it, so
+ * they never sit on the blob. The tempo, just turned or tapped: its number, big. */
+static void cap_band(int32_t x0, int32_t h)
+{
+    px_rect(x0, 0, PX_W - x0, h, PC_BG0);
+    px_rect(x0, h, PX_W - x0, 1, PC_GRID);
+}
 static void draw_caption(void)
 {
     const uint32_t now = plat_ms();
-    const int32_t cx = tape_up() ? 84 : 60, maxw = tape_up() ? 70 : PX_W - 4;
+    const int32_t x0 = tape_up() ? 38 : 0, cx = (x0 + PX_W) / 2, maxw = PX_W - x0 - 4;
     char l1[32], l2[32];
     int i, n, cut = -1;
+    if (ui.tempo_t && now - ui.tempo_t < 1500u) {        /* the tempo: big, BPM small beside it */
+        char b[4];
+        const int t = sy_tel.ext_bpm ? (sy_tel.ext_bpm + 5) / 10 : proj.par[P_TEMPO];
+        int32_t w;
+        n = 0;
+        if (t >= 100)
+            b[n++] = (char)('0' + t / 100);
+        b[n++] = (char)('0' + t / 10 % 10);
+        b[n++] = (char)('0' + t % 10);
+        b[n] = 0;
+        w = n * 10 - 2 + 4 + px_text_w("BPM");
+        cap_band(x0, 16);
+        px_text2(cx - w / 2, 2, b, PC_WHITE);
+        px_text(cx - w / 2 + n * 10 + 2, 8, "BPM", sy_tel.ext_bpm ? PC_TEAR : PC_DIM);
+        return;
+    }
     if (!ui.cap[0] || (int32_t)(ui.cap_until - now) <= 0)
         return;
     if (px_text_w(ui.cap) <= maxw) {
-        px_text_c(cx, 3, ui.cap, PC_WHITE, PC_BG0);
+        cap_band(x0, 11);
+        px_text(cx - px_text_w(ui.cap) / 2, 3, ui.cap, PC_WHITE);
         return;
     }
     for (n = 0; ui.cap[n]; n++)                          /* too wide: two lines, split at the space nearest the middle */
@@ -1763,8 +1825,9 @@ static void draw_caption(void)
     for (i = 0; ui.cap[cut + 1 + i] && i < 31; i++)
         l2[i] = ui.cap[cut + 1 + i];
     l2[i] = 0;
-    px_text_c(cx, 3, l1, PC_WHITE, PC_BG0);
-    px_text_c(cx, 11, l2, PC_WHITE, PC_BG0);
+    cap_band(x0, 19);
+    px_text(cx - px_text_w(l1) / 2, 3, l1, PC_WHITE);
+    px_text(cx - px_text_w(l2) / 2, 11, l2, PC_WHITE);
 }
 
 /* ------------------------------------------------------------ animate --- */
@@ -1812,7 +1875,7 @@ static void animate(const geo_t *g)
     bs.wall_flash -= bs.wall_flash * dt * 4.0f;
     bs.echo_flash -= bs.echo_flash * dt * 6.0f;
     if (sy_tel.drums_on)
-        bs.reel += dt * (float)proj.par[P_TEMPO] / 60.0f * 0.5f;
+        bs.reel += dt * (sy_tel.ext_bpm ? (float)sy_tel.ext_bpm * 0.1f : (float)proj.par[P_TEMPO]) / 60.0f * 0.5f;
     /* a new tape: the old one slides out, the blob shrugs, the new one slides in */
     if (bs.tape_shown != proj.par[P_STYLE] && bs.tape_anim <= 0.0f) {
         bs.tape_anim = 0.01f;
