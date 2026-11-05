@@ -99,7 +99,7 @@ void sy_punch(int fx, int on)
 const uint8_t SY_PUNCH_KDEF[PU_N][PU_KN] = {
     {8, 15},  /* HALF: how far down (a fourth .. two octaves), smear */
     {8, 8},   /* DOUBLE: how far up (a fourth .. two octaves), window */
-    {15, 8},  /* STOP: how long (a scratch-stop .. a power-down), the brake's curve */
+    {9, 8},   /* STOP: how long (a scratch-stop .. a turntable left to stop, ~3 s), the brake's curve */
     {8, 4},   /* REVERSE: slice, soft seams */
     {8, 8},   /* REPEAT: the roll's length (1/32 .. 1/2), its pitch (down .. up an octave) */
     {8, 8},   /* STUTTER: the same */
@@ -407,6 +407,10 @@ static float bend_c, mod_amt;
  * until it has been calm for a while. The FM-1 crackles otherwise. */
 static int vcap = SY_NVOICE, vcap_sound = SY_NVOICE;   /* (the guard's; what this sound allows) */
 static uint32_t load_hot, load_calm;
+/* ...and before it: the last block's load and how many voices made it, so a chord starts only as many voices
+ * as there is room for (six at once used to run a block late before the guard could act) */
+static int load_pct, load_voices = SY_NVOICE;
+static float voice_cost = 6.6f;                         /* (this sound's, % of a block a voice: render_voices) */
 static int voice_oldest(int released_only)
 {
     int i, best = -1;
@@ -440,6 +444,8 @@ static void voice_shed(void)                           /* the oldest let go (or 
 void sy_load(int pct)
 {
     const int sounding = voices_kept();
+    load_pct = pct;
+    load_voices = sounding;
     if (pct >= 88) {
         load_calm = 0;
         if (++load_hot >= 2u && sounding > 2) {       /* two in a row: one voice goes, quickly */
@@ -465,10 +471,17 @@ static int voice_find(int note)
             return i;
     for (i = 0; i < SY_NVOICE; i++)
         sounding += vc[i].stage != ST_OFF;
-    if (sounding < (vcap < vcap_sound ? vcap : vcap_sound))
-        for (i = 0; i < SY_NVOICE; i++)
-            if (vc[i].stage == ST_OFF)
-                return i;
+    {
+        int cap = vcap < vcap_sound ? vcap : vcap_sound;
+        if (load_pct > 0) {                             /* (the room the last block left: no more than fits) */
+            const int fits = load_voices + (int)((90.0f - (float)load_pct) / voice_cost);
+            cap = fits < cap ? (fits < 1 ? 1 : fits) : cap;
+        }
+        if (sounding < cap)
+            for (i = 0; i < SY_NVOICE; i++)
+                if (vc[i].stage == ST_OFF)
+                    return i;
+    }
     for (i = 0; i < SY_NVOICE; i++)                    /* the oldest one let go */
         if (!vc[i].gate && vc[i].stage != ST_OFF && vc[i].age < oldest) {
             oldest = vc[i].age;
@@ -1138,6 +1151,7 @@ static void render_voices(float *ol, float *or_, uint32_t n, const mods_t *mods)
         const float cost = 6.6f + (shadow_on ? 2.2f : 0.0f) + (drive > 0.0f ? 1.5f : 0.0f) + (ftype != FT_LOW ? 2.0f : 0.0f) + (ftype == FT_VOWEL ? 1.0f : 0.0f) +
                            (scan ? 2.2f : 0.0f);
         vcap_sound = (int)((52.0f - fx_cost()) / cost);   /* (room left for the drums, the bass, the effects) */
+        voice_cost = cost;
         vcap_sound = vcap_sound < 3 ? 3 : vcap_sound > SY_NVOICE ? SY_NVOICE : vcap_sound;
         if (voices_kept() > vcap_sound)
             voice_shed();
@@ -1959,10 +1973,19 @@ static inline void pu_read(float *l, float *r)
         }
         {
             /* (its speed and loudness, set once a chunk, stepped across it: see punch_chunk) */
+            /* (a long one, a turntable left to stop: the buffer keeps filling while the head falls behind; full,
+             * it stops filling and the head plays on through what it kept, slower and slower) */
             const float v = pu_stop_v;
             pu_stop_v = mm_maxf(v + pc_stop_dv, 0.0f);
             pu_spin = 0.0f;
-            pu_head[0] = mm_minf(pu_head[0] + hr_step * (1.0f - v), (float)PU_LEN - 4.0f);
+            if (!pu_frozen) {
+                pu_head[0] += hr_step * (1.0f - v);
+                if (pu_head[0] > (float)PU_LEN - 24.0f)
+                    pu_frozen = 1;
+            } else if ((pu_head[0] -= hr_step * v) < 4.0f) {
+                pu_head[0] = 4.0f;                      /* (caught up with where it stopped filling: quiet) */
+                pc_stop_a = pc_stop_da = 0.0f;
+            }
             a = pc_stop_a;
             pc_stop_a = mm_maxf(a + pc_stop_da, 0.0f);
             *l = pu_at(0, pu_head[0]) * a;
@@ -2147,8 +2170,10 @@ static void pu_rates(void)
         pc_twist_inc = 1.0f / (pu_beat() * 0.5f * SY_SR);
         if (pu_cur == PU_STOP && !(md & PM_TWIST)) {   /* STOP: its speed now and in 16 samples (the curve, knob 2) */
             const float c = pke(PU_STOP, 1, 8.0f, 4.0f), drag = c / (c + 1.0f);
-            const float T = mm_minf(mm_minf(pu_beat(), 0.7f) * (0.15f + 0.85f * pkf(PU_STOP, 0)), 7800.0f / (0.5f * SY_SR * drag)) *
-                            SY_SR * ((md & PM_MORE) ? 0.22f : 1.0f);   /* (knob 1: how long; inside the buffer however long) */
+            /* knob 1: how long, a tenth of a second (a scratch-stop) .. ~3 s (a turntable's stop button, left to
+             * run down); as long as the buffer can feed it (a curve that holds on longer needs more) */
+            const float T = mm_minf(0.1f * mm_exp2f((float)pu_k[PU_STOP][0] / 3.0f), 1.45f / drag) *
+                            SY_SR * ((md & PM_MORE) ? 0.22f : 1.0f);
             const float v0 = mm_powf(mm_maxf(1.0f - pu_t / T, 0.0f), c), v1 = mm_powf(mm_maxf(1.0f - (pu_t + 16.0f) / T, 0.0f), c);
             pu_stop_v = v0;
             pc_stop_dv = (v1 - v0) * (1.0f / 16.0f);

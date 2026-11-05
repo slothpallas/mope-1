@@ -21,8 +21,10 @@ enum {
     PC_COOLW, PC_WARMW, PC_WARMW2, PC_N
 };
 /* (the dark blues are kept deep for contrast with the lit blob: under 60, 0.6 of what they were; under 80, 0.85) */
+/* (the darkest ones on the panel's 5-6-5 steps: green has finer steps than blue, so a dark blue with green near
+ * it rounds to teal. They are picked so blue stays on top: BG0 0,4,8; BG1 8,8,16; BG2 and the cold wall 8,12,24) */
 static const uint16_t PX_PAL[PC_N] = {
-    RGB(5, 6, 10), RGB(9, 11, 16), RGB(14, 17, 23), RGB(58, 74, 92), RGB(93, 113, 134), RGB(20, 23, 31),
+    RGB(5, 6, 12), RGB(9, 10, 18), RGB(12, 14, 26), RGB(58, 74, 92), RGB(93, 113, 134), RGB(20, 23, 31),
     RGB(70, 82, 102), RGB(52, 76, 88), RGB(84, 118, 130), RGB(126, 160, 168), RGB(178, 204, 204),
     RGB(217, 214, 199), RGB(12, 13, 17), RGB(111, 183, 224), RGB(168, 220, 245), RGB(43, 29, 37),
     RGB(140, 74, 90), RGB(224, 145, 58), RGB(122, 79, 36), RGB(224, 69, 42), RGB(245, 197, 66),
@@ -32,7 +34,7 @@ static const uint16_t PX_PAL[PC_N] = {
     RGB(18, 23, 32),
     RGB(17, 24, 32), RGB(68, 98, 110), RGB(226, 240, 236), RGB(150, 150, 142), RGB(20, 26, 35),
     RGB(20, 20, 23), RGB(78, 76, 86), RGB(84, 50, 32),
-    RGB(12, 16, 23), RGB(28, 22, 26), RGB(56, 39, 40),
+    RGB(12, 13, 26), RGB(28, 22, 26), RGB(56, 39, 40),
 };
 static uint16_t px_pal_sw[PC_N];                    /* byte-swapped for the panel */
 
