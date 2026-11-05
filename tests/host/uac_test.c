@@ -12,7 +12,6 @@
 #define RING_PUBLISH() __asm__ volatile("" ::: "memory")
 #define FELUCCA_UAC 1
 static void fm1_delay_ms(uint32_t ms) { (void)ms; }
-static volatile uint32_t fm1_ms;  /* (main.c's: real-time MIDI is stamped with it) */
 #include "usb.c"
 
 static int16_t outL[44100 * 40];
