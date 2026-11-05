@@ -48,7 +48,7 @@ static const uint8_t PAGE_SEEN_BIT[NPAGES] = {0, 0, 0, 0, 32, 0, 16, 8, 0, 0, 0,
 /* the knobs' names, under their meters in the schematic */
 static const char *const PAGE_LABEL[NPAGES][4] = {
     {"WAVE", "POS", "DTUN", "SUB"}, {"CUT", "RES", "TYPE", "DRIV"}, {"ATK", "DEC", "SUS", "REL"},
-    {"RATE", "DPTH", "SHPE", "DEST"}, {"DLY", "TIME", "FDBK", "DARK"}, {"VERB", "SIZE", "TONE", "ROOM"},
+    {"RATE", "DPTH", "SHPE", "DEST"}, {"DLY", "TIME", "FDBK", "DARK"}, {"VERB", "SIZE", "TONE", "RAIN"},
     {"STYL", "BPM", "SWNG", "HUMN"}, {"MOVE", "SET", "", ""}, {"BPM", "VOX", "DRUM", "BASS"},
     {"MODE", "RATE", "OCT", "GATE"}, {"STEP", "NOTE", "LEN", "BARS"},
     {"WAVE", "TUNE", "MEET", "LVL"}, {"ATK", "DEC", "WAVE", "EYES"}, {"RATE", "DPTH", "SHPE", "DEST"},

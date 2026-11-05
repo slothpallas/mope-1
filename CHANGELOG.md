@@ -4,6 +4,54 @@ A release is a push to `main` that changes `VERSION` to a version with no tag ye
 release build, tags the commit `vX.Y.Z` and publishes the GitHub Release with that version's notes,
 taken from its section below. Add the section in the same pull request as the `VERSION` change.
 
+## 0.4.0
+
+Punches, more effects, presets of your own, a band that keeps time with others, and a sequencer you
+can perform with.
+
+- **Punches.** Hold **SEL** (or press it twice to keep them) and the black keys punch the whole sound
+  while held: half speed, double speed, a tape stop, reverse, repeats, a stutter, a gate, grains, a
+  crush, a closing filter, a frozen wash and a warped record. With the band playing they land on the
+  step. The two white keys beside a held punch light up: the left one makes it stronger, the right one
+  twists it. Each punch has two knobs, shown as big named dials at the bottom of the screen, and the
+  blob acts each one out (flat on the floor, up at the ceiling, greying to a stop, mirrored...).
+- **FX goes round four effect pages:** walls (reverb, size, tone, rain), tears (the delay), copies (the
+  chorus: rate, depth, width) and dust (tape, crackle, dust, fry).
+- **A richer delay.** Its time follows the band's tempo (sixteenths, triplets, eighths, dotted eighths,
+  the beat, dotted quarters). Every echo wears a little more, like tape: it saturates, more with more
+  feedback, and the time wanders and flutters (Tape: much more). Dark past halfway smears the echoes
+  into a cloud. Presets with a delay keep their sound but their echo now snaps to the tempo.
+- **Your own presets.** Tap **SAVE**: SAVE AS opens with a sad name (DAMP MONDAY) in your first empty
+  place of sixteen. Type over it in the web player, or spell it with the knobs (knob 1 the cursor,
+  knob 2 the letter, knob 3 another name, knob 4 the place); SAVE again keeps it, any other button
+  doesn't. Your presets come after the factory ones on PRESETS.
+- **16 new presets, 54 in all:** aggressive basses (Rage quit, Passive aggressive, Overdraft, Landlord,
+  Burnout), screaming leads (Scream into pillow, Noise complaint, All caps, Reply all), a new kind, VOX,
+  sung by a vowel filter (Choir of one, Humming alone, Aah well, Says nothing), and more. All measured
+  on the FM-1 to one loudness.
+- **A vowel filter:** the Eyes page's sixth kind; Cutoff moves it from A to U.
+- **Table 0 is PLAIN:** a sine, then a square in the middle, then a saw at the end.
+- **The LFOs go further:** across the wavetables, to the detune, and to each effect.
+- **One tempo for every beat,** on the mixer and the tape deck. Tap **HOME** in time on either to set
+  it; the number shows big for a moment.
+- **MIDI.** Settings → Clock: its own tempo, follow an incoming clock (and Start / Stop), or lead (it
+  sends clock). Settings → MIDI out: the keys, plus the arpeggiator and the loop, plus the bass and the
+  drums on channel 10. The sustain pedal works, and aftertouch does what Settings → Aftertouch says.
+- **The sequencer.** Four patterns on the SEQ screen's first black keys, switching on the next bar
+  while the band plays; mutes for the drums, the bass and the loop on the next three. The roll fits
+  your notes, and the cursor edits single notes.
+- **Settings** is a page of its own (GLO again): a list of rows on the whole screen.
+- **The screen:** captions in their own band at the top, never on the blob; the cassette counts the
+  beats on its label; the Sigh page draws the wave a note starts on and where its sweep takes it.
+- **The web player** plays like a DAW from the computer's keys (A S D F... the white keys, W E R... the
+  black ones, Z / X an octave), the letters drawn on the keys, the buttons on the number row. On the
+  front page it is wider.
+- **Faster where it counts:** the clocks no longer redo the tempo's maths every sample, and the gate
+  punch no longer costs a tenth of the chip (it had been running the tape buffer it doesn't use). Heavy
+  punches leave fewer voices free so the audio never runs late.
+- **Fixes:** no hanging notes when the band's notes and yours overlap; the loop stays steady through
+  tempo changes; the balloon at level 10 is gone (it crowded the screen).
+
 ## 0.3.0
 
 More sound from the same blob: a second oscillator, more filters, a second envelope and a second LFO,

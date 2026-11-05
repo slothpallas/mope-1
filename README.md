@@ -44,9 +44,10 @@ through X0X, FoMni and FiMba-1, the firmware MOPE-1 started from.
 
 | | | | |
 | --- | --- | --- | --- |
-| ![](docs/img/02b_env_schematic.png) envelope | ![](docs/img/02c_lfo_schematic.png) LFO | ![](docs/img/04_lasers.png) resonance | ![](docs/img/05_tears_chorus.png) delay + chorus |
+| ![](docs/img/02b_env_schematic.png) envelope | ![](docs/img/02c_lfo_schematic.png) LFO | ![](docs/img/04_lasers.png) resonance | ![](docs/img/05_tears_chorus.png) chorus (copies) |
 | ![](docs/img/04b_preset_card.png) a preset's card | ![](docs/img/08_deep_fried.png) fry | ![](docs/img/09_drums.png) drums | ![](docs/img/12b_blob_alone.png) the blob alone |
 | ![](docs/img/10b_mixer.png) mixer | ![](docs/img/10c_arp.png) arpeggiator | ![](docs/img/07_void.png) the void | ![](docs/img/13_asleep.png) asleep |
+| ![](docs/img/14_punch.png) a punch (SEL) | ![](docs/img/15_punch_knobs.png) its knobs | ![](docs/img/16_save_as.png) save as | ![](docs/img/17_seq.png) the sequencer |
 
 ## The look
 
@@ -58,7 +59,7 @@ through X0X, FoMni and FiMba-1, the firmware MOPE-1 started from.
 
 ## Controls
 
-Press or hold a part's button: its schematic opens in a dark glass drawer over the bottom of the screen and the four knobs turn that part, each knob's name over its meter (the one you turn lights up). The drawer stays until 3 seconds after your last touch, then slides away, but **the page stays**: its button stays lit and the knobs still turn that part (turning one brings the drawer back). **HOME** goes back to the Body. **Some parts have a second page:** press the button again while its page shows (HOME: Shadow, ENV: Sigh, LFO: Tremble, GLO: Setup, SEQ: Tape deck). Until you've found one, the caption nudges you (AGAIN: SHADOW.). **Press a part's button twice quickly and its drawer stays open** (switch pages with the other buttons) until you press **HOME**. OCT+ or OCT− is lit while the keyboard is shifted up or down. The blob stays big and shows faintly through the glass. The drawer is drawn in the room's cold colours, like the drum grid.
+Press or hold a part's button: its schematic opens in a dark glass drawer over the bottom of the screen and the four knobs turn that part, each knob's name over its meter (the one you turn lights up). The drawer stays until 3 seconds after your last touch, then slides away, but **the page stays**: its button stays lit and the knobs still turn that part (turning one brings the drawer back). **HOME** goes back to the Body. **Some parts have a second page:** press the button again while its page shows (HOME: Shadow, ENV: Sigh, LFO: Tremble, GLO: Setup, SEQ: Tape deck; FX goes round four: Walls, Tears, Copies, Dust). Until you've found one, the caption nudges you (AGAIN: SHADOW.). **Press a part's button twice quickly and its drawer stays open** (switch pages with the other buttons) until you press **HOME**. OCT+ or OCT− is lit while the keyboard is shifted up or down. The blob stays big and shows faintly through the glass. The drawer is drawn in the room's cold colours, like the drum grid.
 
 | Page | Its schematic |
 | --- | --- |
@@ -66,33 +67,37 @@ Press or hold a part's button: its schematic opens in a dark glass drawer over t
 | Eyes | the filter's curve for its kind (low, band, high, notch, or the comb's teeth) and its resonance peak, the cutoff marked, and where the note's envelope opens it now (red) |
 | Mouth | the ADSR, a red dot riding it where the loudest note is |
 | Vibe | the LFO's wave (more cycles: faster), a red dot at its phase, where it goes |
-| Tears | the delay's taps, ping (blue) and pong (coral), each smaller; the chorus as a wobbling ribbon |
-| Walls | the reverb's tail (its length: Size), tape's wobble on it, the fry's transfer curve |
+| Walls | the reverb's tail (its length: Size, its colour: Tone), the rain |
+| Tears | the delay's taps, ping (blue) and pong (coral), each smaller and spaced in the tempo |
+| Copies | the chorus as wobbling ribbons, as wide as Width |
+| Dust | an old record: tape's wobble, crackle, dust, the fry's transfer curve |
+| Punch | the keyboard, each black key with its punch's symbol; the whites beside a held punch lit |
+| Save as | the name with its cursor, your sixteen places (filled lit, the chosen one outlined) |
 | Tape deck | the drum grid as round steps in the room's cold colours (kick pale blue, snare tear-blue, hats rain-grey, bass violet; soft hits dimmer, empty steps rings), the fill on the fourth bar, a pale glint for the playhead |
-| Mixer | four channel strips: each a fader and a live meter (voice, drums, bass, gunk) |
+| Mixer | the tempo, and three channel strips: each a fader and a live meter (voice, drums, bass) |
 | Arp | the next 16 steps as a piano roll, the playing one lit, each as long as the gate |
 | Setup | a note gliding to the next, MIDI out and channel |
 | Shadow | the second wave over the first at its interval, how they meet (mix, FM, ring, sync), the interval in semitones |
-| Sigh | the second envelope's rise and fall, a red dot where the loudest note is; meters for how far it moves the wave (W, up or down the table) and the eyes (E) |
+| Sigh | the second envelope's rise and fall, full width, the wave a note starts on and the one its sweep reaches |
 | Tremble | the second LFO, drawn like Vibe's |
 
 | Button | Part | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 | --- | --- | --- | --- | --- | --- |
 | HOME | Body | Table | Position | Detune | Sub |
 | HOME again | Shadow | Its table | Tune (semitones, ±24) | Meets (mix, FM, ring, sync) | Level (0: off) |
-| EDIT | Eyes | Cutoff | Resonance | Kind (low, band, high, notch, comb) | Drive |
+| EDIT | Eyes | Cutoff | Resonance | Kind (low, band, high, notch, comb, vowel) | Drive |
 | ENV | Mouth | Attack | Decay | Sustain | Release |
 | ENV again | Sigh | Its attack (0: the mouth's) | Its decay | Wave (how far it sweeps the table, either way) | Eyes (how far it opens the filter) |
-| LFO | Vibe | Rate | Depth | Shape (sway, bob, bounce, nod, twitch, heave, wander, stagger, throb) | Destination (shape, eyes, voice, volume, shadow) |
+| LFO | Vibe | Rate | Depth | Shape (sway, bob, bounce, nod, twitch, heave, wander, stagger, throb) | Destination (position, eyes, voice, volume, shadow, across the tables, detune, walls, tears, copies, dust) |
 | LFO again | Tremble | Rate | Depth | Shape | Destination |
 | FX | Walls | Reverb | Size | Tone | Rain |
 | FX again | Tears | Delay | Time (in the tempo: sixteenths, triplets, eighths, slow triplets, dotted eighths, the beat, dotted quarters) | Feedback (each echo more worn, like tape) | Dark (past halfway: each echo smeared into a cloud) |
 | FX again | Copies | Chorus | Rate | Depth | Width |
 | FX again | Dust | Tape | Crackle | Dust | Fry |
 | SEL | Punch | Held (or pressed twice): the last punch's first knob | Its second knob | | |
-| SEQ | Loop | Note | Length | Velocity (of the chosen step, or the whole loop) | Bars (1, 2, 4) |
+| SEQ | Loop | Step (the cursor, along the bars) | Note (under the cursor) | Length (of that note) | Bars (1, 2, 4) |
 | SEQ again | Tape deck | Style | Tempo | Swing | Human (looser timing and velocity) |
-| GLO | Mixer | Voice | Drums | Bass (0: no bass) | Gunk |
+| GLO | Mixer | Tempo (one for every beat) | Voice | Drums | Bass (0: no bass) |
 | GLO again | Setup | Row (a list, full screen: Voices, Glide, Tempo, Room, Room level, Auto bass, Bass way, MIDI in, MIDI out, Clock, Aftertouch, Tune) | Its value | | |
 | ARP | Arp | Mode (up, down, up and down, wander, stab) | Rate (1/4 .. 1/32, triplets) | Octaves (1-3) | Gate |
 
@@ -112,27 +117,29 @@ As on X0X, Melodee and JIANT FM: **PLAY**, **REC** and **SEQ** do what they say.
 - **REC while stopped**: a one-bar count-in (four red lights, a click on each beat), then the band starts and what you play is recorded into the loop (1, 2 or 4 bars; the Loop page's Bars). Notes snap to the 1/16 grid; the tape deck's Human puts some looseness back. The arpeggiator's notes are recorded too.
 - **REC while playing**: it records at once, on top of what's there (overdub). **REC** again stops recording; the loop keeps playing with the band.
 - **HOME + REC** undoes the last take. **SAVE + REC** clears the loop.
-- **SEQ** (press it twice to keep it open): the loop as a piano roll, and while it is open the **16 white keys are the steps** of one bar (not while recording: then they play). Press a step to **choose** it and hear it; an empty step gets the last note you played. Turn **NOTE, LEN, VEL** to edit the chosen step. **Tap** a step without turning a knob to remove its notes. With no step chosen (the drawer says ALL) the knobs edit the **whole loop**: transpose it, make it longer or shorter, louder or softer. **OCT− / OCT+** go to the other bars.
+- **SEQ**: the loop as a piano roll on the whole screen, with a cursor. While it is open the **16 white keys are the steps** of the bar on show (not while recording: then they play). Press a step: the cursor goes there, on its nearest note (you hear it). Press the cursor's step again: its note goes, or one comes (the last note you played). **Knob 1** moves the cursor along the steps, **knob 2** its note up or down, **knob 3** that note's length, **knob 4** the bars. **OCT− / OCT+** go to the other bars.
 - **Patterns:** four loops, saved with your sound (up to 150 notes each). On the SEQ screen the first four **black keys** (F#3, G#3, A#3, C#4) pick one: lit is playing, blinking is waiting. With the band playing it comes in on the next bar, from its first bar; stopped, at once. Each keeps its own length.
 - **Mutes:** on the SEQ screen the next three black keys (F#4, G#4, A#4) silence the **drums**, the **bass** and the **loop** (lit: playing). The steps keep going; unmuted, it is back on the next hit. Not saved.
 - The roll fits itself to your notes (fewer notes: taller rows). Turning a knob shows only that knob and its value (the step, the note, the length, the bars); untouched, the bottom line shows the mutes.
 - Changing the drum style while playing also waits for the bar.
-- REC used to be "hold"; that's gone.
 - **OCT− / OCT+**: octave. The 27 keys play F3 to G5.
-- **SAVE**: saves (it also saves by itself when quiet). Hold for 1.5 s, then press SAVE again, to reset everything. The blob keeps its level.
+- **SAVE** (tapped): SAVE AS, to keep the sound as a preset of yours (below). Everything else saves by itself when quiet. Hold SAVE for 1.5 s, then press it again, to reset everything; the blob keeps its level.
 - The lowest and highest keys together: it gives up.
 
-**Presets** (38, in six kinds; the card shows the kind):
-- **Pad:** Monday, 3AM, Rain again, Church of nothing, Sunday scaries, Seen 2:14, Weighted blanket, The void stares, Slow heart
-- **Keys:** Left on read, Hold music, Open plan, Music box, Glass office, Elevator
-- **Pluck:** NPC, Read receipt, Bubble wrap, Typing..., Icicle
-- **Lead:** Main character, Low battery, Deep fried, Cry on the floor, Bent out of shape, Drama
-- **Bass** (an octave down): Sub-par, Bottom text, Doomscroll, Basement, Hollow inside, Underslept
+**Presets** (54, in seven kinds; the card shows the kind):
+- **Pad:** Monday, 3AM, Rain again, Church of nothing, Sunday scaries, Seen 2:14, Weighted blanket, The void stares, Slow heart, Tide goes out
+- **Keys:** Left on read, Hold music, Open plan, Music box, Glass office, Elevator, Worn tape
+- **Pluck:** NPC, Read receipt, Bubble wrap, Typing..., Icicle, Second guessing
+- **Lead:** Main character, Low battery, Deep fried, Cry on the floor, Bent out of shape, Drama, Scream into pillow, Noise complaint, All caps, Reply all
+- **Bass** (an octave down): Sub-par, Bottom text, Doomscroll, Basement, Hollow inside, Underslept, Rage quit, Passive aggressive, Overdraft, Landlord, Burnout
 - **FX:** Tinnitus, Dial tone, Ghosted, Heavy breathing, Broken record, Phantom vibrate
+- **VOX** (the vowel filter): Choir of one, Humming alone, Aah well, Says nothing
+
+**Your presets:** tap **SAVE** and SAVE AS opens in the drawer, with a sad name (DAMP MONDAY) in your first empty place of sixteen (or the place of the preset of yours that is playing). **Knob 1** moves the cursor, **knob 2** changes its letter, **knob 3** gives another name, **knob 4** (or PRESETS) picks the place; the header says EMPTY or whose place it was. In the web player, type the name (the first letter replaces the offered one; Enter keeps, Esc doesn't). **SAVE** again keeps it; any other button leaves it. A preset of yours keeps the sound (not the mixer, the tempo, the band or MIDI) and comes after the factory ones on PRESETS.
 
 **Drum styles:** each named after its genre, sadly: Grief drill, Empty city pop, Gloom gabber, Missed phonk call, Jersey cry club, Heartbreakcore, Amapia-no, Cold footwork, Dembow out, Vaporweep, Hyperflop, Funeral bossa, Office ambivalent. Each style has a main bar, a fill every fourth bar, its own tempo and swing, and a synthesized kit (no samples). In Amapia-no the bass is a log drum.
 
-**Gunk** is the room's texture: rain on the window, a record's crackle, a low rumble. It swells when nothing plays and steps back when something does, and the rain on the window follows it.
+**Gunk** (the Walls page's Rain) is the room's texture: rain on the window, a record's crackle, a low rumble. It swells when nothing plays and steps back when something does, and the rain on the window follows it.
 
 **The bass is always sad:** the auto-bass plays natural minor. Hold something that sounds major (or one note) and it plays the relative minor, a minor third down: hold C and it plays A minor, every note of which is also in C major. Hold a minor chord and it plays that minor. Any note in a pattern outside the minor scale is pulled onto it.
 
@@ -160,29 +167,36 @@ deeper, or nothing.
 | Lead | it sends clock (24 a beat) all the time, and Start / Stop with PLAY |
 
 **Levels:** every note is XP. Levels change nothing, but the captions say so ("LEVEL UP. NOTHING
-CHANGED."). Level 10 gives it a balloon, mostly deflated.
+CHANGED.").
 
 ## The sound
 
-- **16 wavetables:** Sigh, Moan, Pulse, Crush, Warble, Fold, Church, Sync, Glass, Breath, Cry, Hollow,
+- **16 wavetables:** Plain (a sine, then a square, then a saw), Moan, Pulse, Crush, Warble, Fold, Church, Sync, Glass, Breath, Cry, Hollow,
   Bend, Toy, Ice, Sag. Each has 8 frames, built at
   boot from harmonic recipes, so they take no flash space. Each frame is mipmapped at five sizes, so
   high notes don't alias (the test checks C7 on Sync: aliases at −68 dB).
 - **6 voices:** two detuned oscillators panned apart, a sine sub, slow analog drift, a resonant
-  filter (Simper's SVF: low, band, high or notch; or a comb) with key tracking and drive, an amp ADSR
+  filter (Simper's SVF: low, band, high or notch; a comb; or a vowel filter, two formants from A to U) with key tracking and drive, an amp ADSR
   and a mod envelope (its own attack) on the cutoff and the wavetable's position. A stolen voice
   restarts from its current level, so stealing doesn't click.
 - **The shadow:** a second oscillator per voice, its own table, ±24 semitones away, mixed in, frequency
   modulating the first, ring modulating it or synced to it.
 - **Two LFOs** with 9 shapes (sine, triangle, square, saw down, random, saw up, smooth random, four steps,
-  a heartbeat) and 5 destinations (the position, the cutoff, the pitch, the volume, the shadow).
+  a heartbeat) and 11 destinations (the position, the cutoff, the pitch, the volume, the shadow, across
+  the tables (crossfading two), the detune, and each effect: walls, tears, copies, dust).
 - **It keeps up:** on the FM-1 a heavy sound (the shadow, drive, a band-pass) plays fewer voices so
   the audio never runs late, and if a moment still runs hot it lets the oldest voice go quickly.
 - **Presets at one level:** each preset carries a trim measured on the FM-1, so switching doesn't jump.
-- **Effects:** fry (drive, then bitcrush and sample-rate crush), a three-tap chorus, the tears (a
-  ping-pong delay: every echo crosses the room darker and thinner, its time wobbling with Tape), the
-  room (a reverb of eight walls handing sound to each other, four of them breathing; Size goes from a
-  one-second closet to a half-minute void), tape (wow, flutter, saturation, a darker top) and a limiter.
+- **Effects:** fry (drive, then bitcrush and sample-rate crush), a three-tap chorus (rate, depth,
+  width), the tears (a ping-pong delay in the band's tempo: every echo crosses the room darker, thinner
+  and more worn, saturating like tape, its time wandering and fluttering; Dark past halfway smears the
+  echoes through all-passes), the room (a reverb of eight walls handing sound to each other, four of
+  them breathing; Size goes from a one-second closet to a half-minute void; Tone), dust (vinyl crackle
+  and hiss, a narrowing band), tape (wow, flutter, saturation, a darker top) and a limiter.
+- **Punches:** twelve effects on the whole mix while a key is held. Six play from a 371 ms buffer of
+  the mix (half and double speed, a tape stop, reverse, repeats, grains), one at a time; the others
+  (gate, crush, sweep, wash, wobble) stack on top. Each costs the chip only while held, and heavy ones
+  leave fewer voices free.
 - **Fry is level-matched:** more fry is more grit, not more loud (full fry stays within about 2 dB of clean), and it glides, so a preset change doesn't slam it in.
 - **Drums:** synthesized kick (808 to gabber), snare, clap, closed and open hats, perc (rim, cowbell,
   log drum, squeak), a sliding 808 bass and record crackle. They run sample-accurate with swing.
@@ -202,9 +216,12 @@ It runs the engine tests and writes the demo WAVs, then the app scenario (screen
 web/play/build.sh && node tools/serve_play.mjs
 ```
 
-Then open <http://localhost:8137>, or open `build/play/MOPE-1.html` straight from disk. Computer keys:
-`Q`–`I` and `A`–`K` play the white keys and `1`–`0`, `-` the black ones. `Space` is PLAY, `Enter` REC,
-`B` ARP, `Esc` HOME, `Z` `X` the octave. `↑` `↓` turn ALGORITHM (the wavetable) and `←` `→` SELECT (the drum tape).
+Then open <http://localhost:8137>, or open `build/play/MOPE-1.html` straight from disk. Computer keys,
+as in a DAW: `A` `S` `D` `F` `G` `H` `J` `K` `L` `;` `'` play the white keys from F3 and `W` `E` `R`
+`Y` `U` `O` `P` `[` the black ones; `Z` `X` move them an octave (the letters are drawn on the keys).
+`1`–`6` are FX SEL ENV LFO EDIT GLO, `7` or `Esc` HOME, `8` SAVE, `9` or `B` ARP, `0` SEQ, `Space`
+PLAY, `Enter` REC, `-` `=` the octave. `↑` `↓` turn ALGORITHM (the wavetable), `←` `→` SELECT (the
+drum tape), `,` `.` PRESETS. While SAVE AS is open the keys type the name.
 To put the player in another page, serve `index.html`, `voice.js` and `mope.wasm` from `build/play/`
 together and frame `index.html`: in a frame it drops its title and installer, and it needs no `data:`
 scripts, only `'wasm-unsafe-eval'` if the page has a content security policy.
