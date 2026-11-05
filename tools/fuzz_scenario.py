@@ -54,8 +54,15 @@ def main():
                 out.append(f"midi {0xB0 | ch:02x} {r.randint(0, 127):02x} {r.randint(0, 127):02x}")
             elif t < 0.88:
                 out.append(f"midi {0xC0 | ch:02x} {r.randint(0, 127):02x} 00")
-            elif t < 0.95:
+            elif t < 0.92:
                 out.append(f"midi {0xE0 | ch:02x} {r.randint(0, 127):02x} {r.randint(0, 127):02x}")
+            elif t < 0.95:                                 # the clock: in at any tempo, Start / Continue / Stop
+                out.append(r.choice([f"clockin {r.choice([0, 0, 40, 90, 126, 174, 300, r.randint(20, 400)])}",
+                                     "midi fa 00 00", "midi fb 00 00", "midi fc 00 00", "midi f8 00 00"]))
+            elif t < 0.98:                                 # the pedal, aftertouch (channel, key)
+                out.append(r.choice([f"midi {0xB0 | ch:02x} 40 {r.choice([0, 127, r.randint(0, 127)]):02x}",
+                                     f"midi {0xD0 | ch:02x} {r.randint(0, 127):02x} 00",
+                                     f"midi {0xA0 | ch:02x} {r.randint(0, 127):02x} {r.randint(0, 127):02x}"]))
             else:
                 out.append(f"midi b0 68 {r.choice([0, 127]):02x}")
         elif x < 0.83:
