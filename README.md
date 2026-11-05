@@ -39,7 +39,7 @@ through X0X, FoMni and FiMba-1, the firmware MOPE-1 started from.
 | **Fry** | It gets deep-fried in burnt patches: brown, crusty, sweating, then steaming. |
 | **Volume** | Its dirty orange aura. |
 | **Clipping** | It catches fire and looks calm (this is fine). |
-| **The drums** | A smoky see-through cassette in the top-left corner, the tape winding between its spools, the style on its label, its reels turning at the tempo. Kicks squash the blob and make the light flinch, snares make it blink, hats are rain on the window. Gabber makes it shake. |
+| **The drums** | A smoky see-through cassette in the top-left corner, the tape winding between its spools, the style on its label, its reels turning at the tempo. The label's stripe counts the bar's four beats (the one now lit) and a white mark runs along the tape through the bar. Kicks squash the blob and make the light flinch, snares make it blink, hats are rain on the window. Gabber makes it shake. |
 | **Nothing** | Its mouth rests at meh. It falls asleep; much later it wakes up and stares at you. |
 
 | | | | |
@@ -97,7 +97,9 @@ Press or hold a part's button: its schematic opens in a dark glass drawer over t
 - **PRESETS** loads a whole saved sound at once: wave, filter, envelope, LFO and effects. Its card opens in the drawer: the name, where it sits in its kind, and thumbnails of the wave, filter and envelope it brought.
 - **SELECT**: the drum tape (the blob swaps the cassette and shrugs).
 - **Close-ups:** while you hold EDIT (Eyes) the view moves in on its eyes; while you hold ENV (Mouth), on its mouth.
-- **Tap tempo:** on the tape deck or the mixer, tap **HOME** in time (two taps or more); the tempo shows a moment. One tap alone is HOME, as always (a moment later).
+- **Tap tempo:** on the tape deck or the mixer, tap **HOME** in time (two taps or more). Turning or tapping the tempo shows its number big at the top for a moment (BPM in blue while it follows a MIDI clock).
+- **Punches (hold FX):** the drawer shows the keyboard, each black key with its punch's symbol: lit while it plays, blinking while it waits for the step; the white key beside a held punch lights when it changes it (left: more, right: twist).
+- **Captions** sit in their own dark band at the top (right of the cassette when it is up), never on the blob. One tap alone is HOME, as always (a moment later).
 - **PLAY**: the band on and off: drums, bass and your loop. **ARP**: tap for the arpeggiator on or off; hold for its page: the keys you hold become its pattern, at the tempo, starting each bar with the drums.
 
 ### Recording a loop

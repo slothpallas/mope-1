@@ -209,6 +209,18 @@ static void px_text(int32_t x, int32_t y, const char *s, uint8_t c)
                     px_pset(x + k, y + r, c);
     }
 }
+/* text twice the size (a number to read across the room) */
+static void px_text2(int32_t x, int32_t y, const char *s, uint8_t c)
+{
+    for (; *s; s++, x += 10) {
+        const uint32_t g = fontd(*s);
+        int r, k;
+        for (r = 0; r < 6; r++)
+            for (k = 0; k < 4; k++)
+                if (g >> ((5 - r) * 4 + (3 - k)) & 1u)
+                    px_rect(x + 2 * k, y + 2 * r, 2, 2, c);
+    }
+}
 /* text with a dark outline: readable over anything */
 static void px_text_o(int32_t x, int32_t y, const char *s, uint8_t c, uint8_t o)
 {

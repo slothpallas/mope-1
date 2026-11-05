@@ -273,6 +273,7 @@ static struct {
     uint32_t last_draw;
     uint8_t naming;                    /* SAVE AS open: the knobs (and typing) edit the name, SAVE keeps it */
     uint8_t set_row;                   /* SETTINGS: the row chosen (knob 1 moves, knob 2 sets) */
+    uint32_t tempo_t;                  /* the tempo just changed (turned, tapped, a clock found): its number shows */
     uint8_t mute;                      /* SY_MUTE_*: the drums, the bass, the loop quiet (not saved) */
     int8_t pat_next;                   /* a pattern asked for, waiting for the bar (-1 none) */
     uint8_t tap_n, tap_skip;           /* tap tempo: HOME taps so far (on the tempo pages); a HOME let through */
@@ -553,6 +554,8 @@ static void turn(int role, int k, int32_t e)
     if (!e || k == K_NONE)
         return;
     knob_set(k, proj.par[k] + accel(role, e, p->hi - p->lo));
+    if (k == P_TEMPO)
+        ui.tempo_t = plat_ms() | 1u;                     /* (its number, big, a moment) */
     if (k == P_STYLE) {
         beat_changed();
         return;
@@ -1015,7 +1018,6 @@ static void tap_tempo(void)
         const int k = ui.tap_n - 1 < 3 ? ui.tap_n - 1 : 3;
         uint32_t sum = 0;
         int i, t;
-        static char cap[16];
         for (i = 0; i < k; i++)
             sum += ui.tap_iv[i];
         t = (int)((60000u * (uint32_t)k + sum / 2u) / sum);
@@ -1024,16 +1026,8 @@ static void tap_tempo(void)
             return;
         }
         knob_set(P_TEMPO, t);
-        t = proj.par[P_TEMPO];
-        i = 0;
-        if (t >= 100)
-            cap[i++] = (char)('0' + t / 100);
-        cap[i++] = (char)('0' + t / 10 % 10);
-        cap[i++] = (char)('0' + t % 10);
-        for (const char *q = " BPM"; *q; q++)
-            cap[i++] = *q;
-        cap[i] = 0;
-        ui_caption(cap, 1200u);
+        ui.tempo_t = plat_ms() | 1u;                     /* (the number, big) */
+        ui.cap_until = plat_ms();                        /* (no words over it) */
     }
 }
 
