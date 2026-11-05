@@ -1326,6 +1326,16 @@ void ui_frame(void)
 {
     int c;
     input();
+    {   /* a flood of MIDI filled the engine's queue and some values were lost: all of them again, once there is room */
+        static uint32_t seen;
+        if (sy_tel.dropped != seen && sy_queue_room() > P_NPARAMS + PU_N * PU_KN + 16) {
+            int i;
+            seen = sy_tel.dropped;
+            for (i = 0; i < P_NPARAMS; i++)
+                sy_set(i, proj.par[i]);
+            project_send_knobs();
+        }
+    }
     if (ui.prev_on && (int32_t)(plat_ms() - ui.prev_until) >= 0) {   /* (SEQ's taste of a note: over) */
         sy_note_off(ui.preview);
         ui.prev_on = 0;

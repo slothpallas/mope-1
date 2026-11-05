@@ -1,7 +1,8 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-3.0-only
 # Look for crashes: the host simulator built with the address and undefined-behaviour sanitizers (and
-# float-to-int overflow), driven by random sessions (tools/fuzz_scenario.py). Any report fails it.
+# float-to-int overflow), driven by random sessions (tools/fuzz_scenario.py, and tools/fuzz_punch.py heavy on the
+# punches). Any report fails it.
 #   tests/fuzz.sh [RUNS] [COMMANDS] [FIRST SEED]
 set -e
 cd "$(dirname "$0")/.."
@@ -27,6 +28,20 @@ while [ $s -lt $((FIRST + RUNS)) ]; do
     else
         echo "  FAIL fuzz seed $s: build/fuzz/s$s.log"
         grep -m3 "runtime error\|ERROR: AddressSanitizer\|SUMMARY" build/fuzz/s$s.log | sed 's/^/       /'
+        fail=1
+    fi
+    s=$((s + 1))
+done
+# and as many heavy on the punches (tools/fuzz_punch.py)
+s=$FIRST
+while [ $s -lt $((FIRST + RUNS)) ]; do
+    "$PY" tools/fuzz_punch.py $s "$N" > build/fuzz/p$s.mope
+    if ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=print_stacktrace=1 \
+        build/fuzz/mope_host_san build/fuzz/p$s.mope build/fuzz/pout$s > build/fuzz/p$s.log 2>&1; then
+        echo "  ok   punch fuzz seed $s ($N commands)"
+    else
+        echo "  FAIL punch fuzz seed $s: build/fuzz/p$s.log"
+        grep -m3 "runtime error\|ERROR: AddressSanitizer\|SUMMARY" build/fuzz/p$s.log | sed 's/^/       /'
         fail=1
     fi
     s=$((s + 1))

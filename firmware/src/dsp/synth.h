@@ -140,6 +140,7 @@ enum { PU_HALF, PU_DOUBLE, PU_STOP, PU_REVERSE, PU_REPEAT, PU_STUTTER, PU_GATE, 
        PU_WOBBLE, PU_N };
 /* on: 0 let go; held: 1 + PM_* (the white keys beside its key: MORE, stronger; TWIST, another way) */
 enum { PM_MORE = 1, PM_TWIST = 2 };
+int sy_queue_room(void);                             /* room in the commands' queue (the UI resends after a flood) */
 void sy_punch(int fx, int on);
 /* each punch's two knobs, 0..15, the ones a DJ rides: HALF/DOUBLE how far, STOP how long, a roll's length,
  * the gate's rate, the sweep's length... (K1 the main one, K2 the other) */
