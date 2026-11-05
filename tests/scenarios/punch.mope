@@ -67,6 +67,8 @@ key b4 up
 wait 200
 key b5 down
 wait 140
+# GATE works on the sound as it is: not from the buffer (no half-rate copy), so it stacks with REPEAT
+expect punchbuf -1
 shot 06_gate.png
 wait 70
 shot 06b_gate.png
@@ -75,6 +77,11 @@ wait 300
 expect punchmod6 2
 shot 06c_gate_pattern.png
 key w8 up
+key b4 down
+wait 300
+expect punchbuf 4
+expect punch 80
+key b4 up
 key b5 up
 wait 200
 key b6 down

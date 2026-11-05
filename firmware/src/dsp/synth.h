@@ -164,6 +164,8 @@ void sy_panic(void);
  * GRAIN) play one at a time (the last one held); the others stack on top. */
 enum { PU_HALF, PU_DOUBLE, PU_STOP, PU_REVERSE, PU_REPEAT, PU_STUTTER, PU_GATE, PU_GRAIN, PU_CRUSH, PU_SWEEP, PU_WASH,
        PU_WOBBLE, PU_N };
+/* the ones that play from the buffer (one at a time); the rest (GATE, CRUSH .. WOBBLE) work on the sound as it is */
+#define PU_IS_BUF(fx) ((fx) <= PU_GRAIN && (fx) != PU_GATE)
 /* on: 0 let go; held: 1 + PM_* (the white keys beside its key: MORE, stronger; TWIST, another way) */
 enum { PM_MORE = 1, PM_TWIST = 2 };
 int sy_queue_room(void);                             /* room in the commands' queue (the UI resends after a flood) */
@@ -197,7 +199,7 @@ typedef struct {
     float wave_pos;               /* where in the table it is now, with every modulation, 0..1 */
     float wave_tbl;               /* which table, with the LFOs scanning across them (0..15, between two: both) */
     uint16_t punch;               /* the punches sounding (a bit each, PU_*; still fading out: still set) */
-    int8_t punch_buf;             /* the buffer punch playing (PU_HALF .. PU_GRAIN), -1 none */
+    int8_t punch_buf;             /* the buffer punch playing (PU_IS_BUF), -1 none */
     float punch_wet;              /* how much of it is heard, 0..1 */
     float punch_ph;               /* where in its slice, gate step or stop it is, 0..1 */
     float punch_k;                /* STOP: the speed left; SWEEP: how closed; WASH: how held */
