@@ -349,7 +349,7 @@ static int find_name(const char *const *t, int n, const char *s)
     return -1;
 }
 
-static const uint8_t WHITE_K[16] = {0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26};
+/* (WHITE_K: the app's, ui.c) */
 static const uint8_t BLACK_K[11] = {1, 3, 5, 8, 10, 13, 15, 17, 20, 22, 25};
 static int key_of(const char *s)
 {
@@ -391,6 +391,8 @@ static int expect(const char *what, const char *val)
         got = project_pk(atoi(what + 2) % PU_N, atoi(strchr(what, '_') + 1) % PU_KN);
     else if (!strcmp(what, "latch"))
         got = ui.latch;
+    else if (!strcmp(what, "leds_lit"))           /* the keys lit now (a bit each) */
+        got = (int)lit_keys;
     else if (!strcmp(what, "leds_dim"))           /* the keys lit dim now (a bit each) */
         got = (int)dim_keys;
     else if (!strcmp(what, "kicks"))

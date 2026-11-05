@@ -766,12 +766,12 @@ static void stop(int n)
     note_out(0, n, 0);
 }
 
+static const uint8_t WHITE_K[16] = {0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26};   /* (the white keys, F3 up) */
 static int white_of(int k)
 {
-    static const uint8_t W[16] = {0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26};
     int i;
     for (i = 0; i < 16; i++)
-        if (W[i] == k)
+        if (WHITE_K[i] == k)
             return i;
     return -1;
 }
@@ -1276,6 +1276,18 @@ static void leds(void)
                 dim |= 1u << k;
             if (ui.punched >> k & 1u)
                 dim |= (k > 0 ? 1u << (k - 1) : 0u) | (k < NKEYS - 1 ? 1u << (k + 1) : 0u);
+        }
+    }
+    if (step_mode()) {   /* SEQ: the cursor's step lit (where a tap lands), the bar's steps with notes dim */
+        int i, n;
+        const sy_ev_t *ev = sy_loop_events(&n);
+        for (i = 0; i < n; i++)
+            if (ev[i].t / 192 == ui.loop_bar)
+                dim |= 1u << WHITE_K[ev[i].t / 12 % 16];
+        if (ui.cur_step / 16 == ui.loop_bar) {
+            const uint32_t at = 1u << WHITE_K[ui.cur_step % 16];
+            plat_leds(b, ui.keys | at, dim & ~at);
+            return;
         }
     }
     plat_leds(b, ui.keys | ui.punched, dim & ~ui.punched);
