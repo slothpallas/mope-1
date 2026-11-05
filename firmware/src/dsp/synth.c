@@ -46,7 +46,7 @@ volatile sy_tel_t sy_tel;
 
 /* ----------------------------------------------------------- commands --- */
 enum { C_SET, C_ON, C_OFF, C_BEND, C_MOD, C_DRUMS, C_ARP, C_PANIC, C_REC, C_LUNDO, C_LCLEAR, C_LSTEP, C_LNUDGE, C_LLOAD, C_LSEL,
-       C_PUNCH, C_PUNCHK };
+       C_PUNCH, C_PUNCHK, C_LNOTE, C_LLEN };
 typedef struct {
     uint8_t c;
     int16_t a, b;
@@ -81,6 +81,8 @@ void sy_loop_clear(void) { post(C_LCLEAR, 0, 0); }
 void sy_loop_step(int step, int note) { post(C_LSTEP, step, clampi(note, 0, 127)); }
 void sy_loop_nudge(int field, int delta) { post(C_LNUDGE, field, delta); }
 void sy_loop_select(int step) { post(C_LSEL, step, 0); }
+void sy_loop_note(int step, int note) { post(C_LNOTE, step, clampi(note, 0, 127)); }
+void sy_loop_len(int step, int note, int delta) { post(C_LLEN, step * 128 + clampi(note, 0, 127), delta); }
 static const sy_ev_t *load_src;
 void sy_loop_load(const sy_ev_t *ev, int n)
 {
@@ -99,12 +101,12 @@ const uint8_t SY_PUNCH_KDEF[PU_N][PU_KN] = {
     {8, 8},   /* DOUBLE: how far up (a fourth .. two octaves), window */
     {15, 8},  /* STOP: how long (a scratch-stop .. a power-down), the brake's curve */
     {8, 4},   /* REVERSE: slice, soft seams */
-    {8, 0},   /* REPEAT: the roll's length (1/32 .. 1/2), fading out */
-    {8, 0},   /* STUTTER: the same */
+    {8, 8},   /* REPEAT: the roll's length (1/32 .. 1/2), its pitch (down .. up an octave) */
+    {8, 8},   /* STUTTER: the same */
     {8, 15},  /* GATE: rate (1/64 .. 1/4), how deep */
     {8, 15},  /* GRAIN: grain size, scatter */
     {8, 8},   /* CRUSH: bits, rate */
-    {8, 8},   /* SWEEP: how long it takes (a third of a beat .. ten), scream */
+    {15, 8},  /* SWEEP: where the filter goes (left of the middle a high-pass, right a low-pass), scream */
     {15, 10}, /* WASH: how long it hangs, the dry gone */
     {8, 15},  /* WOBBLE: how fast, how deep */
 };
@@ -1423,6 +1425,13 @@ static inline float line_read(const float *b, uint32_t mask, uint32_t w, float b
     float f = back - (float)ib;
     return b[i0] + (b[i1] - b[i0]) * f;
 }
+static inline float line_read4(const float *b, uint32_t mask, uint32_t w, float back)   /* cubic: for the tape */
+{
+    const uint32_t ib = (uint32_t)back, i1 = (w - ib) & mask, i0 = (i1 + 1u) & mask, i2 = (i1 - 1u) & mask, i3 = (i1 - 2u) & mask;
+    const float f = back - (float)ib, x0 = b[i0], x1 = b[i1], x2 = b[i2], x3 = b[i3];
+    const float c1 = 0.5f * (x2 - x0), c2 = x0 - 2.5f * x1 + 2.0f * x2 - 0.5f * x3, c3 = 0.5f * (x3 - x0) + 1.5f * (x1 - x2);
+    return ((c3 * f + c2) * f + c1) * f + x1;
+}
 static inline void chorus(float *l, float *r, float amt, const float *d, float narrow)
 {
     float m = (*l + *r) * 0.5f, tl, tr, t;
@@ -1670,7 +1679,6 @@ static inline void dust(float *l, float *r, float c, float u, float lpk, float h
 #define PU_IN 0.25f                                   /* into the int16 buffer: headroom +-4 */
 static uint32_t pu_w;                                 /* the next write, half rate */
 static int pu_odd, pu_frozen;
-static float pu_last_l, pu_last_r;
 static uint16_t pu_held;
 static uint32_t pu_stamp[PU_N], pu_clock;             /* when each was pressed: the newest buffer one plays */
 static int8_t pu_cur = -1;                            /* the buffer punch playing (fading out: still it) */
@@ -1679,9 +1687,9 @@ static float pu_head[2], pu_t;                        /* the heads' lags (half-r
 static float pu_slice;                                /* REVERSE / REPEAT / STUTTER: the slice's length, half rate */
 static uint32_t pu_anchor;                            /* REPEAT / STUTTER: where the kept slice ends */
 static float pu_stop_v;                               /* STOP: the speed left */
-static float pu_grain_len[2], pu_grain_at[2], pu_grain_sp[2], pu_grain_pan[2];
+static float pu_grain_len[3], pu_grain_at[3], pu_grain_sp[3], pu_grain_pan[3], pu_grain_lag[3];
 static float pu_gate, pu_gate_ph, pu_crush, pu_crush_l, pu_crush_r, pu_crush_n;
-static float pu_sweep, pu_sweep_t, pu_s1[2], pu_s2[2];
+static float pu_sweep, pu_s1[2], pu_s2[2];
 static float pu_wob, pu_wob_ph, pu_wash_t;
 static float pu_sw_a1, pu_sw_a2, pu_sw_a3, pu_sw_k;   /* SWEEP's filter, once a chunk */
 static uint16_t pu_wait, pu_short;                      /* on the beat: waiting for the next step; let go before it came */
@@ -1692,16 +1700,32 @@ static float pu_crush_hold = 5.0f, pu_pump_ph;          /* CRUSH: samples held; 
 static float pu_spin;                                   /* STOP TWIST: past nothing, backwards */
 static uint8_t pu_k[PU_N][PU_KN];                       /* the knobs (SY_PUNCH_KDEF at start) */
 static float pu_amt;                                    /* the buffer one: how much (knob 1), come in so far */
-static float pu_rep_g, pu_rep_pos;                      /* REPEAT / STUTTER: each round fainter */
+static float pu_rep_ph;                                 /* REPEAT / STUTTER: where in the slice (0..1) */
+static uint8_t pu_k0_was;                               /* the buffer one's knob 1 when it was sliced (turned: again) */
 static float pu_gdep;                                   /* GATE: how deep, come in so far */
-static float pu_sweep_len = 2.0f;                       /* SWEEP: beats to close */
+static float pu_sw_pos, pu_sw_reached;                  /* SWEEP: the filter now (-1 high-pass .. 0 open .. 1 low-pass) */
+static float pu_xf = 1.0f;                              /* HALF / DOUBLE: the splice's crossfade, 0..1 (1: one head) */
+static float pu_hb[2][32];                              /* the buffer's way in: the last 32 samples (the half-band) */
+static float pu_lp[2][2][2], pu_lp_g = 1.0f;            /* the way out: two low-passes a side (what's past the buffer's top
+                                                           is only its mirror image: gone) */
+static uint32_t pu_hbi;
 
 static inline int16_t pu_pack(float x) { x = mm_clampf(x * (PU_IN * 32767.0f), -32767.0f, 32767.0f); return (int16_t)x; }
-static inline float pu_at(int c, float lag)           /* the buffer, lag half-rate samples back, between two */
+/* the buffer, lag half-rate samples back: a cubic (Hermite) between four, so the slow and fast reads stay clean */
+static inline float pu_at(int c, float lag)
 {
-    const uint32_t k = (uint32_t)lag, i = (pu_w - 1u - k) & (PU_LEN - 1u), j = (i - 1u) & (PU_LEN - 1u);
-    const float a = (float)pu_buf[c][i], f = lag - (float)k;
-    return (a + ((float)pu_buf[c][j] - a) * f) * (1.0f / (32767.0f * PU_IN));
+    const float lg = mm_clampf(lag, 1.0f, (float)PU_LEN - 4.0f);
+    const uint32_t k = (uint32_t)lg, p = (pu_w - 1u - k) & (PU_LEN - 1u);
+    const float f = lg - (float)k;
+    const float x0 = (float)pu_buf[c][(p + 1u) & (PU_LEN - 1u)], x1 = (float)pu_buf[c][p];
+    const float x2 = (float)pu_buf[c][(p - 1u) & (PU_LEN - 1u)], x3 = (float)pu_buf[c][(p - 2u) & (PU_LEN - 1u)];
+    const float c1 = 0.5f * (x2 - x0), c2 = x0 - 2.5f * x1 + 2.0f * x2 - 0.5f * x3, c3 = 0.5f * (x3 - x0) + 1.5f * (x1 - x2);
+    return (((c3 * f + c2) * f + c1) * f + x1) * (1.0f / (32767.0f * PU_IN));
+}
+static inline float pu_mono(uint32_t lag)               /* (the splice's search: both sides, whole samples) */
+{
+    const uint32_t p = (pu_w - 1u - lag) & (PU_LEN - 1u);
+    return (float)pu_buf[0][p] + (float)pu_buf[1][p];
 }
 static inline float pu_beat(void) { return 60.0f / (float)par[P_TEMPO]; }   /* seconds */
 static inline float pkf(int fx, int k) { return (float)pu_k[fx][k] * (1.0f / (float)PU_KMAX); }   /* 0..1 */
@@ -1749,14 +1773,41 @@ static void pu_reslice(int fx)
         pu_slice = mm_maxf(pu_slice, 64.0f);
         while (pu_slice > 7600.0f)
             pu_slice *= 0.5f;
+        pu_rep_ph = 0.0f;                               /* (the roll from its start: on the beat it was pressed) */
     }
     pu_mod_was = pu_mod[fx];
+    pu_k0_was = pu_k[fx][0];
 }
-/* HALF / DOUBLE: the heads' window (knob 3: HALF smears more with a longer one, DOUBLE too) */
+/* HALF / DOUBLE: how far the head runs before it jumps back (knob 2): long, smooth; short, smeared and grainy */
+#define PU_LMIN 80.0f                                   /* (the nearest a head reads: room for the splice's search) */
 static inline float pu_win(int fx)
 {
-    return fx == PU_HALF ? mm_clampf(4096.0f * pke(fx, 1, 15.0f, 5.0f), 512.0f, 4096.0f)
-                         : mm_clampf(1024.0f * pke(fx, 1, 8.0f, 4.0f), 256.0f, 3600.0f);
+    return fx == PU_HALF ? mm_clampf(7400.0f * pke(fx, 1, 15.0f, 4.0f), 600.0f, 7400.0f)
+                         : mm_clampf(2048.0f * pke(fx, 1, 8.0f, 4.0f), 400.0f, 6000.0f);
+}
+/* a splice: where to jump so the new head carries on what the old one plays (the best match of the next 64
+ * samples within +-128 of the plain jump), so it is heard as little as can be */
+static float pu_splice(float from, float to)
+{
+    float best = to, bv = -1e30f;
+    int off, i;
+    for (off = -128; off <= 128; off += 2) {
+        const float cand = to + (float)off;
+        float xy = 0.0f, yy = 1.0f;
+        if (cand < 70.0f || cand > (float)PU_LEN - 300.0f)
+            continue;
+        for (i = 0; i < 64; i += 2) {
+            const float x = pu_mono((uint32_t)from - (uint32_t)i), y = pu_mono((uint32_t)cand - (uint32_t)i);
+            xy += x * y;
+            yy += y * y;
+        }
+        xy = xy * mm_rsqrtf(yy);
+        if (xy > bv) {
+            bv = xy;
+            best = cand;
+        }
+    }
+    return best;
 }
 static void pu_start(int fx)                           /* a buffer punch takes over */
 {
@@ -1766,8 +1817,8 @@ static void pu_start(int fx)                           /* a buffer punch takes o
     pu_spin = 0.0f;
     pu_mod_was = pu_mod[fx];
     switch (fx) {
-    case PU_HALF: pu_head[0] = 8.0f; pu_head[1] = 8.0f + 0.5f * pu_win(fx); break;
-    case PU_DOUBLE: pu_head[0] = 8.0f + pu_win(fx); pu_head[1] = 8.0f + 0.5f * pu_win(fx); break;
+    case PU_HALF: pu_head[0] = PU_LMIN; pu_xf = 1.0f; break;
+    case PU_DOUBLE: pu_head[0] = PU_LMIN + pu_win(fx); pu_xf = 1.0f; break;
     case PU_STOP: pu_head[0] = 1.0f; pu_stop_v = 1.0f; break;
     case PU_REVERSE:
         pu_reslice(fx);                                 /* (a 1/16, read back over twice its length: inside 8192) */
@@ -1776,12 +1827,18 @@ static void pu_start(int fx)                           /* a buffer punch takes o
         pu_reslice(fx);
         pu_anchor = pu_w;
         pu_frozen = 1;                                  /* (the last slice kept: no more writing over it) */
-        pu_rep_g = 1.0f;
-        pu_rep_pos = 0.0f;
         break;
-    default:                                            /* GRAIN: both heads somewhere */
-        pu_grain_len[0] = pu_grain_len[1] = 0.0f;
+    default: {                                          /* GRAIN: three heads, a third of a grain apart */
+        int h;
+        for (h = 0; h < 3; h++) {                       /* (the first now, the others part way through one) */
+            pu_grain_len[h] = 3600.0f;
+            pu_grain_at[h] = 3600.0f * (1.0f - (float)h / 3.0f);
+            pu_grain_lag[h] = 300.0f + 1500.0f * (float)h;
+            pu_grain_sp[h] = 1.0f;
+            pu_grain_pan[h] = 0.5f;
+        }
         break;
+    }
     }
 }
 static void pu_go(int fx)                              /* it starts now */
@@ -1790,7 +1847,7 @@ static void pu_go(int fx)                              /* it starts now */
         pu_held |= (uint16_t)(1u << fx);
         pu_stamp[fx] = ++pu_clock;
         if (fx == PU_SWEEP)
-            pu_sweep_t = 0.0f;
+            pu_sw_reached = 0.0f;                       /* (it glides to the knob first, then follows it) */
         if (fx == PU_GATE) {
             pu_gate_ph = 0.0f;
             pu_gate_n = 0;
@@ -1849,26 +1906,33 @@ static inline void pu_read(float *l, float *r)
     float a, b, w;
     pu_t += 1.0f;
     switch (pu_cur) {
-    case PU_HALF: case PU_DOUBLE: {                     /* two heads, each lag running away (or toward) and wrapping */
-        /* HALF: an octave down (MORE: two; TWIST: a fifth); DOUBLE: up the same way */
+    case PU_HALF: case PU_DOUBLE: {
+        /* HALF: down (knob 1: a fourth .. two octaves; MORE: an octave further; TWIST: a fourth up from there);
+         * DOUBLE: up the same way. One head reads the buffer slower (or faster) than it fills; when it has run
+         * its window (knob 2) it jumps back, to where the music best carries on, and the old head fades out
+         * under the new one in 23 ms. One head most of the time: no phasing, the sound as it was, moved. */
         const int md = pu_mod[pu_cur];
         const float sp = pu_interval(pu_cur) * (pu_cur == PU_HALF ? ((md & PM_MORE) ? 0.5f : 1.0f) * ((md & PM_TWIST) ? 4.0f / 3.0f : 1.0f)
                                                                   : ((md & PM_MORE) ? 2.0f : 1.0f) * ((md & PM_TWIST) ? 0.75f : 1.0f));
-        const float W = pu_win(pu_cur), d = hr_step * (1.0f - sp);
-        int h;
-        *l = *r = 0.0f;
-        for (h = 0; h < 2; h++) {
-            float ph;
-            pu_head[h] += d;
-            while (pu_head[h] > 8.0f + W)               /* (while: knob 3 may have shrunk the window) */
-                pu_head[h] -= W;
-            while (pu_head[h] < 8.0f)
-                pu_head[h] += W;
-            ph = (pu_head[h] - 8.0f) / W;
-            w = 1.0f - mm_fabsf(2.0f * ph - 1.0f);      /* (a triangle: the two always add to one) */
-            *l += pu_at(0, pu_head[h]) * w;
-            *r += pu_at(1, pu_head[h]) * w;
+        const float W = pu_win(pu_cur), d = hr_step * (1.0f - sp), XF = 1024.0f;
+        pu_head[0] += d;
+        if (pu_xf < 1.0f) {                             /* splicing: the old head still going, fading */
+            const float g = 0.5f - 0.5f * mm_sin_turns(0.25f + 0.5f * pu_xf);   /* (0 .. 1, smooth) */
+            pu_head[1] += d;
+            pu_xf += 1.0f / XF;
+            *l = pu_at(0, pu_head[0]) * g + pu_at(0, pu_head[1]) * (1.0f - g);
+            *r = pu_at(1, pu_head[0]) * g + pu_at(1, pu_head[1]) * (1.0f - g);
+        } else {
+            *l = pu_at(0, pu_head[0]);
+            *r = pu_at(1, pu_head[0]);
+            if (d > 0.0f ? pu_head[0] > PU_LMIN + W : pu_head[0] < PU_LMIN + 160.0f - d * XF) {
+                pu_head[1] = pu_head[0];                /* (run out: a splice) */
+                pu_head[0] = pu_splice(pu_head[0], d > 0.0f ? PU_LMIN + 128.0f : PU_LMIN + W - 128.0f - d * XF);
+                pu_xf = 0.0f;
+            }
         }
+        pu_head[0] = mm_clampf(pu_head[0], 2.0f, (float)PU_LEN - 8.0f);
+        pu_head[1] = mm_clampf(pu_head[1], 2.0f, (float)PU_LEN - 8.0f);
         break;
     }
     case PU_STOP: {     /* slower and slower, then nothing. MORE: each press of it, the tape back and braked hard;
@@ -1911,43 +1975,45 @@ static inline void pu_read(float *l, float *r)
         *r = pu_at(1, lag) * fade;
         break;
     }
-    case PU_REPEAT: case PU_STUTTER: {                  /* the kept slice, round and round */
-        const float len = pu_slice * 2.0f, pos = pu_t - mm_floorf(pu_t / len) * len;
-        const float back = pu_slice - pos * 0.5f + (float)((pu_w - pu_anchor) & (PU_LEN - 1u));
-        const float fade = mm_minf(mm_minf(pos, len - pos) / 66.0f, 1.0f);   /* (1.5 ms seams) */
-        if (pos < pu_rep_pos)                           /* (round again: knob 3, each fainter) */
-            pu_rep_g *= 1.0f - 0.35f * pkf(pu_cur, 1);
-        pu_rep_pos = pos;
-        *l = pu_at(0, back) * fade * pu_rep_g;
-        *r = pu_at(1, back) * fade * pu_rep_g;
+    case PU_REPEAT: case PU_STUTTER: {   /* the kept slice, round and round; knob 2: pitched up or down as it goes */
+        const float len = pu_slice * 2.0f, rate = pke(pu_cur, 1, 8.0f, 7.0f);
+        float pos, back, fade;
+        pu_rep_ph += rate / len;
+        pu_rep_ph -= (float)(int)pu_rep_ph;
+        pos = pu_rep_ph * len;                          /* (full-rate samples into the slice) */
+        back = pu_slice - pos * 0.5f + (float)((pu_w - pu_anchor) & (PU_LEN - 1u));
+        fade = mm_minf(mm_minf(pos, len - pos) / (66.0f * rate), 1.0f);   /* (1.5 ms seams) */
+        *l = pu_at(0, back) * fade;
+        *r = pu_at(1, back) * fade;
         break;
     }
-    default: {                                          /* GRAIN: two heads, each a grain somewhere */
+    default: {   /* GRAIN: three heads, a third of a grain apart, each a grain somewhere behind, smoothly in and out */
         int h;
         *l = *r = 0.0f;
-        for (h = 0; h < 2; h++) {
-            float ph;
+        for (h = 0; h < 3; h++) {
+            float ph, wl;
             if (pu_grain_at[h] >= pu_grain_len[h]) {    /* a new grain: where, how long, how fast, which side */
                 const int md = pu_mod[PU_GRAIN];        /* (MORE: shorter, wilder; TWIST: one moment, frozen) */
-                /* (knob 1: the grains' size; knob 2: how far back they scatter, and low, no octave jumps) */
-                const float sc = pkf(PU_GRAIN, 1);
-                pu_grain_len[h] = mm_minf(((md & PM_MORE) ? 12.0f + 25.0f * rndf() : 40.0f + 80.0f * rndf()) *
+                /* (knob 1: the grains' size; knob 2: how far back they scatter, and how often an octave away) */
+                const float sc = pkf(PU_GRAIN, 1), jump = 0.3f * sc * sc * ((md & PM_MORE) ? 2.0f : 1.0f);
+                const float u = rndf();
+                pu_grain_len[h] = mm_minf(((md & PM_MORE) ? 15.0f + 25.0f * rndf() : 50.0f + 70.0f * rndf()) *
                                           pke(PU_GRAIN, 0, 8.0f, 3.0f), 250.0f) * 44.1f;
                 pu_grain_at[h] = 0.0f;
-                pu_head[h] = 300.0f + ((md & PM_TWIST) ? 1500.0f : 6000.0f) * (0.03f + 0.97f * sc * sc) * rndf();
-                pu_grain_sp[h] = sc < 0.3f ? 1.0f + 0.02f * rnds()
-                                 : (rnd() & 3u) == 0u ? 0.5f : (rnd() & 3u) == 1u ? 2.0f : (md & PM_MORE) && (rnd() & 1u) ? 4.0f
-                                                                                    : 1.0f + 0.02f * rnds();
-                pu_grain_pan[h] = 0.5f + 0.45f * rnds();
+                pu_grain_lag[h] = 300.0f + ((md & PM_TWIST) ? 1500.0f : 6000.0f) * (0.03f + 0.97f * sc * sc) * rndf();
+                pu_grain_sp[h] = u < jump * 0.5f ? 0.5f : u < jump ? ((md & PM_MORE) && (rnd() & 1u) ? 4.0f : 2.0f)
+                                                               : 1.0f + 0.006f * rnds();
+                pu_grain_pan[h] = 0.5f + 0.4f * rnds();
             }
             pu_grain_at[h] += 1.0f;
-            pu_head[h] = mm_clampf(pu_head[h] + hr_step * (1.0f - pu_grain_sp[h]), 4.0f, (float)PU_LEN - 4.0f);
+            pu_grain_lag[h] = mm_clampf(pu_grain_lag[h] + hr_step * (1.0f - pu_grain_sp[h]), 4.0f, (float)PU_LEN - 8.0f);
             ph = pu_grain_at[h] / pu_grain_len[h];
-            w = 1.0f - mm_fabsf(2.0f * ph - 1.0f);
-            a = pu_at(0, pu_head[h]) * w;
-            b = pu_at(1, pu_head[h]) * w;
-            *l += (a + b) * 0.5f * (1.0f - pu_grain_pan[h]) * 1.4f;
-            *r += (a + b) * 0.5f * pu_grain_pan[h] * 1.4f;
+            wl = mm_sin_turns(0.5f * ph);
+            w = wl * wl * 0.67f;                        /* (Hann: three of them overlapping add to one) */
+            a = pu_at(0, pu_grain_lag[h]) * w;
+            b = pu_at(1, pu_grain_lag[h]) * w;
+            *l += a * (1.5f - pu_grain_pan[h]);         /* (a little to one side, the stereo kept) */
+            *r += b * (0.5f + pu_grain_pan[h]);
         }
         break;
     }
@@ -1957,21 +2023,47 @@ static inline void pu_read(float *l, float *r)
 /* the punches on one sample of the mix (after the rain and the dust, before the tape) */
 static inline void punch(float *l, float *r)
 {
-    const float in = 1.0f / (0.002f * SY_SR), out = 1.0f / (0.008f * SY_SR);
-    if (!pu_frozen) {                                   /* keep the mix: two samples, one half-rate step */
-        if (pu_odd) {
-            pu_buf[0][pu_w] = pu_pack(0.5f * (*l + pu_last_l));
-            pu_buf[1][pu_w] = pu_pack(0.5f * (*r + pu_last_r));
-            pu_w = (pu_w + 1u) & (PU_LEN - 1u);
+    /* keep the mix at half rate, through a half-band filter (31 taps, flat to 8 kHz, -50 dB from 14: what is
+     * too high to keep is gone, not folded back down as hiss), 15 samples late */
+    pu_hb[0][pu_hbi & 31u] = *l;
+    pu_hb[1][pu_hbi & 31u] = *r;
+    pu_hbi++;
+    if (pu_odd && !pu_frozen) {
+        static const float HB[8] = {0.31340535f, -0.09215686f, 0.04274684f, -0.02037606f, 0.00886754f, -0.00321169f,
+                                    0.00082673f, -0.00007913f};
+        const uint32_t c = pu_hbi - 16u;
+        int q, k;
+        for (q = 0; q < 2; q++) {
+            const float *x = pu_hb[q];
+            float y = 0.5f * x[c & 31u];
+            for (k = 0; k < 8; k++)
+                y += HB[k] * (x[(c - 1u - 2u * (uint32_t)k) & 31u] + x[(c + 1u + 2u * (uint32_t)k) & 31u]);
+            pu_buf[q][pu_w] = pu_pack(y);
         }
-        pu_last_l = *l;
-        pu_last_r = *r;
+        pu_w = (pu_w + 1u) & (PU_LEN - 1u);
     }
     pu_odd ^= 1;
     if (pu_cur >= 0 || pu_wet > 0.0f) {
         float wl, wr;
         if (pu_cur >= 0) {
             pu_read(&wl, &wr);
+            {   /* (4-pole Butterworth: two SVFs, k 1.848 and 0.765) */
+                static const float KQ[2] = {1.8478f, 0.7654f};
+                const float g = pu_lp_g;
+                int q, st;
+                float x[2] = {wl, wr};
+                for (q = 0; q < 2; q++)
+                    for (st = 0; st < 2; st++) {
+                        float *z = pu_lp[q][st];
+                        const float a1 = 1.0f / (1.0f + g * (g + KQ[st])), v3 = x[q] - z[1];
+                        const float v1 = a1 * z[0] + g * a1 * v3, v2 = z[1] + g * v1;
+                        z[0] = mm_flush(2.0f * v1 - z[0]);
+                        z[1] = mm_flush(2.0f * v2 - z[1]);
+                        x[q] = v2;
+                    }
+                wl = x[0];
+                wr = x[1];
+            }
             *l += (wl - *l) * pu_wet * pu_amt;
             *r += (wr - *r) * pu_wet * pu_amt;
         }
@@ -1993,7 +2085,7 @@ static inline void punch(float *l, float *r)
             const float v3 = x[q] - pu_s2[q], v1 = pu_sw_a1 * pu_s1[q] + pu_sw_a2 * v3, v2 = pu_s2[q] + pu_sw_a2 * pu_s1[q] + pu_sw_a3 * v3;
             pu_s1[q] = 2.0f * v1 - pu_s1[q];
             pu_s2[q] = 2.0f * v2 - pu_s2[q];
-            x[q] += (((pu_mod[PU_SWEEP] & PM_TWIST) ? x[q] - pu_sw_k * v1 - v2 : v2) - x[q]) * pu_sweep;   /* (TWIST: high-pass) */
+            x[q] += ((pu_sw_pos < 0.0f ? x[q] - pu_sw_k * v1 - v2 : v2) - x[q]) * pu_sweep;   /* (below the middle: high-pass) */
         }
         *l = x[0];
         *r = x[1];
@@ -2011,7 +2103,7 @@ static inline void punch(float *l, float *r)
         pu_gate_ph -= (float)(int)pu_gate_ph;
         want = on > 0.0f ? (pu_gate_ph < open &&
                             (!(md & PM_TWIST) || (PAT >> (pu_gate_n & 15u) & 1u)) ? 1.0f : 1.0f - pu_gdep) : 1.0f;
-        pu_gate += (want - pu_gate) * (want > pu_gate ? in * 0.75f : out * 3.0f);
+        pu_gate += (want - pu_gate) * (want > pu_gate ? 0.028f : 0.009f);   /* (rounded edges: 0.8 ms in, 2.5 ms out) */
         pu_gate = mm_clampf(pu_gate, 0.0f, 1.0f);
         *l *= pu_gate;
         *r *= pu_gate;
@@ -2037,6 +2129,9 @@ static void punch_chunk(void)
     }
     want = pu_want();
     const float in = 16.0f / (0.002f * SY_SR), out = 16.0f / (0.008f * SY_SR), k16 = 16.0f / SY_SR;
+    if (pu_cur >= 0 && want == pu_cur && pu_k[pu_cur][0] != pu_k0_was &&
+        (pu_cur == PU_REVERSE || pu_cur == PU_REPEAT || pu_cur == PU_STUTTER))
+        pu_reslice(pu_cur);                             /* (knob 1 turned while it rolls: the slice follows, at once) */
     if (pu_cur >= 0 && want == pu_cur && pu_mod[pu_cur] != pu_mod_was) {   /* its keys beside changed */
         if (pu_cur == PU_REVERSE || pu_cur == PU_REPEAT || pu_cur == PU_STUTTER)
             pu_reslice(pu_cur);                         /* (the slice follows) */
@@ -2055,6 +2150,18 @@ static void punch_chunk(void)
     }
     if (pu_cur == PU_GRAIN)
         pu_frozen = (pu_mod[PU_GRAIN] & PM_TWIST) != 0;  /* (GRAIN TWIST: the moment kept) */
+    if (pu_cur >= 0) {   /* the buffer holds up to ~9 kHz: read at speed sp, up to 9 kHz * sp is music, above is mirror */
+        const int md = pu_mod[pu_cur];
+        float sp = 1.0f;
+        if (pu_cur == PU_HALF || pu_cur == PU_DOUBLE)
+            sp = pu_interval(pu_cur) * (pu_cur == PU_HALF ? ((md & PM_MORE) ? 0.5f : 1.0f) * ((md & PM_TWIST) ? 4.0f / 3.0f : 1.0f)
+                                                         : ((md & PM_MORE) ? 2.0f : 1.0f) * ((md & PM_TWIST) ? 0.75f : 1.0f));
+        else if (pu_cur == PU_REPEAT || pu_cur == PU_STUTTER)
+            sp = pke(pu_cur, 1, 8.0f, 7.0f);
+        else if (pu_cur == PU_STOP)
+            sp = mm_maxf(pu_stop_v, 0.25f);
+        pu_lp_g = mm_tanf(MM_PI * mm_clampf(9500.0f * sp, 1200.0f, 19000.0f) / SY_SR);
+    }
     if (want != pu_cur) {                               /* another one: the old fades out first (8 ms), then it starts */
         if (pu_cur >= 0 && pu_wet > 0.0f)
             pu_wet = mm_maxf(pu_wet - out, 0.0f);
@@ -2081,14 +2188,24 @@ static void punch_chunk(void)
         if (pu_held >> PU_GATE & 1u)
             pu_gdep = PU_TOWARD(pu_gdep, PU_GATE, in, pkf(PU_GATE, 1));   /* (knob 2: how deep) */
     }
-    pu_sweep_len = 2.0f * pke(PU_SWEEP, 0, 8.0f, 3.0f);   /* (knob 1: beats to close, a third .. ten) */
-    if (pu_held >> PU_SWEEP & 1u) {                     /* closing: 18 kHz down 6.5 octaves over two beats */
-        pu_sweep_t += k16;
-        pu_sweep = PU_TOWARD(pu_sweep, PU_SWEEP, in, 1.0f);
-    } else {
-        pu_sweep_t = mm_maxf(pu_sweep_t - k16 * 8.0f, 0.0f);   /* (letting go: open again, quickly) */
-        if (pu_sweep_t <= 0.0f)
-            pu_sweep = mm_maxf(pu_sweep - out, 0.0f);
+    {   /* SWEEP, a DJ's filter. Knob 1 where it goes: right of the middle a low-pass closing, left a high-pass
+         * rising (TWIST: the other way). Pressed, it glides there over two beats; then it follows the knob at
+         * once. Let go: open again, quickly. */
+        float tgt = ((float)pu_k[PU_SWEEP][0] - 8.0f) / (pu_k[PU_SWEEP][0] >= 8 ? 7.0f : 8.0f);
+        if (pu_mod[PU_SWEEP] & PM_TWIST)
+            tgt = -tgt;
+        if (pu_held >> PU_SWEEP & 1u) {
+            const float slow = k16 / (2.0f * pu_beat()), fast = k16 / 0.08f, rate = pu_sw_reached > 0.0f ? fast : slow;
+            pu_sw_pos = pu_sw_pos < tgt ? mm_minf(pu_sw_pos + rate, tgt) : mm_maxf(pu_sw_pos - rate, tgt);
+            if (mm_fabsf(pu_sw_pos - tgt) < 0.01f)
+                pu_sw_reached = 1.0f;
+            pu_sweep = PU_TOWARD(pu_sweep, PU_SWEEP, in, 1.0f);
+        } else {
+            const float back = k16 / 0.12f;
+            pu_sw_pos = pu_sw_pos > 0.0f ? mm_maxf(pu_sw_pos - back, 0.0f) : mm_minf(pu_sw_pos + back, 0.0f);
+            if (pu_sw_pos == 0.0f)
+                pu_sweep = mm_maxf(pu_sweep - out, 0.0f);
+        }
     }
     if (pu_held >> PU_CRUSH & 1u) {                     /* CRUSH: how long a sample is held (TWIST: a new length each 1/16) */
         const int md = pu_mod[PU_CRUSH];
@@ -2102,8 +2219,8 @@ static void punch_chunk(void)
             pu_crush_hold = mm_maxf(((md & PM_MORE) ? 10.0f : 5.0f) * pke(PU_CRUSH, 1, 8.0f, 3.0f), 1.0f);   /* (knob 2) */
     }
     if (pu_sweep > 0.0f) {      /* (closing: TWIST high-pass opening upward instead; MORE: it screams) */
-        const float cut0 = mm_maxf(18000.0f * mm_exp2f(-6.5f * pu_sweep_t / (pu_sweep_len * pu_beat())), 120.0f);
-        const float cut = (pu_mod[PU_SWEEP] & PM_TWIST) ? mm_minf(18120.0f - cut0, 12000.0f) : cut0;
+        const float cut = pu_sw_pos >= 0.0f ? mm_maxf(18000.0f * mm_exp2f(-6.5f * pu_sw_pos), 120.0f)   /* (low-pass: 18 kHz .. 200 Hz) */
+                                            : mm_minf(20.0f * mm_exp2f(-9.2f * pu_sw_pos), 12000.0f);   /* (high-pass: 20 Hz .. 12 kHz) */
         const float g = mm_tanf(MM_PI * cut / SY_SR), kk = 2.0f - 1.94f * ((pu_mod[PU_SWEEP] & PM_MORE) ? mm_minf(0.53f + 0.05f * (float)pu_k[PU_SWEEP][1], 0.97f)
                                                                                          : 0.2f + 0.05f * (float)pu_k[PU_SWEEP][1]);   /* (knob 2) */
         pu_sw_k = kk;
@@ -2128,8 +2245,9 @@ static void punch_chunk(void)
 static float fx_cost(void)
 {
     float c = 0.0f;
-    if (pu_cur >= 0)
-        c += pu_cur == PU_HALF || pu_cur == PU_DOUBLE || pu_cur == PU_GRAIN ? 3.0f : 1.5f;
+    c += 0.5f;                                          /* (the buffer's half-band, always) */
+    if (pu_cur >= 0)                                    /* (cubic reads, the splice's search, the way-out filter) */
+        c += pu_cur == PU_GRAIN ? 4.0f : pu_cur == PU_HALF || pu_cur == PU_DOUBLE ? 3.0f : 2.0f;
     c += (pu_crush > 0.0f ? 0.3f : 0.0f) + (pu_sweep > 0.0f ? 1.0f : 0.0f) + (pu_wob > 0.0f ? 1.0f : 0.0f) +
          (pu_held >> PU_GATE & 1u ? 0.1f : 0.0f) + (par[P_DUST] || par[P_CRACKLE] ? 1.0f : 0.0f);
     return c;
@@ -2885,6 +3003,36 @@ static void loop_cmd(const cmd_t *c)
         loop_changed();
         break;
     }
+    case C_LNOTE: {                                      /* one note at a step: it goes, or it comes */
+        const int t = c->a * 12;
+        int found = 0;
+        if (t < 0 || t >= SY_TPB * 4)
+            break;
+        loop_snapshot();
+        for (i = loop_n - 1; i >= 0; i--)
+            if ((int)loop_ev[i].t >= t && (int)loop_ev[i].t < t + 12 && loop_ev[i].note == c->b) {
+                loop_remove(i);
+                found = 1;
+            }
+        if (!found && loop_n < SY_LOOP_MAX) {
+            loop_ev[loop_n].t = (uint16_t)t;
+            loop_ev[loop_n].note = (uint8_t)c->b;
+            loop_ev[loop_n].vel = 100;
+            loop_ev[loop_n].len = 11;
+            loop_ev[loop_n].flags = 0;
+            loop_n++;
+        }
+        loop_changed();
+        break;
+    }
+    case C_LLEN: {                                       /* that one note: longer, shorter (a 1/16 is 12) */
+        const int t = (c->a / 128) * 12, nt = c->a % 128;
+        for (i = 0; i < loop_n; i++)
+            if ((int)loop_ev[i].t >= t && (int)loop_ev[i].t < t + 12 && loop_ev[i].note == nt)
+                loop_ev[i].len = (uint8_t)clampi(loop_ev[i].len + c->b * 3, 3, 255);
+        loop_changed();
+        break;
+    }
     case C_LSEL:
         loop_sel = c->a < 0 || c->a >= SY_TPB * 4 / 12 ? -1 : c->a;
         sy_tel.loop_sel = (int16_t)loop_sel;
@@ -2999,7 +3147,7 @@ static void drain(void)
             }
             sy_tel.drums_on = dr_on;
             break;
-        case C_REC: case C_LUNDO: case C_LCLEAR: case C_LSTEP: case C_LNUDGE: case C_LLOAD: case C_LSEL:
+        case C_REC: case C_LUNDO: case C_LCLEAR: case C_LSTEP: case C_LNUDGE: case C_LLOAD: case C_LSEL: case C_LNOTE: case C_LLEN:
             loop_cmd(&c);
             break;
         case C_ARP: arp_set(c.a); break;
@@ -3170,8 +3318,8 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
                 const float flut = 20.0f;
                 const float back = 40.0f + tape * (30.0f * mm_sin_turns(wow_ph) + 6.0f * mm_sin_turns(flut_ph) + 36.0f) +
                                    pu_wob * (190.0f + (190.0f - flut) * mm_sin_turns(pu_wob_ph) + flut * mm_sin_turns(flut_ph * 1.08f));
-                l = line_read(tp_l, TP_N - 1u, tp_w, back);
-                r = line_read(tp_r, TP_N - 1u, tp_w, back);
+                l = line_read4(tp_l, TP_N - 1u, tp_w, back);   /* (cubic: the wobble keeps its top) */
+                r = line_read4(tp_r, TP_N - 1u, tp_w, back);
                 if (tape > 0.0f) {
                     l = mm_tanhf(l * tp_sat) * tp_comp;
                     r = mm_tanhf(r * tp_sat) * tp_comp;
@@ -3220,8 +3368,10 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
         sy_tel.punch = m;
         sy_tel.punch_wait = pu_wait;
         sy_tel.punch_buf = pu_wet > 0.0f ? pu_cur : -1;
-        sy_tel.punch_wet = pu_wet * pu_amt;            /* (as much as is heard: the blob follows knob 1 and 4) */
-        if (pu_cur == PU_REVERSE || pu_cur == PU_REPEAT || pu_cur == PU_STUTTER) {
+        sy_tel.punch_wet = pu_wet * pu_amt;            /* (as much as is heard: GRAIN's slow coming in too) */
+        if (pu_cur == PU_REPEAT || pu_cur == PU_STUTTER)
+            sy_tel.punch_ph = pu_rep_ph;
+        else if (pu_cur == PU_REVERSE) {
             const float len = pu_slice * 2.0f;
             sy_tel.punch_ph = len > 0.0f ? (pu_t - mm_floorf(pu_t / len) * len) / len : 0.0f;
         } else
@@ -3230,7 +3380,7 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
             sy_tel.punch_mod[j] = pu_mod[j];
         sy_tel.punch_gate = pu_gate;
         sy_tel.punch_k = pu_cur == PU_STOP ? pu_stop_v : (pu_held >> PU_SWEEP & 1u) ?
-                         mm_minf(pu_sweep_t / (pu_sweep_len * pu_beat()), 1.0f) : pu_wash;
+                         mm_fabsf(pu_sw_pos) : pu_wash;
     }
     sy_tel.out_peak = peak;
     sy_tel.busy = busy;

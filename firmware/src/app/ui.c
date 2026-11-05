@@ -11,7 +11,7 @@
  *   LFO   VIBE       Rate  Depth  Shape  Destination
  *   FX    TEARS      Chorus  Delay  Time  Feedback
  *   SEL   WALLS      Reverb  Size  Fry  Tape
- *   SEQ   LOOP       the stepped step's Note  Length  Velocity, and the loop's Bars
+ *   SEQ   LOOP       full screen: the cursor's Step and Note, the note's Length, the loop's Bars
  *         held (or pressed twice): the 16 white keys are its steps, OCT- / OCT+ its bars
  *   SEQ again: TAPE DECK  Style  Tempo  Swing  Human
  *   GLO   MIXER      Voice  Drums  Bass  Gunk (the room's texture: rain, crackle; louder when idle)
@@ -50,7 +50,7 @@ static const char *const PAGE_LABEL[NPAGES][4] = {
     {"WAVE", "POS", "DTUN", "SUB"}, {"CUT", "RES", "TYPE", "DRIV"}, {"ATK", "DEC", "SUS", "REL"},
     {"RATE", "DPTH", "SHPE", "DEST"}, {"DLY", "TIME", "FDBK", "DARK"}, {"VERB", "SIZE", "TONE", "ROOM"},
     {"STYL", "BPM", "SWNG", "HUMN"}, {"MOVE", "SET", "", ""}, {"BPM", "VOX", "DRUM", "BASS"},
-    {"MODE", "RATE", "OCT", "GATE"}, {"NOTE", "LEN", "VEL", "BARS"},
+    {"MODE", "RATE", "OCT", "GATE"}, {"STEP", "NOTE", "LEN", "BARS"},
     {"WAVE", "TUNE", "MEET", "LVL"}, {"ATK", "DEC", "WAVE", "EYES"}, {"RATE", "DPTH", "SHPE", "DEST"},
     {"CHOR", "RATE", "DPTH", "WIDE"}, {"TAPE", "CRKL", "DUST", "FRY"}, {"", "", "", ""}, {"CURS", "CHAR", "NAME", "SLOT"}};
 #define STAY_MS 3000u                  /* a drawer stays this long after the last touch (a press, a turn) */
@@ -263,6 +263,9 @@ static struct {
     int8_t pk_fx;                       /* the punch the knobs turn (the last one punched), -1 none yet */
     uint8_t loop_bar, step_note;       /* the bar the steps show; the note a new step gets */
     int16_t step_held;                 /* a step key down on a step with notes: let go untouched, they go */
+    int16_t cur_step;                  /* SEQ: the cursor's step (1/16s from the loop's start) */
+    uint8_t cur_note, prev_on;         /* ...and its note; a preview sounding */
+    uint32_t prev_until;               /* ...till then */
     uint8_t preview;                   /* the note a step key is sounding */
     uint8_t step_turned;               /* ...a knob turned meanwhile: they stay (edited) */
     uint32_t loop_ver;
@@ -343,15 +346,27 @@ static const char *set_text(int r)                       /* a row's value in wor
     return 0;
 }
 
+/* SEQ: the loop's length in steps; the note at a step nearest a pitch */
+static int loop_steps(void) { return (sy_tel.loop_ticks ? sy_tel.loop_ticks : SY_TPB) / 12; }
+static int loop_nearest(int st, int pitch)              /* the note at that step nearest pitch, -1 none */
+{
+    int i, n, best = -1;
+    const sy_ev_t *ev = sy_loop_events(&n);
+    for (i = 0; i < n; i++)
+        if (ev[i].t / 12 == (uint16_t)st && (best < 0 || (ev[i].note > pitch ? ev[i].note - pitch : pitch - ev[i].note) <
+                                                             (best > pitch ? best - pitch : pitch - best)))
+            best = ev[i].note;
+    return best;
+}
 /* the punches' knobs: what each one is (its word, and its symbol around the blob) */
-enum { PK_DOWN, PK_UP, PK_DEEP, PK_SMEAR, PK_WINDOW, PK_BRAKE, PK_LONG, PK_SLICE, PK_ROLL, PK_SOFT, PK_FADING, PK_RATE,
-       PK_SIZE, PK_SCATTER, PK_BITS, PK_SCREAM, PK_HANG, PK_DRY, PK_SPEED, PK_NKIND };
+enum { PK_DOWN, PK_UP, PK_DEEP, PK_SMEAR, PK_WINDOW, PK_BRAKE, PK_LONG, PK_SLICE, PK_ROLL, PK_SOFT, PK_PITCH, PK_RATE,
+       PK_SIZE, PK_SCATTER, PK_BITS, PK_SCREAM, PK_HANG, PK_DRY, PK_SPEED, PK_FILTER, PK_NKIND };
 static const char *const PK_NAME[PK_NKIND] = {"HOW LOW", "HOW HIGH", "HOW DEEP", "SMEAR", "WINDOW", "BRAKE", "HOW LONG", "SLICE",
-                                              "ROLL", "SOFT", "FADE OUT", "RATE", "GRAIN SIZE", "SCATTER", "BITS", "SCREAM",
-                                              "HANG", "DRY GONE", "SPEED"};
+                                              "ROLL", "SOFT", "PITCH", "RATE", "GRAIN SIZE", "SCATTER", "BITS", "SCREAM",
+                                              "HANG", "DRY GONE", "SPEED", "FILTER"};
 static const uint8_t PK_KIND[PU_N][PU_KN] = {
-    {PK_DOWN, PK_SMEAR}, {PK_UP, PK_WINDOW}, {PK_LONG, PK_BRAKE}, {PK_SLICE, PK_SOFT}, {PK_ROLL, PK_FADING}, {PK_ROLL, PK_FADING},
-    {PK_RATE, PK_DEEP},  {PK_SIZE, PK_SCATTER}, {PK_BITS, PK_RATE}, {PK_LONG, PK_SCREAM}, {PK_HANG, PK_DRY}, {PK_SPEED, PK_DEEP},
+    {PK_DOWN, PK_SMEAR}, {PK_UP, PK_WINDOW}, {PK_LONG, PK_BRAKE}, {PK_SLICE, PK_SOFT}, {PK_ROLL, PK_PITCH}, {PK_ROLL, PK_PITCH},
+    {PK_RATE, PK_DEEP},  {PK_SIZE, PK_SCATTER}, {PK_BITS, PK_RATE}, {PK_FILTER, PK_SCREAM}, {PK_HANG, PK_DRY}, {PK_SPEED, PK_DEEP},
 };
 
 #include "px.c"
@@ -783,6 +798,36 @@ static const char *const TWIST_SAID[PU_N] = {"A FIFTH DOWN.", "A FIFTH UP.", "AN
 static const char *const PUNCH_SAID[PU_N] = {"HALF.", "TWICE. WHY.", "STOP.", "BACKWARDS.", "AGAIN AGAIN.", "S-S-STUTTER.",
                                              "ON OFF ON OFF.", "FALLING APART.", "CRUSHED.", "MUFFLED.", "WASHED OUT.",
                                              "WARPED."};
+/* ------------------------------------------------------------ the loop --- */
+/* SEQ, full screen: a cursor on the roll. Knob 1 its step, knob 2 its note, knob 3 the note's length; a step's
+ * white key: there (on its nearest note), and again: that note goes, or one comes. */
+static void seq_preview(int note)                       /* a short taste of it */
+{
+    if (ui.prev_on)
+        sy_note_off(ui.preview);
+    sy_note_on(note, 90);
+    ui.preview = (uint8_t)note;
+    ui.prev_on = 1;
+    ui.prev_until = plat_ms() + 220u;
+}
+static void seq_knob(int k, int32_t e)
+{
+    const int n = loop_steps();
+    if (k == 0) {                                        /* the step: along the bars (the bar on show follows) */
+        ui.cur_step = (int16_t)(((ui.cur_step + (int)e) % n + n) % n);
+        ui.loop_bar = (uint8_t)(ui.cur_step / 16);
+        if (loop_nearest(ui.cur_step, ui.cur_note) == ui.cur_note)
+            seq_preview(ui.cur_note);
+    } else if (k == 1) {                                 /* the note: up and down, a semitone a click */
+        const int v = ui.cur_note + (int)e;
+        ui.cur_note = (uint8_t)(v < 0 ? 0 : v > 127 ? 127 : v);
+        seq_preview(ui.cur_note);
+    } else if (loop_nearest(ui.cur_step, ui.cur_note) == ui.cur_note)
+        sy_loop_len(ui.cur_step, ui.cur_note, e > 0 ? 1 : -1);   /* its length */
+    else
+        ui_caption("NO NOTE HERE.", 800u);
+}
+
 /* the punches' knobs, what each is called (said when turned; the screen shows them as symbols) */
 static void punch_knob(int k, int32_t e)
 {
@@ -834,35 +879,28 @@ static void key_down(int k)
         ui.page_until = plat_ms() + STAY_MS;
         return;
     }
-    if (step_mode()) {                                   /* a white key: that 1/16 step of the bar on show */
+    if (step_mode()) {   /* a white key: that 1/16 step of the bar on show. Another step: the cursor goes there (on its
+                          * nearest note; none, one comes). The cursor's step again: its note goes, or one comes. */
         const int w = white_of(k);
         if (w >= 0) {
-            const int st = ui.loop_bar * 16 + w;
-            int i, cnt, has = 0, pitch = ui.step_note;
-            const sy_ev_t *ev = sy_loop_events(&cnt);
-            for (i = 0; i < cnt; i++)
-                if (ev[i].t / 12 == (uint16_t)st) {
-                    has = 1;
-                    pitch = ev[i].note;
-                }
-            if (has) {                                   /* notes there: chosen (the knobs edit them) */
-                sy_loop_select(st);
-                ui.step_held = (int16_t)st;
-                ui.step_turned = 0;
-            } else {                                     /* none: one comes, chosen */
-                sy_loop_step(st, ui.step_note);
-                ui.step_held = -1;
+            const int st = ui.loop_bar * 16 + w, near = loop_nearest(st, ui.cur_note);
+            if (st != ui.cur_step && near >= 0) {
+                ui.cur_step = (int16_t)st;
+                ui.cur_note = (uint8_t)near;
+            } else {
+                const int had = loop_nearest(st, ui.cur_note) == ui.cur_note;
+                ui.cur_step = (int16_t)st;
+                sy_loop_note(st, ui.cur_note);
+                ui_caption(had ? "THAT NOTE: GONE." : "A NOTE.", 700u);
             }
             ui.focus_t = plat_ms();
             ui.page_until = plat_ms() + STAY_MS;
-            sy_note_on(pitch, 90);                       /* (you hear the step) */
-            ui.preview = (uint8_t)pitch;
-            ui.stepped |= 1u << k;
+            seq_preview(ui.cur_note);                    /* (you hear it) */
         }
         return;
     }
     ui.key_note[k] = (uint8_t)n;
-    ui.step_note = (uint8_t)n;                           /* (a new step gets the last note you played) */
+    ui.step_note = ui.cur_note = (uint8_t)n;             /* (a new step gets the last note you played: SEQ's cursor on it) */
     play(n, 100);
 }
 static void key_up(int k)
@@ -875,16 +913,6 @@ static void key_up(int k)
     if (ui.modkeys >> k & 1u) {
         ui.modkeys &= ~(1u << k);
         punch_resend();
-        return;
-    }
-    if (ui.stepped >> k & 1u) {
-        ui.stepped &= ~(1u << k);
-        sy_note_off(ui.preview);
-        if (ui.step_held >= 0 && !ui.step_turned) {      /* tapped, not edited: its notes go */
-            sy_loop_step(ui.step_held, ui.step_note);
-            sy_loop_select(-1);
-        }
-        ui.step_held = -1;
         return;
     }
     if (step_mode() && white_of(k) >= 0)
@@ -952,8 +980,13 @@ static void button(int b)
             for (i = 0; pg < 0 && i < NPAGES; i++)
                 if (PAGE_BTN[i] == b && !PAGE_NTH[i])
                     pg = i;
-        if (pg == PG_LOOP && !(ui.panel && ui.page == PG_LOOP))
-            sy_loop_select(-1);                          /* (a fresh look: the knobs edit the whole loop) */
+        if (pg == PG_LOOP && !(ui.panel && ui.page == PG_LOOP)) {   /* (a fresh look: the cursor on the last note played) */
+            sy_loop_select(-1);
+            ui.cur_note = ui.step_note;
+            if (ui.cur_step >= loop_steps())
+                ui.cur_step = 0;
+            ui.loop_bar = (uint8_t)(ui.cur_step / 16);
+        }
         if (pg >= 0) {                                   /* a part's button: its page while held, and 3 s on */
             const int again = PAGE_AGAIN[pg];
             set_page(pg);
@@ -974,8 +1007,8 @@ static void button(int b)
             }
             ui.held_btn = (int8_t)b;
             ui.held_t = now;
-            if (pg == PG_SETUP)
-                ui.latch = 1;                            /* (the settings stay until HOME) */
+            if (pg == PG_SETUP || pg == PG_LOOP)
+                ui.latch = 1;                            /* (the settings and the loop, full screen: they stay until HOME) */
             if (dbl && !ui.latch) {
                 ui.latch = 1;                            /* twice: it stays (other pages too) until HOME */
                 ui_caption(pg == PG_PUNCH ? "PUNCHES STAY. FX: AWAY." : "STAYS OPEN.", 1200u);
@@ -1013,6 +1046,7 @@ static void button(int b)
         if (step_mode()) {                               /* the steps: the next bar, or the one before */
             const int bars = proj.par[P_LOOPBARS] == 2 ? 4 : proj.par[P_LOOPBARS] + 1;
             ui.loop_bar = (uint8_t)((ui.loop_bar + (b == B_OCTUP ? 1 : bars - 1)) % bars);
+            ui.cur_step = (int16_t)(ui.loop_bar * 16 + ui.cur_step % 16);   /* (the cursor goes along) */
             ui.focus_t = plat_ms();
             break;
         }
@@ -1208,10 +1242,8 @@ static void input(void)
                 ui.focus_t = ui.act_t = plat_ms();
                 continue;
             }
-            if (ui.page == PG_LOOP && i < 3) {           /* the chosen step (or the whole loop): note, length, velocity */
-                sy_loop_nudge((int)i, e > 0 ? 1 : -1);
-                ui.step_turned = 1;
-            }
+            if (ui.page == PG_LOOP && i < 3)             /* the cursor: step, note; the note's length */
+                seq_knob((int)i, e);
             else
                 turn(EN_K1 + (int)i, PAGE_KNOB[ui.page][i], e);
             ui.touched = (int8_t)i;
@@ -1273,6 +1305,7 @@ void ui_init(void)
     ui.last_up_btn = -1;
     ui.step_note = 60;
     ui.step_held = -1;
+    ui.cur_note = 60;
     px_init();
     blob_init();
 }
@@ -1281,6 +1314,10 @@ void ui_frame(void)
 {
     int c;
     input();
+    if (ui.prev_on && (int32_t)(plat_ms() - ui.prev_until) >= 0) {   /* (SEQ's taste of a note: over) */
+        sy_note_off(ui.preview);
+        ui.prev_on = 0;
+    }
     while ((c = plat_text()) != 0)                       /* typing: into the name, while SAVE AS is open */
         if (ui.naming)
             name_type(c);

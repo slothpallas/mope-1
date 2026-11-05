@@ -411,6 +411,10 @@ static int expect(const char *what, const char *val)
         const int j = atoi(what + (what[1] == 'n' ? 5 : 4));
         got = j < n2 ? (what[1] == 'n' ? ev[j].note : ev[j].len) : -1;
     }
+    else if (!strcmp(what, "curstep"))            /* SEQ: the cursor's step, and its note */
+        got = ui.cur_step;
+    else if (!strcmp(what, "curnote"))
+        got = ui.cur_note;
     else if (!strcmp(what, "arp"))                /* the arpeggiator: 3 = the UI and the engine agree it is on */
         got = ui.arp + 2 * sy_tel.arp_on;
     else if (!strcmp(what, "arpseq"))
@@ -581,6 +585,8 @@ int main(int argc, char **argv)
         else if (!strcmp(cmd, "reboot")) {
             memset(&proj, 0, sizeof proj);
             boot();
+        } else if (!strcmp(cmd, "setxp")) {          /* setxp N: notes played, ever (to see a level's things) */
+            proj.xp = (uint32_t)strtoul(a, 0, 10);
         } else if (!strcmp(cmd, "echo"))
             printf("%s", line + 5);
         else {

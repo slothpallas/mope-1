@@ -106,6 +106,22 @@ static void capture(void)
             cap[b * 256 + k] = (float)blk[2 * k] / 8388608.0f;
     }
 }
+/* the biggest jump from one sample to the next, against the loudest sample (a click: a big jump) */
+static float max_step(uint32_t ms)
+{
+    uint32_t blocks = ms * 441u / 2560u + 1u, b, k;
+    float last = 0.0f, most = 0.0f, pk = 1e-9f;
+    for (b = 0; b < blocks; b++) {
+        sy_render(blk, 256, 4096);
+        for (k = 0; k < 256; k++) {
+            const float x = (float)blk[2 * k] / 8388608.0f, d = b || k ? x - last : 0.0f;   /* (the first: no step) */
+            most = d > most ? d : -d > most ? -d : most;
+            pk = x > pk ? x : -x > pk ? -x : pk;
+            last = x;
+        }
+    }
+    return most / pk;
+}
 static float goertzel(float hz)
 {
     float c = 2.0f * mm_cosf(MM_TWO_PI * hz / 44100.0f), s1 = 0.0f, s2 = 0.0f, w;
@@ -369,6 +385,17 @@ int main(int argc, char **argv)
         run(100);
         capture();
         CHECK(goertzel(440.0f) > goertzel(220.0f) * 100.0f && sy_tel.punch == 0, "let go: back to the note as it was");
+        /* HALF and DOUBLE splice smoothly: over seconds of a sine, never a jump bigger than the wave's own */
+        for (fx = PU_HALF; fx <= PU_DOUBLE; fx++) {
+            float st;
+            sy_punch(fx, 1);
+            run(100);
+            st = max_step(3000);
+            sy_punch(fx, 0);
+            run(100);
+            CHECK(st < (fx == PU_HALF ? 0.04f : 0.14f), "%s: no clicks where it splices (biggest step %.3f of the peak)",
+                  fx == PU_HALF ? "HALF" : "DOUBLE", (double)st);
+        }
         /* the knobs: HALF's knob 1, how far down: a fourth .. two octaves */
         sy_punch_knob(PU_HALF, 0, 0);
         sy_punch(PU_HALF, 1);
@@ -473,6 +500,19 @@ int main(int argc, char **argv)
         capture();
         CHECK(goertzel(329.6f) > goertzel(220.0f) * 10.0f, "...let go: the new note");
         sy_note_off(64);
+        quiet();
+        /* REPEAT's knob 2, turned while it rolls: the roll an octave up */
+        sy_note_on(57, 100);
+        run(300);
+        sy_punch(PU_REPEAT, 1);
+        run(200);
+        sy_punch_knob(PU_REPEAT, 1, PU_KMAX);
+        run(300);
+        capture();
+        CHECK(goertzel(440.0f) > goertzel(220.0f) * 10.0f, "REPEAT, knob 2 up while held: the roll an octave up");
+        sy_punch(PU_REPEAT, 0);
+        sy_punch_knob(PU_REPEAT, 1, SY_PUNCH_KDEF[PU_REPEAT][1]);
+        sy_note_off(57);
         quiet();
         /* WASH: the room holds on long after the note */
         sy_set(P_REVERB, 40);

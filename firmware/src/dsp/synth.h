@@ -126,6 +126,9 @@ void sy_loop_step(int step, int note);              /* a 1/16 step: a note there
 void sy_loop_select(int step);                      /* a step chosen (-1: none): the knobs edit it */
 void sy_loop_nudge(int field, int delta);           /* 0 note, 1 length, 2 velocity: the chosen step's notes, or
                                                      * with none chosen the whole loop's */
+void sy_loop_note(int step, int note);              /* one note at a step: there, it goes; not, it comes (a chord's
+                                                     * notes one by one) */
+void sy_loop_len(int step, int note, int delta);    /* that one note longer or shorter */
 void sy_loop_load(const sy_ev_t *ev, int n);        /* from a saved project (ev stays valid until drained) */
 int sy_loop_copy(sy_ev_t *dst, int max);            /* into a project, to save */
 const sy_ev_t *sy_loop_events(int *n);              /* for the screen: read-only, may change under you */             /* the notes it is cycling, low to high (for the screen) */
