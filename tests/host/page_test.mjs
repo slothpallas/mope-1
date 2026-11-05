@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // MOPE-1's page in headless Chrome, twice: the one-file build opened from disk (file://), and the
 // served page under a strict content policy like a portfolio site's (no data: scripts, WebAssembly
-// allowed). Each time it must switch on, sound for a held key and for a MIDI note, and draw.
+// allowed). Each time it must switch on, sound for a held key and for a MIDI note, and draw; what's new links to the manual.
 //   node tests/host/page_test.mjs CHROME
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
@@ -19,6 +19,7 @@ const PROBE = `(async () => {
   };
   const loudest = async (n) => { let most = 0; const b = new Float32Array(2048);
     for (let i = 0; i < n; i++) { await wait(30); ear.getFloatTimeDomainData(b); for (const v of b) most = Math.max(most, Math.abs(v)); } return most; };
+  const news = [...document.querySelectorAll(".news a[data-m]")].filter((a) => /^https?:.*#[a-z-]+$/.test(a.href)).length;
   document.getElementById("on").click();
   for (let i = 0; i < 100 && !document.getElementById("power").hidden; i++) await wait(100);
   if (!document.getElementById("power").hidden) return "did not switch on: " + document.getElementById("said").textContent;
@@ -31,7 +32,7 @@ const PROBE = `(async () => {
   const midi = await loudest(10);
   const px = document.getElementById("screen").getContext("2d").getImageData(0, 0, 240, 240).data;
   let lit = 0; for (let i = 0; i < px.length; i += 4) lit += px[i] + px[i + 1] + px[i + 2] > 60;
-  return \`key=\${key.toFixed(3)} midi=\${midi.toFixed(3)} screen=\${lit}\`;
+  return \`key=\${key.toFixed(3)} midi=\${midi.toFixed(3)} screen=\${lit} news=\${news}\`;
 })()`;
 
 const chrome = process.argv[2], profile = resolve("build/play/chrome_profile");
@@ -78,8 +79,8 @@ for (const [what, url] of [["from disk", "file://" + resolve("build/play/MOPE-1.
   await new Promise((r) => setTimeout(r, 1500));
   const r = await cdp("Runtime.evaluate", { expression: PROBE, awaitPromise: true });
   const said = r?.result?.value || "no answer";
-  const m = /key=([\d.]+) midi=([\d.]+) screen=(\d+)/.exec(said);
-  const ok = m && +m[1] > 0.05 && +m[2] > 0.02 && +m[3] > 10000 && !errors.length;
+  const m = /key=([\d.]+) midi=([\d.]+) screen=(\d+) news=(\d+)/.exec(said);
+  const ok = m && +m[1] > 0.05 && +m[2] > 0.02 && +m[3] > 10000 && +m[4] >= 9 && !errors.length;   // (what's new: each item a link to the manual)
   failed += !ok;
   console.log(`${ok ? "ok  " : "FAIL"} ${what}: ${said}${errors.length ? " | " + errors.join(" | ") : ""}`);
 }

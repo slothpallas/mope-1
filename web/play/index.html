@@ -84,6 +84,27 @@ section { margin-top: 2rem; padding-top: 1.2rem; border-top: 1px solid var(--rul
 .guide li + li { margin-top: .3rem; }
 .guide b { font-weight: 600; color: var(--ink); }   /* (the FM-1's own names, as on its panel) */
 .install b { font-weight: 600; color: var(--ink); }
+/* what's new: a small panel under the bar; in the front page's frame, one line of links */
+.news { margin-top: 1.4rem; padding: 1rem 1.2rem 1.1rem; border: 1px solid var(--line); border-radius: 14px; }
+.news-top { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: .55rem; }
+.news h2 { font-size: 1.35rem; margin: 0; }
+.news-top button { font: .75rem var(--mono); color: var(--quiet); background: transparent; border: 1px solid var(--line); border-radius: 8px;
+                   padding: .2em .7em; cursor: pointer; }
+.news ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); gap: .55rem 2rem; }
+.news li { color: var(--quiet); font-size: .8rem; line-height: 1.55; }
+.news li a { display: block; color: var(--ink); font-weight: 600; text-decoration: none; }
+.news li a::after { content: " → manual"; font-weight: 400; color: var(--glass); }
+.news li a[href^="#"]::after { content: " → below"; }
+.news li a:hover::after, .news li a:focus-visible::after { text-decoration: underline; }
+.news b { font-weight: 600; color: var(--ink); }
+.bar #newsShow { color: var(--quiet); }
+.bare .news { margin-top: .7rem; padding: .55rem .8rem; }
+.bare .news-top { margin: 0 0 .25rem; }
+.bare .news h2 { font: .8rem var(--mono); color: var(--quiet); }
+.bare .news ul { display: flex; flex-wrap: wrap; gap: .2rem 1rem; }
+.bare .news li span, .bare .news li a[href^="#"] { display: none; }
+.bare .news li a { font: 500 .8rem var(--mono); color: var(--glass); }
+.bare .news li a::after { content: none; }
 kbd { font: .78rem var(--mono); color: var(--ink); border: 1px solid var(--line-hi); border-radius: 4px; padding: 0 .3em; }
 .install p, .install ol { color: var(--quiet); max-width: 72ch; }
 .install ol { padding-left: 1.2rem; }
@@ -124,7 +145,27 @@ if (/[?&]bare\b/.test(location.search)) document.documentElement.classList.add("
   <button id="midi" type="button" title="Play it from a MIDI keyboard (Chrome or Edge)">Connect MIDI</button>
   <span class="midi" id="midisaid"></span>
   <button id="forget" type="button" title="Forget your sound, your loop and your settings">Factory reset</button>
+  <button id="newsShow" type="button" hidden>What's new</button>
 </div>
+
+<section class="news" id="news" aria-labelledby="news-h">
+  <div class="news-top">
+    <h2 id="news-h">New in <span id="news-v">0.4.0</span></h2>
+    <button id="newsHide" type="button" title="Hide this until the next version">Hide</button>
+  </div>
+  <ul>
+    <li><a data-m="punch">Punches</a><span>Hold <b>SEL</b> and a black key: half speed, tape stop, reverse, repeats, grains, a gate… while it's held. The white keys beside it light up: more, or a twist.</span></li>
+    <li><a data-m="walls">Four effect pages</a><span><b>FX</b> goes round the walls (reverb), tears (delay), copies (chorus) and dust (an old record).</span></li>
+    <li><a data-m="tears">A delay in the tempo</a><span>Echoes in sixteenths to dotted quarters, worn like tape; Dark past halfway smears them into a cloud.</span></li>
+    <li><a data-m="saving">Presets of your own</a><span>Tap <b>SAVE</b>, name it (type it here), <b>SAVE</b> again. Sixteen places, after the factory presets.</span></li>
+    <li><a data-m="eyes">16 new presets, a vowel filter</a><span>Angry basses, screaming leads and VOX, sung by the Eyes page's new vowel filter. 54 in all, at one loudness.</span></li>
+    <li><a data-m="patterns">Patterns and mutes</a><span>On the <b>SEQ</b> screen the black keys pick four patterns (on the next bar) and mute the drums, bass and loop.</span></li>
+    <li><a data-m="setup">MIDI clock and out</a><span>Follow or lead a MIDI clock, send the band's notes, the sustain pedal, aftertouch: in Setup (<b>GLO</b> twice).</span></li>
+    <li><a data-m="mixer">One tempo, tapped</a><span>One tempo for every beat; tap <b>HOME</b> in time on the mixer or the tape deck.</span></li>
+    <li><a data-m="vibe">LFOs go further</a><span>Across the wavetables, to the detune and to each effect.</span></li>
+    <li><a href="#keys">Keys like a DAW</a><span><kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> <kbd>F</kbd>… play, <kbd>1</kbd>–<kbd>0</kbd> are the buttons; the letters are on the drawn keys.</span></li>
+  </ul>
+</section>
 
 <section class="guide" aria-label="How to play it">
   <div>
@@ -142,14 +183,14 @@ if (/[?&]bare\b/.test(location.search)) document.documentElement.classList.add("
       <li>27 keys, F3 to G5. <b>OCT−</b> / <b>OCT+</b> shift them and light up while they're shifted.</li>
       <li><b>PRESETS</b> a whole sound (54 of them, then yours: <b>SAVE</b> names one), <b>ALGORITHM</b> only the wavetable (16 of them), <b>SELECT</b> the drum tape.</li>
       <li><b>PLAY</b> the band: thirteen depressing beats, a minor-key bass, your loop. <b>ARP</b> tapped: chords become patterns.</li>
-      <li><b>REC</b> records into a 1, 2 or 4-bar loop (a bar's count-in when stopped). <b>SEQ</b>: the white keys are its steps; press one and turn NOTE, LEN, VEL; tap it to remove it. <b>HOME + REC</b> undo, <b>SAVE + REC</b> clear.</li>
+      <li><b>REC</b> records into a 1, 2 or 4-bar loop (a bar's count-in when stopped). <b>SEQ</b>: the white keys are its steps (press one: the cursor goes there; again: its note goes, or one comes), the knobs move the cursor, its note and length; the first black keys pick four patterns, the next three mute the band. <b>HOME + REC</b> undo, <b>SAVE + REC</b> clear.</li>
     </ul>
   </div>
   <div>
     <h2>Here</h2>
     <ul>
       <li>Drag a knob up or down, or scroll on it. Several fingers work on a touch screen. <kbd>Shift</kbd>-click or right-click a button to keep it held.</li>
-      <li>The computer's keys play like a DAW's: <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> <kbd>F</kbd>… the white keys from F3, <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>Y</kbd>… the black ones; <kbd>Z</kbd> <kbd>X</kbd> move them down or up an octave. The letters are on the drawn keys. Buttons: <kbd>1</kbd>–<kbd>6</kbd> FX SEL ENV LFO EDIT GLO, <kbd>7</kbd> or <kbd>Esc</kbd> home, <kbd>8</kbd> save, <kbd>9</kbd> or <kbd>B</kbd> arp, <kbd>0</kbd> seq, <kbd>Space</kbd> play, <kbd>Enter</kbd> rec, <kbd>−</kbd> <kbd>=</kbd> octave. <kbd>↑</kbd> <kbd>↓</kbd> wavetable, <kbd>←</kbd> <kbd>→</kbd> drum tape, <kbd>,</kbd> <kbd>.</kbd> presets. While SAVE AS is open, type the name; <kbd>Enter</kbd> keeps it, <kbd>Esc</kbd> doesn't.</li>
+      <li id="keys">The computer's keys play like a DAW's: <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> <kbd>F</kbd>… the white keys from F3, <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>Y</kbd>… the black ones; <kbd>Z</kbd> <kbd>X</kbd> move them down or up an octave. The letters are on the drawn keys. Buttons: <kbd>1</kbd>–<kbd>6</kbd> FX SEL ENV LFO EDIT GLO, <kbd>7</kbd> or <kbd>Esc</kbd> home, <kbd>8</kbd> save, <kbd>9</kbd> or <kbd>B</kbd> arp, <kbd>0</kbd> seq, <kbd>Space</kbd> play, <kbd>Enter</kbd> rec, <kbd>−</kbd> <kbd>=</kbd> octave. <kbd>↑</kbd> <kbd>↓</kbd> wavetable, <kbd>←</kbd> <kbd>→</kbd> drum tape, <kbd>,</kbd> <kbd>.</kbd> presets. While SAVE AS is open, type the name; <kbd>Enter</kbd> keeps it, <kbd>Esc</kbd> doesn't.</li>
       <li>MIDI in: notes, bend, the mod wheel (the wavetable's position), program change (a preset), CC 74 cutoff, 71 resonance, 73 attack, 72 release, 91 reverb, 93 chorus, 94 delay, 7 volume.</li>
     </ul>
   </div>
@@ -376,6 +417,29 @@ addEventListener("blur", () => {
   for (const part of ["buttons", "keys"]) for (const id of [...holding[part].keys()]) if (id[0] === "k") holding[part].delete(id);
   sync();
 });
+
+/* ------------------------------------------------------------------------ what's new */
+// Each item links to its part of the manual on MOPE-1's page (one folder up from the player; the page itself
+// when opened from disk). Hidden, it stays hidden until a newer version's list.
+{
+  const NEWS = document.getElementById("news-v").textContent, KEY = "mope1-news-hidden";
+  const site = location.protocol === "file:" ? "https://slothpallas.github.io/mope-1/" : new URL("../", location.href).href;
+  for (const a of document.querySelectorAll(".news a[data-m]")) {
+    a.href = site + "#" + a.dataset.m;
+    if (window.parent !== window) a.target = "_top";            // (in the front page's frame: the page scrolls there)
+  }
+  const news = document.getElementById("news"), show = document.getElementById("newsShow");
+  const hide = (yes, keep) => {
+    news.hidden = yes;
+    show.hidden = !yes;
+    if (keep) try { yes ? localStorage.setItem(KEY, NEWS) : localStorage.removeItem(KEY); } catch (e) { /* (private window) */ }
+  };
+  let was = null;
+  try { was = localStorage.getItem(KEY); } catch (e) { /* (private window) */ }
+  hide(was === NEWS, false);
+  document.getElementById("newsHide").addEventListener("click", () => hide(true, true));
+  show.addEventListener("click", () => hide(false, true));
+}
 
 /* ------------------------------------------------------------------------ what it shows */
 const paint = document.getElementById("screen").getContext("2d");
