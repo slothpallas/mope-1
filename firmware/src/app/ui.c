@@ -273,6 +273,8 @@ static struct {
     uint32_t last_draw;
     uint8_t naming;                    /* SAVE AS open: the knobs (and typing) edit the name, SAVE keeps it */
     uint8_t set_row;                   /* SETTINGS: the row chosen (knob 1 moves, knob 2 sets) */
+    uint8_t tap_n, tap_skip;           /* tap tempo: HOME taps so far (on the tempo pages); a HOME let through */
+    uint32_t tap_last, tap_iv[3];      /* the last tap, the intervals between the last few */
     uint8_t save_slot, cursor;
     char name[PRESET_NAME + 1];
     uint32_t name_dice;
@@ -320,12 +322,18 @@ static const char *const SW_TEMPO[] = {"ONE FOR ALL", "EACH BEAT'S"};
 static const char *const SW_ROOM[] = {"RAIN", "FOREST", "CITY NIGHT", "OFFICE", "SEA"};
 static const char *const SW_ONOFF[] = {"OFF", "ON"};
 static const char *const SW_BASS[] = {"THE BEAT'S", "ROOT", "PULSE", "OCTAVES", "FOLLOW"};
+static const char *const SW_MOUT[] = {"OFF", "KEYS", "NOTES", "ALL"};
+static const char *const SW_CLOCK[] = {"OWN", "FOLLOW", "LEAD"};
+static const char *const SW_PRESS[] = {"NOTHING", "VIBRATO", "FILTER", "WAVE", "LFO"};
 _Static_assert(sizeof SW_VOICES / sizeof SW_VOICES[0] == VM_N && sizeof SW_TEMPO / sizeof SW_TEMPO[0] == TM_N &&
-               sizeof SW_ROOM / sizeof SW_ROOM[0] == AM_N && sizeof SW_BASS / sizeof SW_BASS[0] == BS_N, "a word for each");
+               sizeof SW_ROOM / sizeof SW_ROOM[0] == AM_N && sizeof SW_BASS / sizeof SW_BASS[0] == BS_N &&
+               sizeof SW_MOUT / sizeof SW_MOUT[0] == MO_N && sizeof SW_CLOCK / sizeof SW_CLOCK[0] == CK_N &&
+               sizeof SW_PRESS / sizeof SW_PRESS[0] == AT_N, "a word for each");
 static const set_row_t SET_ROWS[] = {
     {"VOICES", P_VMODE, SW_VOICES}, {"GLIDE", P_GLIDE, 0}, {"TEMPO", P_TEMPOMODE, SW_TEMPO}, {"ROOM", P_AMBI, SW_ROOM},
     {"ROOM LEVEL", P_GUNK, 0},      {"AUTO BASS", P_BASSON, SW_ONOFF}, {"BASS WAY", P_BSTYLE, SW_BASS},
-    {"MIDI IN", P_MIDICH, 0},       {"MIDI OUT", P_MIDIOUT, SW_ONOFF}, {"TUNE", P_TUNE, 0}};
+    {"MIDI IN", P_MIDICH, 0},       {"MIDI OUT", P_MIDIOUT, SW_MOUT}, {"CLOCK", P_CLOCK, SW_CLOCK},
+    {"AFTERTOUCH", P_PRESS, SW_PRESS}, {"TUNE", P_TUNE, 0}};
 #define NSET ((int)(sizeof SET_ROWS / sizeof SET_ROWS[0]))
 static const char *set_text(int r)                       /* a row's value in words (0: draw it as a bar) */
 {
@@ -461,7 +469,21 @@ static void say_choice(int k)
         ui_caption(b, 1300u);
         break;
     }
-    case P_MIDIOUT: ui_caption(proj.par[k] ? "MIDI OUT: YES" : "MIDI OUT: NO", 1200u); break;
+    case P_MIDIOUT: {
+        static const char *const W[MO_N] = {"MIDI OUT: NO", "MIDI OUT: THE KEYS", "OUT: KEYS, ARP, LOOP", "OUT: EVERYTHING. DRUMS ON 10"};
+        ui_caption(W[proj.par[k]], 1400u);
+        break;
+    }
+    case P_CLOCK: {
+        static const char *const W[CK_N] = {"MY OWN TEMPO.", "FOLLOWING THEIR CLOCK.", "THEY FOLLOW ME."};
+        ui_caption(W[proj.par[k]], 1400u);
+        break;
+    }
+    case P_PRESS: {
+        static const char *const W[AT_N] = {"PRESSING: NOTHING.", "PRESS: IT TREMBLES", "PRESS: EYES OPEN", "PRESS: IT MORPHS", "PRESS: MORE LFO"};
+        ui_caption(W[proj.par[k]], 1400u);
+        break;
+    }
     case P_ARPMODE: ui_caption(ARP_MODE_NAME[proj.par[k]], 1200u); break;
     case P_ARPRATE: ui_caption(ARP_RATE_NAME[proj.par[k]], 1200u); break;
     case P_ARPOCT: ui_caption(proj.par[k] == 1 ? "ONE OCTAVE" : proj.par[k] == 2 ? "TWO OCTAVES" : "THREE OCTAVES", 1200u); break;
@@ -740,8 +762,8 @@ static int midi_ch(void) { return proj.par[P_MIDICH] ? proj.par[P_MIDICH] - 1 : 
 static void note_out(int on, int n, int vel)
 {
     uint32_t st;
-    if (!proj.par[P_MIDIOUT])
-        return;
+    if (proj.par[P_MIDIOUT] == MO_OFF || (ui.arp && proj.par[P_MIDIOUT] >= MO_NOTES))
+        return;                                          /* (the arpeggiator's notes go out instead: the engine's) */
     st = (on ? 0x90u : 0x80u) | (uint32_t)midi_ch();
     plat_midi_out(st >> 4 | st << 8 | (uint32_t)n << 16 | (uint32_t)(on ? vel : 0) << 24);
 }
@@ -934,6 +956,45 @@ static void reset_defaults(void)
     ui_caption("FORGOT EVERYTHING.", 1800u);
 }
 
+/* TAP TEMPO: HOME tapped in time on the tape deck or the mixer: the last few gaps, averaged */
+#define TAP_GAP_MS 1300u                                 /* (50 bpm is 1200 ms a beat) */
+static void tap_tempo(void)
+{
+    const uint32_t now = plat_ms();
+    if (ui.tap_n && now - ui.tap_last <= TAP_GAP_MS)
+        ui.tap_iv[(ui.tap_n - 1) % 3] = now - ui.tap_last;
+    else
+        ui.tap_n = 0;
+    ui.tap_n = (uint8_t)(ui.tap_n < 200 ? ui.tap_n + 1 : ui.tap_n);
+    ui.tap_last = now;
+    ui.page_until = now + STAY_MS;
+    ui.focus_t = ui.act_t = now;
+    if (ui.tap_n >= 2) {
+        const int k = ui.tap_n - 1 < 3 ? ui.tap_n - 1 : 3;
+        uint32_t sum = 0;
+        int i, t;
+        static char cap[16];
+        for (i = 0; i < k; i++)
+            sum += ui.tap_iv[i];
+        t = (int)((60000u * (uint32_t)k + sum / 2u) / sum);
+        if (proj.par[P_CLOCK] == CK_FOLLOW && sy_tel.ext_bpm) {
+            ui_caption("THEIR CLOCK DECIDES.", 1200u);
+            return;
+        }
+        knob_set(P_TEMPO, t);
+        t = proj.par[P_TEMPO];
+        i = 0;
+        if (t >= 100)
+            cap[i++] = (char)('0' + t / 100);
+        cap[i++] = (char)('0' + t / 10 % 10);
+        cap[i++] = (char)('0' + t % 10);
+        for (const char *q = " BPM"; *q; q++)
+            cap[i++] = *q;
+        cap[i] = 0;
+        ui_caption(cap, 1200u);
+    }
+}
+
 static void button(int b)
 {
     int i;
@@ -948,6 +1009,10 @@ static void button(int b)
     }
     if (ui.naming) {                                     /* SAVE AS open: SAVE keeps it, anything else: never mind */
         save_close(b == B_SAVE);
+        return;
+    }
+    if (b == B_HOME && !ui.tap_skip && ui.panel && (ui.page == PG_DECK || ui.page == PG_MIX)) {
+        tap_tempo();                                     /* the tempo pages: HOME in time sets it (one tap: HOME) */
         return;
     }
     if (b == B_FX && ui.latch && ui.page == PG_PUNCH && !(plat_ms() - ui.last_up_t < DOUBLE_MS && ui.last_up_btn == B_FX)) {
@@ -1090,6 +1155,7 @@ static void midi_cc(uint32_t cc, uint32_t v)
         break;
     }
     case 1: sy_mod((int)v); break;
+    case 64: sy_sustain(v >= 64u); break;               /* the pedal */
     case 7: knob_set(P_VOLUME, (int)(v * 100u / 127u)); break;
     case 71: knob_set(P_RESO, (int)(v * 100u / 127u)); break;
     case 74: knob_set(P_CUTOFF, (int)(v * 100u / 127u)); break;
@@ -1104,13 +1170,104 @@ static void midi_cc(uint32_t cc, uint32_t v)
     }
 }
 
+/* ---------------------------------------------------- a MIDI clock in --- */
+/* CLOCK FOLLOW: its tempo from the times of the last clocks (stamped as they arrived), where it is from the
+ * count since its Start; both to the engine, which follows. Two seconds without one: its own tempo again. */
+#define CK_HIST 25
+static struct {
+    uint16_t t[CK_HIST];               /* the last clocks' arrival (ms, low 16 bits) */
+    uint8_t n, w, started, start_pend;
+    uint32_t clocks;                   /* since the first after Start */
+    uint32_t seen;                     /* plat_ms of the newest */
+    float est, sent;                   /* the tempo: as measured (smoothed), as last sent (0 none) */
+} ck;
+static void clock_in(uint32_t st, uint32_t stamp)
+{
+    if (proj.par[P_CLOCK] != CK_FOLLOW)
+        return;
+    if (st == 0xF8u) {
+        ck.t[ck.w] = (uint16_t)stamp;
+        ck.w = (uint8_t)((ck.w + 1) % CK_HIST);
+        ck.n += ck.n < CK_HIST;
+        ck.seen = plat_ms();
+        if (ck.start_pend) {                             /* (the first clock after Start: beat one) */
+            ck.start_pend = 0;
+            ck.started = 1;
+            ck.clocks = 0;
+            sy_clock_start();
+        }
+        ck.clocks++;
+    } else if (st == 0xFAu) {
+        ck.start_pend = 1;
+    } else if (st == 0xFBu) {
+        sy_drums(1);
+    } else if (st == 0xFCu) {
+        ck.started = ck.start_pend = 0;
+        sy_drums(0);
+    }
+}
+static void clock_frame(void)
+{
+    const uint32_t now = plat_ms();
+    uint16_t newest, span;
+    float b, per;
+    if (proj.par[P_CLOCK] != CK_FOLLOW || (ck.n && now - ck.seen > 2000u)) {
+        if (ck.sent > 0.0f) {
+            sy_clock_bpm(0);
+            if (proj.par[P_CLOCK] == CK_FOLLOW)
+                ui_caption("THEIR CLOCK STOPPED. MINE, THEN.", 1600u);
+        }
+        memset(&ck, 0, sizeof ck);
+        return;
+    }
+    if (ck.n < 7)
+        return;
+    newest = ck.t[(ck.w + CK_HIST - 1) % CK_HIST];
+    span = (uint16_t)(newest - ck.t[(ck.w + CK_HIST - ck.n) % CK_HIST]);
+    if (!span)
+        return;
+    per = (float)span / (float)(ck.n - 1);               /* ms a clock */
+    b = 60000.0f / (24.0f * per);
+    if (b < 20.0f || b > 300.0f)
+        return;
+    ck.est = ck.est > 0.0f ? ck.est + (b - ck.est) * 0.15f : b;
+    if (ck.est - ck.sent > 0.05f || ck.sent - ck.est > 0.05f) {
+        static char cap[24];
+        const int t = (int)(ck.est + 0.5f);
+        if (ck.sent <= 0.0f) {                           /* (found one) */
+            int i = 0;
+            const char *q;
+            for (q = "FOLLOWING: "; *q; q++)
+                cap[i++] = *q;
+            if (t >= 100)
+                cap[i++] = (char)('0' + t / 100);
+            cap[i++] = (char)('0' + t / 10 % 10);
+            cap[i++] = (char)('0' + t % 10);
+            for (q = " BPM"; *q; q++)
+                cap[i++] = *q;
+            cap[i] = 0;
+            ui_caption(cap, 1600u);
+        }
+        ck.sent = ck.est;
+        sy_clock_bpm((int)(ck.est * 100.0f + 0.5f));
+    }
+    if (ck.started) {                                    /* where it is now: its newest clock, and the time since */
+        const float d = (float)(uint16_t)((uint16_t)now - newest) / per, since = d < 0.0f ? 0.0f : d > 1.0f ? 1.0f : d;
+        const float at = ((float)(ck.clocks - 1u) + since) * (1.0f / 24.0f);
+        const int whole = (int)at;
+        sy_clock_pos(whole, (int)((at - (float)whole) * 10000.0f));
+    }
+}
+
 static void midi_in(void)
 {
     uint32_t pkt;
     while (plat_midi_in(&pkt)) {
         uint32_t st = (pkt >> 8) & 0xFFu, d1 = (pkt >> 16) & 0x7Fu, d2 = (pkt >> 24) & 0x7Fu, type = st & 0xF0u;
-        if (st >= 0xF0u)
+        if (st >= 0xF0u) {                               /* real time: the clock (its arrival time in the top bytes) */
+            clock_in(st, pkt >> 16);
             continue;
+        }
         if (proj.par[P_MIDICH] && (st & 0x0Fu) + 1u != (uint32_t)proj.par[P_MIDICH])
             continue;
         if (type == 0x90u && d2) {
@@ -1124,6 +1281,10 @@ static void midi_in(void)
             load_mood((int)(d1 % NMOOD));
         } else if (type == 0xE0u) {
             sy_bend((int)(d2 << 7 | d1) - 8192);
+        } else if (type == 0xD0u) {                      /* channel pressure */
+            sy_press((int)d1);
+        } else if (type == 0xA0u) {                      /* a key's own pressure: taken as everyone's */
+            sy_press((int)d2);
         }
         ui.act_t = plat_ms();
     }
@@ -1308,6 +1469,8 @@ static void autosave(void)
 void ui_init(void)
 {
     memset(&ui, 0, sizeof ui);
+    memset(&ck, 0, sizeof ck);
+    sy_midi_out = plat_midi_out;                         /* (the band's notes and the clock, from the engine) */
     ui.touched = -1;
     ui.pk_fx = -1;
     ui.page = PG_BODY;
@@ -1322,10 +1485,24 @@ void ui_init(void)
     blob_init();
 }
 
+static void button(int b);
+static void button_up(int b);
 void ui_frame(void)
 {
     int c;
     input();
+    clock_frame();
+    if (ui.tap_n && plat_ms() - ui.tap_last > TAP_GAP_MS) {   /* one HOME tap on a tempo page, no more: HOME after all */
+        const int one = ui.tap_n == 1;
+        ui.tap_n = 0;
+        if (one) {
+            ui.tap_skip = 1;
+            button(B_HOME);
+            if (!(ui.btn >> B_HOME & 1u))
+                button_up(B_HOME);
+            ui.tap_skip = 0;
+        }
+    }
     {   /* a flood of MIDI filled the engine's queue and some values were lost: all of them again, once there is room */
         static uint32_t seen;
         if (sy_tel.dropped != seen && sy_queue_room() > P_NPARAMS + PU_N * PU_KN + 16) {

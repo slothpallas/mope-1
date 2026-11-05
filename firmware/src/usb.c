@@ -639,7 +639,10 @@ static void ep1_rx(void)
             for (k = 0; k < nb; k++)
                 sysex_byte(ep1rx[i + 1 + k]);
         } else if (((cin >= 8u && cin <= 0xEu) || (cin == 0xFu && ep1rx[i + 1] >= 0xF8u)) && mi_w - mi_r < MQ) {
-            /* CIN 0xF: a single byte; the real-time ones (clock, start, continue, stop) matter */
+            /* CIN 0xF: a single byte; the real-time ones (clock, start, continue, stop) matter. Their
+             * arrival (ms) goes in the two unused bytes: the clock's tempo is measured from it */
+            if (cin == 0xFu)
+                pkt = (pkt & 0xFFFFu) | (fm1_ms & 0xFFFFu) << 16;
             midi_in_q[mi_w % MQ] = pkt;
             RING_PUBLISH();
             mi_w++;

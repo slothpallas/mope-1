@@ -90,13 +90,14 @@ Press or hold a part's button: its schematic opens in a dark glass drawer over t
 | SEQ | Loop | Note | Length | Velocity (of the chosen step, or the whole loop) | Bars (1, 2, 4) |
 | SEQ again | Tape deck | Style | Tempo | Swing | Human (looser timing and velocity) |
 | GLO | Mixer | Voice | Drums | Bass (0: no bass) | Gunk |
-| GLO again | Setup | Glide | MIDI channel | MIDI out | Tune |
+| GLO again | Settings | a list, full screen: knob 1 picks a row, knob 2 sets it: Voices, Glide, Tempo, Room, Room level, Auto bass, Bass way, MIDI in, MIDI out, Clock, Aftertouch, Tune | | | |
 | ARP | Arp | Mode (up, down, up and down, wander, stab) | Rate (1/4 .. 1/32, triplets) | Octaves (1-3) | Gate |
 
 - **ALGORITHM** changes only the instrument's sound source, its wavetable (the blob's body shape). The caption says which ("WAVE: SIGH"); everything else stays.
 - **PRESETS** loads a whole saved sound at once: wave, filter, envelope, LFO and effects. Its card opens in the drawer: the name, where it sits in its kind, and thumbnails of the wave, filter and envelope it brought.
 - **SELECT**: the drum tape (the blob swaps the cassette and shrugs).
 - **Close-ups:** while you hold EDIT (Eyes) the view moves in on its eyes; while you hold ENV (Mouth), on its mouth.
+- **Tap tempo:** on the tape deck or the mixer, tap **HOME** in time (two taps or more); the tempo shows a moment. One tap alone is HOME, as always (a moment later).
 - **PLAY**: the band on and off: drums, bass and your loop. **ARP**: tap for the arpeggiator on or off; hold for its page: the keys you hold become its pattern, at the tempo, starting each bar with the drums.
 
 ### Recording a loop
@@ -127,9 +128,28 @@ As on X0X, Melodee and JIANT FM: **PLAY**, **REC** and **SEQ** do what they say.
 
 **The bass is always sad:** the auto-bass plays natural minor. Hold something that sounds major (or one note) and it plays the relative minor, a minor third down: hold C and it plays A minor, every note of which is also in C major. Hold a minor chord and it plays that minor. Any note in a pattern outside the minor scale is pulled onto it.
 
-**MIDI in:** notes with velocity, and pitch bend. The mod wheel moves the position and program change
-picks a mood. CCs: 74 cutoff, 71 resonance, 73 attack, 72 release, 70 position, 91 reverb, 93 chorus,
-94 delay, 7 volume.
+**MIDI in** (USB and the TRS jack): notes with velocity, and pitch bend. The mod wheel moves the position
+and program change picks a preset. CCs: 74 cutoff, 71 resonance, 73 attack, 72 release, 70 position,
+91 reverb, 93 chorus, 94 delay, 7 volume, 64 the sustain pedal. **Aftertouch** (channel or per key) does
+what Settings → Aftertouch says: vibrato (as it comes), the filter opening, the wave morphing, the LFOs
+deeper, or nothing.
+
+**MIDI out** (Settings → MIDI out, on the MIDI channel, or 1 when it takes all):
+
+| MIDI out | What goes out |
+|---|---|
+| Off | nothing |
+| Keys | the keys you play (with the arpeggiator on at Notes or All: its notes instead) |
+| Notes | the keys, the arpeggiator and the loop |
+| All | that, plus the auto-bass (on the next channel up, skipping 10) and the drums on 10: kick 36, rim 37, snare 38, clap 39, hat 42, open hat 46 |
+
+**Clock** (Settings → Clock):
+
+| Clock | |
+|---|---|
+| Own | its own tempo; incoming clock is ignored |
+| Follow | an incoming MIDI clock sets the tempo, and Start / Continue / Stop start and stop the band; it stays on their beat (within a few ms). Two seconds without clock: its own tempo again |
+| Lead | it sends clock (24 a beat) all the time, and Start / Stop with PLAY |
 
 **Levels:** every note is XP. Levels change nothing, but the captions say so ("LEVEL UP. NOTHING
 CHANGED."). Level 10 gives it a balloon, mostly deflated.

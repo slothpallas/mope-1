@@ -20,7 +20,7 @@ static const sy_param_t PARAMS[P_NPARAMS] = {
     {"Chorus", 0, 100, 30}, {"Delay", 0, 100, 22}, {"Time", 0, 100, 50}, {"Feedback", 0, 100, 45},
     {"Reverb", 0, 100, 38}, {"Size", 0, 100, 62}, {"Fry", 0, 100, 0}, {"Tape", 0, 100, 35},
     {"Style", 0, ST_N - 1, ST_FUNERAL}, {"Tempo", 50, 200, 84}, {"Drums", 0, 100, 70}, {"Bass", 0, 100, 60},
-    {"Glide", 0, 100, 0}, {"Octave", -3, 3, 0}, {"MIDI ch", 0, 16, 0}, {"MIDI out", 0, 1, 0},
+    {"Glide", 0, 100, 0}, {"Octave", -3, 3, 0}, {"MIDI ch", 0, 16, 0}, {"MIDI out", 0, MO_N - 1, MO_OFF},
     {"Tune", -100, 100, 0}, {"Volume", 0, 100, 80},
     {"Voice", 0, 100, 80}, {"Gunk", 0, 100, 30}, {"Swing", 0, 100, 0}, {"Human", 0, 100, 15},
     {"Arp mode", 0, ARP_NMODE - 1, ARP_UP}, {"Arp rate", 0, ARP_NRATE - 1, 3}, {"Arp oct", 1, 3, 1},
@@ -36,6 +36,7 @@ static const sy_param_t PARAMS[P_NPARAMS] = {
     {"Crackle", 0, 100, 0}, {"Dust", 0, 100, 0},
     {"Voices", 0, VM_N - 1, VM_POLY},
     {"Tempo is", 0, TM_N - 1, TM_GLOBAL}, {"Room sound", 0, AM_N - 1, AM_RAIN}, {"Auto bass", 0, 1, 1}, {"Bass way", 0, BS_N - 1, BS_BEAT},
+    {"Clock", 0, CK_N - 1, CK_OWN}, {"Pressure", 0, AT_N - 1, AT_VIBRATO},
 };
 const sy_param_t *sy_param_info(int i) { return &PARAMS[i < 0 ? 0 : i >= P_NPARAMS ? P_NPARAMS - 1 : i]; }
 
@@ -46,7 +47,7 @@ volatile sy_tel_t sy_tel;
 
 /* ----------------------------------------------------------- commands --- */
 enum { C_SET, C_ON, C_OFF, C_BEND, C_MOD, C_DRUMS, C_ARP, C_PANIC, C_REC, C_LUNDO, C_LCLEAR, C_LSTEP, C_LNUDGE, C_LLOAD, C_LSEL,
-       C_PUNCH, C_PUNCHK, C_LNOTE, C_LLEN };
+       C_PUNCH, C_PUNCHK, C_LNOTE, C_LLEN, C_SUS, C_PRESS, C_CKBPM, C_CKPOS, C_CKSTART };
 typedef struct {
     uint8_t c;
     int16_t a, b;
@@ -84,6 +85,11 @@ void sy_bend(int v) { post(C_BEND, clampi(v, -8192, 8191), 0); }
 void sy_mod(int v) { post(C_MOD, clampi(v, 0, 127), 0); }
 void sy_drums(int on) { post(C_DRUMS, on, 0); }
 void sy_arp(int on) { post(C_ARP, on, 0); }
+void sy_sustain(int on) { post(C_SUS, on != 0, 0); }
+void sy_press(int v) { post(C_PRESS, clampi(v, 0, 127), 0); }
+void sy_clock_bpm(int bpm_x100) { post(C_CKBPM, clampi(bpm_x100, 0, 30000), 0); }
+void sy_clock_pos(int beat, int frac) { post(C_CKPOS, beat & 1023, clampi(frac, 0, 9999)); }
+void sy_clock_start(void) { post(C_CKSTART, 0, 0); }
 void sy_rec(int on) { post(C_REC, on, 0); }
 void sy_loop_undo(void) { post(C_LUNDO, 0, 0); }
 void sy_loop_clear(void) { post(C_LCLEAR, 0, 0); }
@@ -139,6 +145,10 @@ static inline uint32_t rnd(void)
 static inline float rndf(void) { return (float)(rnd() >> 8) * (1.0f / 16777216.0f); }
 static inline float rnds(void) { return rndf() * 2.0f - 1.0f; }
 static inline float pf(int p) { return (float)par[p] * 0.01f; }        /* a 0..100 value as 0..1 */
+/* the tempo: its own (Tempo), or a MIDI clock's while one comes (CK_FOLLOW), that one a little faster or
+ * slower until the band is where the clock is (ck_rate) */
+static float ck_bpm, ck_rate = 1.0f;
+static inline float bpm(void) { return ck_bpm > 0.0f ? ck_bpm * ck_rate : (float)par[P_TEMPO]; }
 /* a time knob: 1 ms .. ~8 s, doubling every 7.7 steps */
 static inline float knob_s(int p) { return 0.001f * mm_exp2f(pf(p) * 13.0f); }
 static inline float coef_s(float s) { return 1.0f - mm_expf(-1.0f / (s * SY_SR)); }
@@ -411,7 +421,8 @@ static voice_t vc[SY_NVOICE];
 #define COMB_N 512u                                    /* a comb down to 86 Hz */
 static float comb_line[SY_NVOICE][COMB_N] SY_POOL;
 static uint32_t age_n;
-static float bend_c, mod_amt;
+static float bend_c, mod_amt, press, press_to, vib_ph;
+static uint8_t sus_on, sus_note[128];             /* the pedal down; the notes it is keeping (let go meanwhile) */
 
 /* the load guard: when a block takes too long (sy_load, from the device), fewer voices may sound
  * until it has been calm for a while. The FM-1 crackles otherwise. */
@@ -620,6 +631,68 @@ static void note_off(int note)
 static void rec_on(int note, int vel);                 /* (the loop records these: below) */
 static void rec_off(int note);
 
+/* ----------------------------------------------------------- MIDI out --- */
+/* MIDI OUT at NOTES: the arpeggiator's and the loop's notes go out too, on the MIDI channel; at ALL also
+ * the auto-bass (the next channel up, past 10) and the drums (10, General MIDI's notes). The keys
+ * themselves the UI sends. CK_LEAD: the clock, Start and Stop. */
+void (*sy_midi_out)(uint32_t pkt);
+static uint8_t mo_held[128];                            /* notes sent on and not off yet: their channel + 1 */
+static int8_t mo_bass = -1;                             /* the bass's note sounding out there, -1 none */
+static uint8_t mo_bass_ch, mo_drum[6];                  /* its channel; each drum's note still on (0 none) */
+static const uint8_t MO_DRUM_NOTE[6] = {36, 38, 39, 42, 46, 37};   /* kick snare clap hat open-hat perc */
+static int mo_ch(void) { return par[P_MIDICH] ? par[P_MIDICH] - 1 : 0; }
+static int mo_bass_chan(void) { const int c = (mo_ch() + 1) % 16; return c == 9 ? 10 : c; }
+static void mo_send(uint32_t st, int d1, int d2)
+{
+    if (sy_midi_out)
+        sy_midi_out(st >> 4 | st << 8 | (uint32_t)(d1 & 127) << 16 | (uint32_t)(d2 & 127) << 24);
+}
+static void mo_note(int ch, int on, int n, int vel) { mo_send((on ? 0x90u : 0x80u) | (uint32_t)ch, n, on ? vel : 0); }
+static void band_on(int n, int vel)                     /* a note of the band's: it sounds, and goes out */
+{
+    note_on(n, vel);
+    if (par[P_MIDIOUT] < MO_NOTES)
+        return;
+    if (mo_held[n])                                     /* (again: the one before ends first) */
+        mo_note(mo_held[n] - 1, 0, n, 0);
+    mo_note(mo_ch(), 1, n, vel);
+    mo_held[n] = (uint8_t)(mo_ch() + 1);
+}
+static void band_off(int n)
+{
+    note_off(n);
+    if (mo_held[n]) {
+        mo_note(mo_held[n] - 1, 0, n, 0);
+        mo_held[n] = 0;
+    }
+}
+static void mo_bass_off(void)
+{
+    if (mo_bass >= 0)
+        mo_note(mo_bass_ch, 0, mo_bass, 0);
+    mo_bass = -1;
+}
+static void mo_drums_off(void)
+{
+    int i;
+    for (i = 0; i < 6; i++)
+        if (mo_drum[i]) {
+            mo_note(9, 0, mo_drum[i], 0);
+            mo_drum[i] = 0;
+        }
+}
+static void mo_all_off(void)                            /* whatever the engine left on out there, off */
+{
+    int k;
+    for (k = 0; k < 128; k++)
+        if (mo_held[k]) {
+            mo_note(mo_held[k] - 1, 0, k, 0);
+            mo_held[k] = 0;
+        }
+    mo_bass_off();
+    mo_drums_off();
+}
+
 /* ---------------------------------------------------------- arpeggiator --- */
 /* While it is on, held notes don't sound: they become its pattern, low to high, over 1-3 octaves, and it
  * plays them one at a time at the tempo (or all at once, STAB), each for Gate of a step. With the drums
@@ -699,11 +772,11 @@ static void arp_release(void)
     int i;
     if (arp_cur == -2) {
         for (i = 0; i < arp_nh; i++) {
-            note_off(arp_held[i]);
+            band_off(arp_held[i]);
             rec_off(arp_held[i]);
         }
     } else if (arp_cur >= 0) {
-        note_off(arp_cur);
+        band_off(arp_cur);
         rec_off(arp_cur);
     }
     arp_cur = -1;
@@ -713,7 +786,7 @@ static void arp_tick(void)                             /* one sample */
 {
     if (!arp_on)
         return;
-    arp_len = SY_SR * 60.0f / (float)par[P_TEMPO] / ARP_DIV[par[P_ARPRATE]];
+    arp_len = SY_SR * 60.0f / bpm() / ARP_DIV[par[P_ARPRATE]];
     if (!arp_nh) {
         if (arp_cur != -1)
             arp_release();
@@ -731,14 +804,14 @@ static void arp_tick(void)                             /* one sample */
             arp_release();
         if (par[P_ARPMODE] == ARP_STAB) {
             for (i = 0; i < arp_nh; i++) {
-                note_on(arp_held[i], arp_vel);
+                band_on(arp_held[i], arp_vel);
                 rec_on(arp_held[i], arp_vel);
             }
             arp_cur = -2;
             sy_tel.arp_note = arp_held[0];
         } else {
             const int n = sy_arp_note(arp_nh, (int)arp_seq);
-            note_on(n > 127 ? 127 : n, arp_seq % (uint32_t)(arp_nh * par[P_ARPOCT]) == 0u ? 110 : arp_vel);
+            band_on(n > 127 ? 127 : n, arp_seq % (uint32_t)(arp_nh * par[P_ARPOCT]) == 0u ? 110 : arp_vel);
             rec_on(n > 127 ? 127 : n, arp_vel);
             arp_cur = (int16_t)(n > 127 ? 127 : n);
             sy_tel.arp_note = arp_cur;
@@ -1061,9 +1134,8 @@ typedef struct {
     int scanning;                                    /* an LFO is on the tables: a second read, crossfading */
 } mods_t;
 #define MODS_NONE {0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0}
-static void lfo_into(mods_t *m, float lfo, int depth_p, int dest_p)
+static void lfo_into(mods_t *m, float lfo, float depth, int dest_p)
 {
-    const float depth = pf(depth_p);
     switch (par[dest_p]) {
     case LD_POS: m->pos += lfo * depth * 0.5f; break;
     case LD_CUTOFF: m->cut += lfo * depth * 4.0f; break;
@@ -1774,7 +1846,7 @@ static inline float pu_mono(uint32_t lag)               /* (the splice's search:
     const uint32_t p = (pu_w - 1u - lag) & (PU_LEN - 1u);
     return (float)pu_buf[0][p] + (float)pu_buf[1][p];
 }
-static inline float pu_beat(void) { return 60.0f / (float)par[P_TEMPO]; }   /* seconds */
+static inline float pu_beat(void) { return 60.0f / bpm(); }   /* seconds */
 static inline float pkf(int fx, int k) { return (float)pu_k[fx][k] * (1.0f / (float)PU_KMAX); }   /* 0..1 */
 static inline float pke(int fx, int k, float mid, float per)   /* 2^((knob - mid) / per) */
 {
@@ -2656,17 +2728,41 @@ static void bass_hit(int bn, int slide, int hold)
     b_gate = 1.0f;
     b_hold = (uint8_t)hold;
     sy_tel.bass_n++;
+    if (par[P_MIDIOUT] == MO_ALL) {                     /* out on its own channel (a slide: legato, the new one first) */
+        const int was = mo_bass, ch = mo_bass_ch;
+        mo_bass_ch = (uint8_t)mo_bass_chan();
+        if (slide && was >= 0 && was != bn) {
+            mo_note(mo_bass_ch, 1, bn, 100);
+            mo_note(ch, 0, was, 0);
+        } else {
+            if (was >= 0)
+                mo_note(ch, 0, was, 0);
+            mo_note(mo_bass_ch, 1, bn, 100);
+        }
+        mo_bass = (int8_t)bn;
+    }
+}
+static void mo_drum_hit(int d, float v)              /* a drum out, on 10 (the one before it ends first) */
+{
+    if (par[P_MIDIOUT] != MO_ALL)
+        return;
+    if (mo_drum[d])
+        mo_note(9, 0, mo_drum[d], 0);
+    mo_note(9, 1, MO_DRUM_NOTE[d], clampi((int)(v * 127.0f + 0.5f), 1, 127));
+    mo_drum[d] = MO_DRUM_NOTE[d];
 }
 static void drum_step(void)
 {
     const int fill = (dr_bar & 3u) == 3u;
     uint8_t c;
     float v;
+    mo_drums_off();                                     /* (out there: last step's hits end)  */
     if ((v = hv(pat[dr_style][TR_KICK][fill][dr_step])) > 0.0f) {
         dk.amp = v;
         dk.pe = 1.0f;
         dk.ph = 0.0f;
         sy_tel.kick_n++;
+        mo_drum_hit(0, v);
     }
     if ((v = hv(pat[dr_style][TR_SNARE][fill][dr_step])) > 0.0f) {
         sn_env = v;
@@ -2674,26 +2770,31 @@ static void drum_step(void)
         dsn.pe = 1.0f;
         dsn.ph = 0.0f;
         sy_tel.snare_n++;
+        mo_drum_hit(1, v);
     }
     if ((v = hv(pat[dr_style][TR_CLAP][fill][dr_step])) > 0.0f) {
         cl_env = v;
         cl_t = 0.0f;
         sy_tel.snare_n++;
+        mo_drum_hit(2, v);
     }
     if ((v = hv(pat[dr_style][TR_HAT][fill][dr_step])) > 0.0f) {
         h_env = v * 0.8f;
         oh_env = 0.0f;                                  /* the closed hat chokes the open one */
         sy_tel.hat_n++;
+        mo_drum_hit(3, v);
     }
     if ((v = hv(pat[dr_style][TR_OHAT][fill][dr_step])) > 0.0f) {
         oh_env = v * 0.7f;
         sy_tel.hat_n++;
+        mo_drum_hit(4, v);
     }
     if ((v = hv(pat[dr_style][TR_PERC][fill][dr_step])) > 0.0f) {
         dp.amp = v;
         dp.pe = 1.0f;
         dp.ph = 0.0f;
         sy_tel.perc_n++;
+        mo_drum_hit(5, v);
     }
     c = pat[dr_style][TR_BASS][fill][dr_step];
     if (abass_on && par[P_BSTYLE] != BS_BEAT) {         /* the bass another way: its own steps, not the beat's line */
@@ -2741,6 +2842,8 @@ static void drum_step(void)
             b_gate = 0.0f;
         }
     }
+    if (mo_bass >= 0 && b_gate <= 0.0f)                 /* (the bass let go: out there too) */
+        mo_bass_off();
 }
 
 /* one sample of the drums (and the auto-bass): their mix, mono, and the bass apart */
@@ -2845,6 +2948,59 @@ static inline float drums_sample(float *bass_out)
     return o;
 }
 
+/* CK_LEAD: 24 clocks a beat, always (Start and Stop with the band) */
+static float ck_out_t;
+static inline void clock_tick(void)
+{
+    if (par[P_CLOCK] != CK_LEAD)
+        return;
+    ck_out_t += bpm() * (24.0f / 60.0f / SY_SR);
+    if (ck_out_t >= 1.0f) {
+        ck_out_t -= 1.0f;
+        if (ck_out_t >= 1.0f)
+            ck_out_t = 0.0f;
+        mo_send(0xF8u, 0, 0);
+        sy_tel.clocks_out++;
+    }
+}
+/* CK_FOLLOW: where the clock is (beats since its Start, mod 1024, as of ck_age frames ago); the band
+ * follows it a little faster or slower (up to 5%), or, far off (a quarter of a beat), jumps there */
+static float ck_beat;
+static uint32_t ck_age;
+static uint8_t ck_have;
+static void drums_to(float beat)                       /* the band, at once at this beat */
+{
+    const int steps = STYLES[dr_style].steps;
+    float b = beat - 1024.0f * (float)(int)(beat * (1.0f / 1024.0f)), st;
+    uint32_t bar;
+    if (b < 0.0f)
+        b += 1024.0f;
+    bar = (uint32_t)(b * 0.25f);
+    st = (b - 4.0f * (float)bar) * (float)steps * 0.25f;
+    dr_bar = bar;
+    dr_step = (uint8_t)clampi((int)st, 0, steps - 1);
+    dr_len = SY_SR * 60.0f / bpm() * 4.0f / (float)steps;
+    dr_t = mm_clampf(st - (float)dr_step, 0.0f, 0.999f) * dr_len;
+    dr_fired = dr_t > 0.0f;                             /* (inside a step: that one has gone by) */
+}
+static void clock_follow(uint32_t n)                   /* once a block */
+{
+    float own, err;
+    ck_rate = 1.0f;
+    if (ck_bpm <= 0.0f || !ck_have || !dr_on || dr_start || dr_len <= 0.0f) {
+        ck_age += n;
+        return;
+    }
+    own = (float)(dr_bar % 256u) * 4.0f + ((float)dr_step + mm_clampf(dr_t / dr_len, 0.0f, 1.0f)) * 4.0f / (float)STYLES[dr_style].steps;
+    err = ck_beat + (float)ck_age * ck_bpm * (1.0f / 60.0f / SY_SR) - own;
+    err -= 1024.0f * (float)(int)(err * (1.0f / 1024.0f) + (err < 0.0f ? -0.5f : 0.5f));
+    sy_tel.clock_err = err * 60000.0f / ck_bpm;
+    if (err > 0.25f || err < -0.25f)
+        drums_to(own + err);
+    else
+        ck_rate = 1.0f + mm_clampf(err, -0.05f, 0.05f);   /* (a beat's error: gone in about a beat) */
+    ck_age += n;
+}
 static void drums_tick(void)                           /* one sample of the sequencer */
 {
     if (!dr_on)
@@ -2856,8 +3012,12 @@ static void drums_tick(void)                           /* one sample of the sequ
         dr_fired = 0;
         dr_style = dr_pending;
         pu_grid = 1;                                    /* (the first step: one too) */
+        if (par[P_CLOCK] == CK_LEAD) {                  /* (leading: Start, and the first clock with it) */
+            mo_send(0xFAu, 0, 0);
+            ck_out_t = 1.0f;
+        }
     }
-    dr_len = SY_SR * 60.0f / (float)par[P_TEMPO] * 4.0f / (float)STYLES[dr_style].steps;
+    dr_len = SY_SR * 60.0f / bpm() * 4.0f / (float)STYLES[dr_style].steps;
     if (!dr_fired) {
         /* the style's own swing plus Swing (up to 60% of a step late), plus Human's stumble */
         const float sw = ((dr_step & 1u) ? mm_minf((float)STYLES[dr_style].swing + 40.0f * pf(P_SWING), 60.0f) * 0.01f * dr_len : 0.0f) + dr_jit;
@@ -2923,14 +3083,14 @@ static void loop_all_off(void)                          /* everything the loop i
     int i;
     for (i = 0; i < loop_n; i++)
         if (loop_ev[i].flags & EV_PLAYING) {
-            note_off(loop_ev[i].note);
+            band_off(loop_ev[i].note);
             loop_ev[i].flags &= (uint8_t)~EV_PLAYING;
         }
 }
 static void loop_remove(int i)
 {
     if (loop_ev[i].flags & EV_PLAYING)
-        note_off(loop_ev[i].note);
+        band_off(loop_ev[i].note);
     loop_ev[i] = loop_ev[--loop_n];
 }
 static void rec_on(int note, int vel)                   /* a note played while recording: into the loop */
@@ -2982,7 +3142,7 @@ static void loop_tick(int p)                            /* one tick of the playh
     for (i = 0; i < loop_n; i++) {                       /* ends first, so a note can start where one ends */
         sy_ev_t *e = &loop_ev[i];
         if ((e->flags & EV_PLAYING) && ((int)e->t + (int)e->len) % lt == p) {
-            note_off(e->note);
+            band_off(e->note);
             e->flags &= (uint8_t)~EV_PLAYING;
         }
     }
@@ -2997,8 +3157,8 @@ static void loop_tick(int p)                            /* one tick of the playh
         if ((e->flags & EV_HELD) || e->len == 0)
             continue;
         if (e->flags & EV_PLAYING)
-            note_off(e->note);
-        note_on(e->note, e->vel);
+            band_off(e->note);
+        band_on(e->note, e->vel);
         e->flags |= EV_PLAYING;
     }
     sy_tel.loop_pos = (uint16_t)p;
@@ -3025,7 +3185,7 @@ static void loop_run(void)                              /* one sample, after the
 /* the count-in: a bar of clicks, then the band starts and it records */
 static void count_run(void)
 {
-    const float beat = SY_SR * 60.0f / (float)par[P_TEMPO];
+    const float beat = SY_SR * 60.0f / bpm();
     const int b = (int)(cnt_t / beat);
     if (!cnt_on)
         return;
@@ -3157,7 +3317,7 @@ static void loop_cmd(const cmd_t *c)
             if (loop_sel < 0 || ((int)loop_ev[i].t >= loop_sel * 12 && (int)loop_ev[i].t < loop_sel * 12 + 12)) {
                 sy_ev_t *e = &loop_ev[i];
                 if (c->a == 0 && (e->flags & EV_PLAYING)) {   /* (a sounding note, retuned: let go first) */
-                    note_off(e->note);
+                    band_off(e->note);
                     e->flags &= (uint8_t)~EV_PLAYING;
                 }
                 if (c->a == 0)
@@ -3215,6 +3375,8 @@ const sy_ev_t *sy_loop_events(int *n)
 static void panic(void)                                 /* everything quiet, at once */
 {
     int i;
+    if (dr_on && par[P_CLOCK] == CK_LEAD)
+        mo_send(0xFCu, 0, 0);
     pu_held = pu_wait = pu_short = 0;
     mono_n = 0;
     for (i = 0; i < SY_NVOICE; i++) {
@@ -3233,6 +3395,20 @@ static void panic(void)                                 /* everything quiet, at 
         loop_ev[i].flags = 0;
     arp_cur = -1;
     arp_nh = 0;
+    sus_on = 0;
+    sy_tel.sustain = 0;
+    for (i = 0; i < 128; i++)
+        sus_note[i] = 0;
+    mo_all_off();
+}
+static void key_off(int n)                              /* a key let go (or the pedal up after it) */
+{
+    if (arp_on)
+        arp_remove(n);
+    else {
+        note_off(n);
+        rec_off(n);
+    }
 }
 static void drain(void)
 {
@@ -3251,6 +3427,8 @@ static void drain(void)
                 par[c.a] = (int16_t)clampi(c.b, p->lo, p->hi);
                 if (c.a == P_STYLE)
                     dr_pending = (uint8_t)par[P_STYLE];
+                if (c.a == P_MIDIOUT || c.a == P_MIDICH)  /* (out there: nothing left hanging) */
+                    mo_all_off();
                 if (c.a == P_SIZE || c.a == P_RTONE)
                     room_size(pf(P_SIZE));
                 if (c.a == P_VMODE) {                   /* (another way of taking voices: what sounds lets go) */
@@ -3265,6 +3443,7 @@ static void drain(void)
             }
             break;
         case C_ON:
+            sus_note[c.a] = 0;                          /* (again while the pedal kept it: a new note) */
             if (arp_on) {
                 arp_vel = (uint8_t)c.b;
                 arp_add(c.a);
@@ -3275,12 +3454,45 @@ static void drain(void)
             }
             break;
         case C_OFF:
-            if (arp_on) {
-                arp_remove(c.a);
-            } else {
-                note_off(c.a);
-                rec_off(c.a);
+            if (sus_on) {                               /* (the pedal keeps it until it is up) */
+                sus_note[c.a] = 1;
+                break;
             }
+            key_off(c.a);
+            break;
+        case C_SUS:
+            sus_on = (uint8_t)c.a;
+            sy_tel.sustain = sus_on;
+            if (!sus_on) {
+                int k;
+                for (k = 0; k < 128; k++)
+                    if (sus_note[k]) {
+                        sus_note[k] = 0;
+                        key_off(k);
+                    }
+            }
+            break;
+        case C_PRESS: press_to = (float)c.a * (1.0f / 127.0f); break;
+        case C_CKBPM:
+            ck_bpm = (float)c.a * 0.01f;
+            sy_tel.ext_bpm = (uint16_t)(c.a / 10);
+            if (!c.a)
+                ck_have = 0;
+            break;
+        case C_CKPOS:
+            ck_beat = (float)c.a + (float)c.b * 0.0001f;
+            ck_age = 0;
+            ck_have = 1;
+            break;
+        case C_CKSTART:                                 /* the clock's Start: from the top, now */
+            dr_on = 1;
+            dr_start = 1;
+            dr_bar = 0;
+            loop_last = -1;
+            ck_beat = 0.0f;
+            ck_age = 0;
+            ck_have = 1;
+            sy_tel.drums_on = 1;
             break;
         case C_BEND: bend_c = (float)c.a * (200.0f / 8192.0f); break;
         case C_MOD: mod_amt = (float)c.a * (0.5f / 127.0f); break;
@@ -3291,8 +3503,12 @@ static void drain(void)
                 dr_bar = 0;
                 loop_last = -1;
             } else if (!c.a) {
+                if (dr_on && par[P_CLOCK] == CK_LEAD)
+                    mo_send(0xFCu, 0, 0);
                 dr_on = 0;
                 b_gate = 0.0f;
+                mo_bass_off();
+                mo_drums_off();
                 if (rec_state)
                     rec_end();
                 loop_all_off();
@@ -3363,14 +3579,32 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
     drain();
     if (n > BLK)
         n = BLK;
+    clock_follow(n);
     lfo = lfo_tick(&lfo1, P_LFORATE, P_LFOSHAPE, n);
     lfo_b = lfo_tick(&lfo2, P_LFO2RATE, P_LFO2SHAPE, n);
     sy_tel.lfo = lfo;
     sy_tel.lfo_phase = lfo1.ph;
     sy_tel.lfo2 = lfo_b;
     sy_tel.lfo2_phase = lfo2.ph;
-    lfo_into(&md, lfo, P_LFODEPTH, P_LFODEST);           /* both LFOs, wherever they go: the voices and the effects */
-    lfo_into(&md, lfo_b, P_LFO2DEPTH, P_LFO2DEST);
+    lfo_into(&md, lfo, pf(P_LFODEPTH), P_LFODEST);       /* both LFOs, wherever they go: the voices and the effects */
+    lfo_into(&md, lfo_b, pf(P_LFO2DEPTH), P_LFO2DEST);
+    press += (press_to - press) * 0.25f;                 /* aftertouch (smoothed over a few blocks): what it moves */
+    sy_tel.press = press;
+    if (press > 0.002f)
+        switch (par[P_PRESS]) {
+        case AT_VIBRATO:
+            vib_ph += 5.5f * (float)n / SY_SR;
+            vib_ph -= (float)(int)vib_ph;
+            md.pitch += press * 40.0f * mm_sin_turns(vib_ph);
+            break;
+        case AT_FILTER: md.cut += press * 2.5f; break;
+        case AT_WAVE: md.pos += press * 0.5f; break;
+        case AT_LFO:
+            lfo_into(&md, lfo, press * 0.6f, P_LFODEST);
+            lfo_into(&md, lfo_b, press * 0.6f, P_LFO2DEST);
+            break;
+        default: break;
+        }
     to_ch = mm_clampf(pf(P_CHORUS) + md.copies, 0.0f, 1.0f);
     to_dl = mm_clampf(pf(P_DELAY) + md.echo, 0.0f, 1.0f) * 0.8f;
     to_rv = mm_clampf(pf(P_REVERB) + md.verb, 0.0f, 1.0f) * 0.6f;
@@ -3414,6 +3648,7 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
             r *= synth_g;
             count_run();
             drums_tick();
+            clock_tick();
             loop_run();
             arp_tick();
             dm = drums_sample(&bass) * drum_g + click_sample();

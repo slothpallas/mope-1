@@ -34,7 +34,7 @@ int main(void)
     const uint32_t magic = PROJ_MAGIC, fmt = 3u, xp = 12345u;
     const uint16_t loop_n = 3;
     const sy_ev_t ev[3] = {{0, 60, 100, 11, 0}, {48, 63, 90, 22, 0}, {96, 67, 80, 33, 0}};
-    int16_t par[64];
+    int16_t par[P_NPARAMS];
     int i, ok = 1;
     sy_init();
     printf("project\n");
@@ -88,6 +88,32 @@ int main(void)
         for (ok = 1, i = P_RTONE; i < P_NPARAMS; i++)
             ok &= proj.par[i] == sy_param_info(i)->def;
         CHECK(ok, "the effects' new knobs start at their defaults");
+    }
+    {   /* a format-6 save (0.4 betas: up to the bass's way, the punches' knobs after the pages seen) keeps
+         * its knobs and loop; the clock and aftertouch start at their defaults */
+        const int n6 = P_BSTYLE + 1, at6 = (8 + 2 * n6 + 3) & ~3, at6_loop = at6 + 4 + 28;
+        const uint32_t fmt6 = 6u;
+        memset(flash, 0, sizeof flash);
+        memcpy(flash, &magic, 4);
+        memcpy(flash + 4, &fmt6, 4);
+        for (i = 0; i < n6; i++)
+            par[i] = sy_param_info(i)->def;
+        par[P_MIDIOUT] = 1;                              /* (0.3's "on": now KEYS) */
+        par[P_BSTYLE] = BS_PULSE;
+        memcpy(flash + 8, par, (size_t)(2 * n6));
+        memcpy(flash + at6, &xp, 4);
+        flash[at6 + 4] = 0x21;
+        flash[at6 + 5] = 0x3A;                           /* (HALF's knobs: 3 and 10 from their defaults) */
+        flash[at6 + 5 + sizeof proj.pk - 1] = 0x07;
+        memcpy(flash + at6_loop, &loop_n, 2);
+        memcpy(flash + at6_loop + 2, ev, sizeof ev);
+        flash_n = at6_loop + 2 + 192 * (int)sizeof(sy_ev_t);
+        CHECK(project_load() == 0, "a format-6 save loads");
+        CHECK(proj.par[P_MIDIOUT] == MO_KEYS && proj.par[P_BSTYLE] == BS_PULSE && proj.seen == 0x21 && proj.xp == xp,
+              "its settings are kept (MIDI out on: the keys)");
+        CHECK(proj.pk[0] == 0x3A && proj.pk[sizeof proj.pk - 1] == 0x07, "the punches' knobs are kept");
+        CHECK(proj.loop_n == 3 && proj.loop[2].note == ev[2].note, "its loop is kept");
+        CHECK(proj.par[P_CLOCK] == CK_OWN && proj.par[P_PRESS] == AT_VIBRATO, "the clock and aftertouch at their defaults");
     }
     proj.par[P_BLEVEL] = 66;
     proj.seen = 5;

@@ -16,6 +16,7 @@
  *   spin ENC N                   N detents at once, exactly N (no acceleration)
  *   master N                     MASTER pot 0..4096
  *   midi B0 B1 B2                incoming USB MIDI message (hex bytes)
+ *   clockin BPM                  a MIDI clock coming in at BPM, from now (0: it stops)
  *   wav FILE | wavstop           start / stop recording the output
  *   peakreset                    restart the output peak (expect peak_db_min / peak_db_max)
  *   shot FILE.png                save the screen
@@ -91,7 +92,8 @@ void plat_leds(uint32_t b, uint32_t k, uint32_t d)
 #define MQ 256
 static uint32_t min_q[MQ], mi_w, mi_r;
 static FILE *midi_log;
-static uint32_t midi_out_count, clock_out_count;
+static uint32_t midi_out_count, clock_out_count, mo_on_ch[16], mo_rt[256];
+static int mo_hung[16][128];                    /* notes on out there and not off yet, by channel */
 int plat_midi_in(uint32_t *pkt)
 {
     if (mi_r == mi_w)
@@ -101,11 +103,19 @@ int plat_midi_in(uint32_t *pkt)
 }
 void plat_midi_out(uint32_t pkt)
 {
+    const uint32_t st = (pkt >> 8) & 0xFF, n = (pkt >> 16) & 0x7F, v = (pkt >> 24) & 0x7F;
     midi_out_count++;
-    if (((pkt >> 8) & 0xFF) == 0xF8) {
+    if (st >= 0xF0)
+        mo_rt[st]++;
+    if (st == 0xF8) {
         clock_out_count++;
         return;
     }
+    if ((st & 0xF0) == 0x90 && v) {
+        mo_on_ch[st & 15]++;
+        mo_hung[st & 15][n]++;
+    } else if (((st & 0xF0) == 0x80 || (st & 0xF0) == 0x90) && mo_hung[st & 15][n] > 0)
+        mo_hung[st & 15][n]--;
     if (midi_log)
         fprintf(midi_log, "%u ms: %02X %02X %02X\n", now_ms, (pkt >> 8) & 0xFF, (pkt >> 16) & 0xFF, (pkt >> 24) & 0xFF);
 }
@@ -294,12 +304,22 @@ static void boot(void)
     ui_init();
 }
 
+static double clockin_bpm, clockin_due;       /* a MIDI clock coming in ("clockin BPM"; 0 stops it) */
+static void midi_push(uint32_t s, uint32_t d1, uint32_t d2)
+{
+    const uint32_t cin = s >= 0xF0 ? 0x0F : s >> 4;
+    min_q[mi_w++ % MQ] = cin | s << 8 | (s >= 0xF0 ? (now_ms & 0xFFFFu) << 16 : (d1 << 16 | d2 << 24));
+}
 static void run_ms(uint32_t ms)
 {
     static int32_t blk[512];
     uint32_t i, k;
     for (i = 0; i < ms; i++) {
         now_ms++;
+        while (clockin_bpm > 0.0 && clockin_due <= (double)now_ms) {
+            midi_push(0xF8, 0, 0);
+            clockin_due += 60000.0 / (24.0 * clockin_bpm);
+        }
         while (audio_due_ms <= (double)now_ms) {      /* 256-frame blocks, as the device renders them */
             double t0 = now_ns(), dt;
             sy_render(blk, 256, master);
@@ -371,6 +391,32 @@ static int expect(const char *what, const char *val)
         got = (int)store_writes;
     else if (!strcmp(what, "midi_out"))
         got = (int)midi_out_count;
+    else if (!strcmp(what, "clocks_out"))
+        got = (int)clock_out_count;
+    else if (!strcmp(what, "starts_out"))
+        got = (int)mo_rt[0xFA];
+    else if (!strcmp(what, "stops_out"))
+        got = (int)mo_rt[0xFC];
+    else if (!strncmp(what, "notes_out", 9))        /* notes_outN: note-ons sent on channel N (1..16) */
+        got = (int)mo_on_ch[(atoi(what + 9) + 15) & 15];
+    else if (!strcmp(what, "hung_out")) {            /* notes sent on and never off */
+        int ch, n2;
+        got = 0;
+        for (ch = 0; ch < 16; ch++)
+            for (n2 = 0; n2 < 128; n2++)
+                got += mo_hung[ch][n2];
+    } else if (!strcmp(what, "clockerr"))           /* following: ms off their beat, either way */
+        got = (int)(fabsf(sy_tel.clock_err) + 0.5f);
+    else if (!strcmp(what, "extbpm"))
+        got = sy_tel.ext_bpm / 10;
+    else if (!strcmp(what, "sustain"))
+        got = sy_tel.sustain;
+    else if (!strcmp(what, "press"))
+        got = (int)(sy_tel.press * 100.0f + 0.5f);
+    else if (!strcmp(what, "bar"))
+        got = sy_tel.bar;
+    else if (!strcmp(what, "step"))
+        got = sy_tel.step;
     else if (!strcmp(what, "voices"))
         got = sy_tel.voices;
     else if (!strcmp(what, "gates"))
@@ -547,9 +593,10 @@ int main(int argc, char **argv)
         } else if (!strcmp(cmd, "master"))
             master = (uint32_t)atoi(a);
         else if (!strcmp(cmd, "midi")) {
-            uint32_t s = (uint32_t)strtoul(a, 0, 16), d1 = (uint32_t)strtoul(b, 0, 16), d2 = (uint32_t)strtoul(c, 0, 16);
-            uint32_t cin = s >= 0xF0 ? 0x0F : s >> 4;
-            min_q[mi_w++ % MQ] = cin | s << 8 | d1 << 16 | d2 << 24;
+            midi_push((uint32_t)strtoul(a, 0, 16), (uint32_t)strtoul(b, 0, 16), (uint32_t)strtoul(c, 0, 16));
+        } else if (!strcmp(cmd, "clockin")) {
+            clockin_bpm = atof(a);
+            clockin_due = (double)now_ms;
         } else if (!strcmp(cmd, "wav")) {
             snprintf(out, sizeof out, "%s/%s", dir, a);
             wav_open(out);

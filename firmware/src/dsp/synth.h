@@ -50,6 +50,7 @@ enum {
     P_CRACKLE, P_DUST,                               /* DUST: a record's crackle and hiss; the band narrowing (old, worn) */
     P_VMODE,                                         /* SETTINGS: how notes take voices (VM_*), part of the sound */
     P_TEMPOMODE, P_AMBI, P_BASSON, P_BSTYLE,         /* SETTINGS: one tempo or each beat's; the room's sound; the auto-bass, its way */
+    P_CLOCK, P_PRESS,                                /* SETTINGS: whose tempo (CK_*); what pressing harder does (AT_*) */
     P_NPARAMS
 };
 typedef struct {
@@ -74,7 +75,12 @@ enum { LD_POS, LD_CUTOFF, LD_PITCH, LD_VOLUME, LD_SHADOW, LD_TABLE, LD_DETUNE, L
 enum { MEET_MIX, MEET_FM, MEET_RING, MEET_SYNC, MEET_N };             /* how oscillator B meets A */
 enum { VM_POLY, VM_MONO, VM_LEGATO, VM_UNISON, VM_N };                /* POLY: a voice a note; MONO: one, each note
                                                                          again; LEGATO: one, held notes slide; UNISON: four on one note */
-enum { TM_GLOBAL, TM_BEAT, TM_N };                                    /* one tempo for every beat, or each beat its own */
+enum { TM_GLOBAL, TM_BEAT, TM_N };
+enum { MO_OFF, MO_KEYS, MO_NOTES, MO_ALL, MO_N };                     /* MIDI out: nothing; the keys; + the arpeggiator and
+                                                                         the loop; + the auto-bass (the next channel) and the drums (10) */
+enum { CK_OWN, CK_FOLLOW, CK_LEAD, CK_N };                            /* the tempo: its own; a MIDI clock's; its own, sent out */
+enum { AT_OFF, AT_VIBRATO, AT_FILTER, AT_WAVE, AT_LFO, AT_N };        /* aftertouch: nothing, vibrato, the eyes open, the
+                                                                         position, the LFOs deeper */                                    /* one tempo for every beat, or each beat its own */
 enum { AM_RAIN, AM_FOREST, AM_URBAN, AM_OFFICE, AM_SEA, AM_N };       /* the room's sound (Gunk: how much) */
 enum { BS_BEAT, BS_ROOT, BS_PULSE, BS_OCTAVES, BS_FOLLOW, BS_N };     /* the auto-bass: the beat's own line, one long note
                                                                          a chord, 8ths, 8ths with the octave, your lowest note on the kicks */
@@ -108,6 +114,14 @@ void sy_bend(int v);                                /* -8192..8191: +-2 semitone
 void sy_mod(int v);                                 /* mod wheel 0..127: adds to position */
 void sy_drums(int on);                              /* the tape deck: play / stop (starts on a bar) */
 void sy_arp(int on);                                /* the arpeggiator: held notes become its pattern */
+void sy_sustain(int on);                            /* the pedal (CC 64): notes let go keep sounding until it is up */
+void sy_press(int v);                               /* aftertouch 0..127: P_PRESS says what it moves */
+void sy_clock_bpm(int bpm_x100);                    /* a MIDI clock's tempo (bpm x 100; 0: none, its own again) */
+void sy_clock_pos(int beat, int frac);              /* where that clock is now: beats since its Start (mod 1024), 1/10000s */
+void sy_clock_start(void);                          /* its Start: the band from the top, now */
+/* MIDI the engine sends itself (the arpeggiator, the loop, the bass, the drums, the clock), from the
+ * render: 4-byte USB-MIDI packets, as plat_midi_out takes them. 0: none. */
+extern void (*sy_midi_out)(uint32_t pkt);
 int sy_arp_held(uint8_t *out, int max);
 
 /* ---- the loop: what you play, recorded against the drums' clock, played back with them. 192 ticks a
@@ -206,5 +220,10 @@ typedef struct {
     uint16_t loop_n;              /* notes in it */
     int16_t loop_sel;             /* the last stepped step (1/16s), -1 none */
     uint32_t loop_ver;            /* changes whenever the loop does (to save it) */
+    uint16_t ext_bpm;             /* following a MIDI clock: its tempo x 10, 0 not */
+    float clock_err;              /* following one: how far the band is from it, ms (+ behind) */
+    uint32_t clocks_out;          /* MIDI clocks sent (counter) */
+    uint8_t sustain;              /* the pedal is down */
+    float press;                  /* aftertouch now, 0..1 */
 } sy_tel_t;
 extern volatile sy_tel_t sy_tel;
