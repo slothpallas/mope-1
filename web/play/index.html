@@ -30,6 +30,7 @@ header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem 1.1re
 header p { margin: 0; color: var(--quiet); font: italic 1.15rem var(--serif); }
 /* bare (?bare, inside the about page): the FM-1 and its status line, nothing else */
 .bare main { padding: 0; max-width: none; }
+html.bare { overflow: hidden; }                     /* (the page around it sizes the frame: never a scrollbar inside) */
 .bare header, .bare .sideways, .bare .guide, .bare .install, .bare #forget, .bare #cpu { display: none; }
 .bare .bar { margin-top: .6rem; }
 .sideways { display: none; color: var(--quiet); font: .8rem var(--mono); margin: 0 0 .8rem; }
@@ -54,6 +55,11 @@ header p { margin: 0; color: var(--quiet); font: italic 1.15rem var(--serif); }
 .key.lit { background: rgba(242, 138, 90, .3); }
 .key.black.lit { color: inherit; border-color: var(--rain); background: rgba(95, 208, 196, .28); box-shadow: 0 0 1.1cqw rgba(95, 208, 196, .5); }
 .key.dim { border-color: rgba(186, 204, 222, .6); background: rgba(186, 204, 222, .06); }
+.cap { position: absolute; right: .5cqw; bottom: .4cqw; font: normal 1cqw/1 var(--mono); letter-spacing: 0; color: rgba(200, 214, 228, .38);
+       pointer-events: none; }
+.key .cap { right: auto; left: 50%; bottom: 1.1cqw; transform: translateX(-50%); font-size: 1.2cqw; }
+.naming .cap { opacity: .25; }
+@media (hover: none) { .cap { display: none; } }
 .down { border-color: var(--sodium); }
 .kept { border-color: var(--glass); box-shadow: inset 0 0 0 1px var(--glass); }
 .screen { position: absolute; left: 30.2%; top: 6.6%; width: 20.6%; height: 34.4%; border: 1px solid var(--line-hi);
@@ -143,7 +149,7 @@ if (/[?&]bare\b/.test(location.search)) document.documentElement.classList.add("
     <h2>Here</h2>
     <ul>
       <li>Drag a knob up or down, or scroll on it. Several fingers work on a touch screen. <kbd>Shift</kbd>-click or right-click a button to keep it held.</li>
-      <li>White keys <kbd>Q</kbd>–<kbd>I</kbd> and <kbd>A</kbd>–<kbd>K</kbd>, black keys <kbd>1</kbd>–<kbd>0</kbd> <kbd>-</kbd>. <kbd>Space</kbd> play, <kbd>Enter</kbd> rec, <kbd>B</kbd> arp, <kbd>Esc</kbd> home, <kbd>Z</kbd> <kbd>X</kbd> octave, <kbd>↑</kbd> <kbd>↓</kbd> wavetable, <kbd>←</kbd> <kbd>→</kbd> drum tape.</li>
+      <li>The computer's keys play like a DAW's: <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> <kbd>F</kbd>… the white keys from F3, <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>Y</kbd>… the black ones; <kbd>Z</kbd> <kbd>X</kbd> move them down or up an octave. The letters are on the drawn keys. Buttons: <kbd>1</kbd>–<kbd>6</kbd> FX SEL ENV LFO EDIT GLO, <kbd>7</kbd> or <kbd>Esc</kbd> home, <kbd>8</kbd> save, <kbd>9</kbd> or <kbd>B</kbd> arp, <kbd>0</kbd> seq, <kbd>Space</kbd> play, <kbd>Enter</kbd> rec, <kbd>−</kbd> <kbd>=</kbd> octave. <kbd>↑</kbd> <kbd>↓</kbd> wavetable, <kbd>←</kbd> <kbd>→</kbd> drum tape, <kbd>,</kbd> <kbd>.</kbd> presets. While SAVE AS is open, type the name; <kbd>Enter</kbd> keeps it, <kbd>Esc</kbd> doesn't.</li>
       <li>MIDI in: notes, bend, the mod wheel (the wavetable's position), program change (a preset), CC 74 cutoff, 71 resonance, 73 attack, 72 release, 91 reverb, 93 chorus, 94 delay, 7 volume.</li>
     </ul>
   </div>
@@ -326,19 +332,41 @@ for (const knob of knobs) {
   });
 }
 
-// the computer's keyboard
-const LETTERS = {};
-"QWERTYUIASDFGHJK".split("").forEach((c, i) => { LETTERS["Key" + c] = ["keys", WHITE[i]]; });
-"1234567890".split("").forEach((c, i) => { LETTERS["Digit" + c] = ["keys", BLACK[i]]; });
-LETTERS.Minus = ["keys", BLACK[10]];
-Object.assign(LETTERS, { Space: ["buttons", 10], Enter: ["buttons", 11], KeyB: ["buttons", 8], Escape: ["buttons", 6],
-                         KeyZ: ["buttons", 12], KeyX: ["buttons", 13] });
+// the computer's keyboard, as in a DAW: the A row the white keys, the row above the black ones, from F3
+// (Z / X move them an octave); the number row the buttons; while SAVE AS is open, typing writes the name
+const PIANO = ["KeyA", "KeyW", "KeyS", "KeyE", "KeyD", "KeyR", "KeyF", "KeyG", "KeyY", "KeyH", "KeyU", "KeyJ", "KeyK",
+               "KeyO", "KeyL", "KeyP", "Semicolon", "BracketLeft", "Quote"];        // key 0 .. 18 of the window
+const PIANO_CAP = ["A", "W", "S", "E", "D", "R", "F", "G", "Y", "H", "U", "J", "K", "O", "L", "P", ";", "[", "'"];
+const BTN_KEYS = { Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Digit5: 4, Digit6: 5, Digit7: 6, Escape: 6, Digit8: 7,
+                   Digit9: 8, KeyB: 8, Digit0: 9, Space: 10, Enter: 11, Minus: 12, Equal: 13 };
+const BTN_CAP = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "␣", "↵", "−", "="];
+let win = 0, naming = false;                                         // the keys' window: 0 or 12 keys up
+buttons.forEach((e, bit) => { const c = document.createElement("i"); c.className = "cap"; c.textContent = BTN_CAP[bit]; e.append(c); });
+keys.forEach((e) => { const c = document.createElement("i"); c.className = "cap"; e.append(c); });
+function labelKeys() {
+  keys.forEach((e, k) => { e.querySelector(".cap").textContent = PIANO_CAP[k - win] ?? ""; });
+}
+labelKeys();
 const byName = (n) => knobs.find((k) => k.name === n);
+const TYPE_CODES = { Backspace: 8, ArrowLeft: 1, ArrowRight: 2, Enter: 13, Escape: 27 };
 addEventListener("keydown", (ev) => {
   if (!voice || ev.metaKey || ev.ctrlKey || ev.altKey || ev.target.closest?.("input, .knob")) return;
-  const arrow = { ArrowUp: ["ALGORITHM", 1], ArrowDown: ["ALGORITHM", -1], ArrowRight: ["SELECT", 1], ArrowLeft: ["SELECT", -1] }[ev.code];
+  if (naming) {                                                      // SAVE AS: the name
+    const c = TYPE_CODES[ev.key] ?? (ev.key.length === 1 ? ev.key.charCodeAt(0) : 0);
+    if (c) { send({ is: "type", c }); ev.preventDefault(); }
+    return;
+  }
+  const arrow = { ArrowUp: ["ALGORITHM", 1], ArrowDown: ["ALGORITHM", -1], ArrowRight: ["SELECT", 1], ArrowLeft: ["SELECT", -1],
+                  Comma: ["PRESETS", -1], Period: ["PRESETS", 1] }[ev.code];
   if (arrow) { turn(byName(arrow[0]), arrow[1]); ev.preventDefault(); return; }
-  const what = LETTERS[ev.code];
+  if (ev.code === "KeyZ" || ev.code === "KeyX") {                     // (held notes stay on the key they started on)
+    win = ev.code === "KeyZ" ? 0 : 12;
+    labelKeys();
+    ev.preventDefault();
+    return;
+  }
+  const at = PIANO.indexOf(ev.code);
+  const what = at >= 0 ? (at + win < keys.length ? ["keys", at + win] : null) : ev.code in BTN_KEYS ? ["buttons", BTN_KEYS[ev.code]] : null;
   if (!what) return;
   ev.preventDefault();
   if (!ev.repeat) { holding[what[0]].set("k" + ev.code, what[1]); sync(); }
@@ -425,6 +453,12 @@ document.getElementById("on").addEventListener("click", async (ev) => {
         if (m.is !== "frame") return;
         if (m.screen) showScreen(m.screen);
         showLights(m.buttons, m.keys, m.dim);
+        if (!!m.naming !== naming) {                                 // SAVE AS opened or closed: the keys type, or play
+          naming = !!m.naming;
+          for (const part of ["buttons", "keys"]) for (const id of [...holding[part].keys()]) if (id[0] === "k") holding[part].delete(id);
+          sync();
+          fm1.classList.toggle("naming", naming);
+        }
         if (m.cpu !== undefined) cpu.textContent = `It takes ${m.cpu}% of this computer's time.`;
         if (m.saves) keepSaves(m.saves);
       };

@@ -65,6 +65,8 @@ img.px { display: block; image-rendering: pixelated; image-rendering: crisp-edge
 .hero { padding-top: 48px; text-align: center; }
 .hero h1 { font-size: 64px; line-height: 64px; }
 .hero .line { font: italic 24px/32px var(--serif); color: var(--ink); margin: 8px 0 32px; }
+/* the player wider than the column under it (up to 1028 px, centred; the column keeps its grid) */
+.wide { max-width: 1028px; margin: 0 auto; padding: 0 16px; }
 .player iframe { display: block; width: 100%; height: 488px; border: 0; background: transparent; }
 .player .under { font-size: 12px; line-height: 20px; color: var(--quiet); margin: 12px 0 0; }
 
@@ -147,12 +149,14 @@ footer p { color: var(--quiet); font-size: 12px; line-height: 20px; max-width: 3
 <body>
 <!--SITE-NAV-->
 
-<header class="hero wrap">
-  <h1>MOPE-1</h1>
-  <p class="line">It's a synthesizer. It's having a hard time.</p>
-  <div class="player">
+<header class="hero">
+  <div class="wrap">
+    <h1>MOPE-1</h1>
+    <p class="line">It's a synthesizer. It's having a hard time.</p>
+  </div>
+  <div class="player wide">
     <iframe id="player" src="play/?bare" title="The MOPE-1 player: the FM-1, playable" allow="autoplay; midi" loading="eager"></iframe>
-    <p class="under">Switch it on, then play it from your computer keys or a MIDI keyboard. <a href="play/">The full player</a></p>
+    <p class="under">Switch it on, then play it from your computer keys (A S D F… like a DAW) or a MIDI keyboard. <a href="play/">The full player</a></p>
   </div>
 </header>
 
