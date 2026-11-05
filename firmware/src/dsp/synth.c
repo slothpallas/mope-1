@@ -51,14 +51,23 @@ typedef struct {
     uint8_t c;
     int16_t a, b;
 } cmd_t;
-#define QN 128u
+#define QN 256u
 static cmd_t q[QN];
 static volatile uint32_t q_w, q_r;
+/* full (a flood of MIDI): a note-off or a panic is never lost (it waits in its own place); the rest is
+ * counted, and the UI sends its values again when there is room (sy_queue_room) */
+static volatile uint8_t off_pend[128], off_any, panic_pend;
 static void post(int c, int a, int b)
 {
     uint32_t w = q_w;
     if (w - q_r >= QN) {
-        sy_tel.dropped++;
+        if (c == C_OFF && a >= 0 && a < 128) {
+            off_pend[a] = 1;
+            off_any = 1;
+        } else if (c == C_PANIC)
+            panic_pend = 1;
+        else
+            sy_tel.dropped++;
         return;
     }
     q[w % QN].c = (uint8_t)c;
@@ -90,6 +99,7 @@ void sy_loop_load(const sy_ev_t *ev, int n)
     post(C_LLOAD, clampi(n, 0, SY_LOOP_MAX), 0);
 }
 void sy_panic(void) { post(C_PANIC, 0, 0); }
+int sy_queue_room(void) { return (int)(QN - (q_w - q_r)); }
 void sy_punch(int fx, int on)
 {
     if (fx >= 0 && fx < PU_N)
@@ -411,6 +421,15 @@ static uint32_t load_hot, load_calm;
  * as there is room for (six at once used to run a block late before the guard could act) */
 static int load_pct, load_voices = SY_NVOICE;
 static float voice_cost = 6.6f;                         /* (this sound's, % of a block a voice: render_voices) */
+static int voice_room(void)                             /* the most voices that may sound now (the guard's, the sound's, the load's) */
+{
+    int cap = vcap < vcap_sound ? vcap : vcap_sound;
+    if (load_pct > 0) {                                 /* (the room the last block left, up to 80%: clear of the guard's 88) */
+        const int fits = load_voices + (int)((80.0f - (float)load_pct) / voice_cost);
+        cap = fits < cap ? (fits < 1 ? 1 : fits) : cap;
+    }
+    return cap;
+}
 static int voice_oldest(int released_only)
 {
     int i, best = -1;
@@ -471,17 +490,10 @@ static int voice_find(int note)
             return i;
     for (i = 0; i < SY_NVOICE; i++)
         sounding += vc[i].stage != ST_OFF;
-    {
-        int cap = vcap < vcap_sound ? vcap : vcap_sound;
-        if (load_pct > 0) {                             /* (the room the last block left: no more than fits) */
-            const int fits = load_voices + (int)((90.0f - (float)load_pct) / voice_cost);
-            cap = fits < cap ? (fits < 1 ? 1 : fits) : cap;
-        }
-        if (sounding < cap)
-            for (i = 0; i < SY_NVOICE; i++)
-                if (vc[i].stage == ST_OFF)
-                    return i;
-    }
+    if (sounding < voice_room())
+        for (i = 0; i < SY_NVOICE; i++)
+            if (vc[i].stage == ST_OFF)
+                return i;
     for (i = 0; i < SY_NVOICE; i++)                    /* the oldest one let go */
         if (!vc[i].gate && vc[i].stage != ST_OFF && vc[i].age < oldest) {
             oldest = vc[i].age;
@@ -534,9 +546,13 @@ static void voice_take(int i, int note, int vel, float c, int again)   /* voice 
 
 /* MONO, LEGATO, UNISON: the keys held, newest last; the sound is the newest. LEGATO: a note while one is
  * held slides there without starting again; letting the newest go goes back to the one before. */
-static uint8_t mono_held[16], mono_n;
+static uint8_t mono_held[16], mono_vel[16], mono_n;  /* (each one's velocity as played: going back, it plays as it was) */
 static const float UNI_CENTS[4] = {0.0f, -9.0f, 9.0f, -17.0f};   /* (UNISON: four, spread) */
-static int mono_voices(void) { return par[P_VMODE] == VM_UNISON ? (vcap_sound < 4 ? vcap_sound : 4) : 1; }
+static int mono_voices(void)                            /* (UNISON: four, or as many as there is room for) */
+{
+    const int room = voice_room();
+    return par[P_VMODE] == VM_UNISON ? (room < 4 ? room : 4) : 1;
+}
 static void mono_play(int note, int vel, int again)
 {
     const int u = mono_voices();
@@ -556,14 +572,19 @@ static void note_on(int note, int vel)
     else {
         int i, j, was = mono_n;
         for (i = j = 0; i < mono_n; i++)                /* (already held: to the top) */
-            if (mono_held[i] != note)
+            if (mono_held[i] != note) {
+                mono_vel[j] = mono_vel[i];
                 mono_held[j++] = mono_held[i];
+            }
         mono_n = (uint8_t)j;
         if (mono_n >= 16) {                             /* (full: the oldest forgotten) */
-            for (i = 1; i < mono_n; i++)
+            for (i = 1; i < mono_n; i++) {
                 mono_held[i - 1] = mono_held[i];
+                mono_vel[i - 1] = mono_vel[i];
+            }
             mono_n--;
         }
+        mono_vel[mono_n] = (uint8_t)clampi(vel, 1, 127);
         mono_held[mono_n++] = (uint8_t)note;
         mono_play(note, vel, !(par[P_VMODE] == VM_LEGATO && was > 0 && vc[0].gate));
     }
@@ -577,11 +598,13 @@ static void note_off(int note)
     if (par[P_VMODE] != VM_POLY && mono_n) {
         const int top = mono_held[mono_n - 1] == note;
         for (i = j = 0; i < mono_n; i++)
-            if (mono_held[i] != note)
+            if (mono_held[i] != note) {
+                mono_vel[j] = mono_vel[i];
                 mono_held[j++] = mono_held[i];
+            }
         mono_n = (uint8_t)j;
         if (top && mono_n) {                            /* back to the one held before */
-            mono_play(mono_held[mono_n - 1], (int)(vc[0].vel * 127.0f), par[P_VMODE] == VM_MONO);
+            mono_play(mono_held[mono_n - 1], mono_vel[mono_n - 1], par[P_VMODE] == VM_MONO);
             return;
         }
         if (mono_n)
@@ -1812,24 +1835,39 @@ static inline float pu_win(int fx)
 }
 /* a splice: where to jump so the new head carries on what the old one plays (the best match of the next 64
  * samples within +-128 of the plain jump), so it is heard as little as can be */
+#define PU_SPL_LO 200.0f                                /* (where a splice may land: the search and its 64 samples fit) */
+#define PU_SPL_HI ((float)PU_LEN - 300.0f)
+static float pu_match(float from, float cand)           /* how alike: xy|xy|/yy (no square root, the sign kept) */
+{
+    float xy = 0.0f, yy = 1.0f;
+    int i;
+    for (i = 0; i < 64; i += 2) {
+        const float x = pu_mono((uint32_t)from - (uint32_t)i), y = pu_mono((uint32_t)cand - (uint32_t)i);
+        xy += x * y;
+        yy += y * y;
+    }
+    return xy * mm_fabsf(xy) / yy;
+}
 static float pu_splice(float from, float to)
 {
-    float best = to, bv = -1e30f;
-    int off, i;
-    for (off = -128; off <= 128; off += 2) {
-        const float cand = to + (float)off;
-        float xy = 0.0f, yy = 1.0f;
-        if (cand < 70.0f || cand > (float)PU_LEN - 300.0f)
-            continue;
-        for (i = 0; i < 64; i += 2) {
-            const float x = pu_mono((uint32_t)from - (uint32_t)i), y = pu_mono((uint32_t)cand - (uint32_t)i);
-            xy += x * y;
-            yy += y * y;
+    float best, bv = -1e30f;
+    int off;
+    from = mm_clampf(from, PU_SPL_LO, PU_SPL_HI);
+    to = mm_clampf(to, PU_SPL_LO + 128.0f, PU_SPL_HI - 128.0f);
+    best = to;
+    for (off = -128; off <= 128; off += 8) {            /* (coarse, then around the best: a quarter of the work) */
+        const float m = pu_match(from, to + (float)off);
+        if (m > bv) {
+            bv = m;
+            best = to + (float)off;
         }
-        xy = xy * mm_rsqrtf(yy);
-        if (xy > bv) {
-            bv = xy;
-            best = cand;
+    }
+    to = best;
+    for (off = -6; off <= 6; off += 2) {
+        const float m = off ? pu_match(from, to + (float)off) : -1e30f;
+        if (m > bv) {
+            bv = m;
+            best = to + (float)off;
         }
     }
     return best;
@@ -1843,7 +1881,7 @@ static void pu_start(int fx)                           /* a buffer punch takes o
     pu_mod_was = pu_mod[fx];
     switch (fx) {
     case PU_HALF: pu_head[0] = PU_LMIN; pu_xf = 1.0f; break;
-    case PU_DOUBLE: pu_head[0] = PU_LMIN + pu_win(fx); pu_xf = 1.0f; break;
+    case PU_DOUBLE: pu_head[0] = mm_minf(PU_LMIN + pu_win(fx), PU_SPL_HI - 128.0f); pu_xf = 1.0f; break;
     case PU_STOP: pu_head[0] = 1.0f; pu_stop_v = 1.0f; break;
     case PU_REVERSE:
         pu_reslice(fx);                                 /* (a 1/16, read back over twice its length: inside 8192) */
@@ -1930,7 +1968,7 @@ static inline void pu_read(float *l, float *r)
 {
     const float hr_step = 0.5f;                         /* the buffer moves half a sample each output sample */
     float a, b, w;
-    pu_t += 1.0f;
+    pu_t = mm_minf(pu_t + 1.0f, 4.0e6f);                /* (past STOP's longest it only has to stay big; a float still counts here) */
     switch (pu_cur) {
     case PU_HALF: case PU_DOUBLE: {
         /* HALF: down (knob 1: a fourth .. two octaves; MORE: an octave further; TWIST: a fourth up from there);
@@ -1943,26 +1981,34 @@ static inline void pu_read(float *l, float *r)
             const float g = 0.5f - 0.5f * mm_sin_turns(0.25f + 0.5f * pu_xf);   /* (0 .. 1, smooth) */
             pu_head[1] += d;
             pu_xf += 1.0f / XF;
+            /* (the speed changed under it, MORE or knob 1: if either head nears an end, the splice ends now) */
+            if (pu_head[0] < PU_LMIN || pu_head[1] < 8.0f || pu_head[0] > PU_SPL_HI || pu_head[1] > (float)PU_LEN - 16.0f)
+                pu_xf = 1.0f;
             *l = pu_at(0, pu_head[0]) * g + pu_at(0, pu_head[1]) * (1.0f - g);
             *r = pu_at(1, pu_head[0]) * g + pu_at(1, pu_head[1]) * (1.0f - g);
         } else {
             *l = pu_at(0, pu_head[0]);
             *r = pu_at(1, pu_head[0]);
-            if (d > 0.0f ? pu_head[0] > PU_LMIN + W : pu_head[0] < PU_LMIN + 160.0f - d * XF) {
+            if (d > 0.0f ? pu_head[0] > PU_LMIN + W : pu_head[0] < PU_SPL_LO - d * XF) {
                 pu_head[1] = pu_head[0];                /* (run out: a splice) */
                 pu_head[0] = pu_splice(pu_head[0], d > 0.0f ? PU_LMIN + 128.0f : PU_LMIN + W - 128.0f - d * XF);
                 pu_xf = 0.0f;
             }
         }
-        pu_head[0] = mm_clampf(pu_head[0], 2.0f, (float)PU_LEN - 8.0f);
-        pu_head[1] = mm_clampf(pu_head[1], 2.0f, (float)PU_LEN - 8.0f);
+        pu_head[0] = mm_clampf(pu_head[0], 8.0f, (float)PU_LEN - 8.0f);
+        pu_head[1] = mm_clampf(pu_head[1], 8.0f, (float)PU_LEN - 8.0f);
         break;
     }
     case PU_STOP: {     /* slower and slower, then nothing. MORE: each press of it, the tape back and braked hard;
                          * TWIST: the moment kept and scratched, back and forth twice a beat */
         const int md = pu_mod[PU_STOP];
         if (md & PM_TWIST) {
-            const float ph = pu_t * pc_twist_inc, c = mm_sin_turns(ph + 0.25f);
+            float ph = pu_t * pc_twist_inc, c;
+            if (ph >= 1.0f) {                           /* (round again: pu_t kept small, so it keeps counting) */
+                pu_t -= 1.0f / pc_twist_inc;
+                ph -= 1.0f;
+            }
+            c = mm_sin_turns(ph + 0.25f);
             const float lag = 300.0f + 2600.0f * (0.5f - 0.5f * c);
             pu_spin = mm_fabsf(mm_sin_turns(ph));       /* (how fast the record moves under the hand) */
             pu_stop_v = 0.0f;
@@ -2162,7 +2208,7 @@ static void pu_rates(void)
         else if (pu_cur == PU_STOP)
             sp = mm_maxf(pu_stop_v, 0.25f);
         pc_sp = sp;
-        pc_W = pu_win(pu_cur);
+        pc_W = mm_minf(pu_win(pu_cur), PU_SPL_HI - 128.0f - PU_LMIN - mm_fabsf(0.5f * (1.0f - sp)) * 1024.0f);   /* (a splice fits) */
         pc_rate = pu_cur == PU_REPEAT || pu_cur == PU_STUTTER ? sp : 1.0f;
         pc_seam = pu_cur == PU_REVERSE ? 1.0f / mm_minf(130.0f * pke(PU_REVERSE, 1, 4.0f, 1.6f), pu_slice) : 1.0f / (66.0f * pc_rate);
         pu_lp_g = mm_tanf(MM_PI * mm_clampf(9500.0f * sp, 1200.0f, 18000.0f) / SY_SR);
@@ -2959,12 +3005,21 @@ static void loop_tick(int p)                            /* one tick of the playh
 }
 static void loop_run(void)                              /* one sample, after the drums' clock */
 {
-    const int p = (int)loop_now();
-    if (!dr_on)
+    const int p = (int)loop_now(), lt = loop_ticks();
+    int d;
+    if (!dr_on || p == loop_last)
         return;
-    if (p != loop_last) {
+    d = loop_last < 0 ? lt : ((p - loop_last) % lt + lt) % lt;
+    if (d > lt / 2 && d < lt)                           /* (a step back, the tempo changed mid-step: wait for it) */
+        return;
+    if (d > 48 || loop_last < 0) {                      /* (a jump: the band started, the loop changed length) */
         loop_last = p;
         loop_tick(p);
+        return;
+    }
+    while (d-- > 0) {                                   /* (forward, every tick on the way: none missed) */
+        loop_last = (loop_last + 1) % lt;
+        loop_tick(loop_last);
     }
 }
 /* the count-in: a bar of clicks, then the band starts and it records */
@@ -3128,15 +3183,26 @@ static void loop_cmd(const cmd_t *c)
         break;
     }
 }
+/* the blocks begun and ended: a copy made while none ran (the same before and after) is whole */
+static volatile uint32_t rend_a, rend_b;
 int sy_loop_copy(sy_ev_t *dst, int max)
 {
-    int i, n = 0;
-    for (i = 0; i < loop_n && n < max; i++)
-        if (loop_ev[i].len > 0) {
-            dst[n] = loop_ev[i];
-            dst[n].flags = 0;
-            n++;
-        }
+    int i, n = 0, tries;
+    for (tries = 0; tries < 8; tries++) {               /* (a block ran meanwhile, recording or editing: again) */
+        const uint32_t a = rend_a;
+        BARRIER();
+        if (a != rend_b)
+            continue;
+        for (i = n = 0; i < loop_n && n < max; i++)
+            if (loop_ev[i].len > 0) {
+                dst[n] = loop_ev[i];
+                dst[n].flags = 0;
+                n++;
+            }
+        BARRIER();
+        if (rend_a == a && rend_b == a)
+            break;
+    }
     return n;
 }
 const sy_ev_t *sy_loop_events(int *n)
@@ -3146,8 +3212,34 @@ const sy_ev_t *sy_loop_events(int *n)
 }
 
 /* ------------------------------------------------------------ commands --- */
+static void panic(void)                                 /* everything quiet, at once */
+{
+    int i;
+    pu_held = pu_wait = pu_short = 0;
+    mono_n = 0;
+    for (i = 0; i < SY_NVOICE; i++) {
+        vc[i].gate = 0;
+        vc[i].stage = ST_OFF;
+        vc[i].env = 0.0f;
+    }
+    dr_on = 0;
+    db.amp = dk.amp = dp.amp = 0.0f;
+    sn_env = cl_env = h_env = oh_env = 0.0f;
+    sy_tel.drums_on = 0;
+    rec_state = 0;
+    cnt_on = 0;
+    sy_tel.rec = 0;
+    for (i = 0; i < loop_n; i++)
+        loop_ev[i].flags = 0;
+    arp_cur = -1;
+    arp_nh = 0;
+}
 static void drain(void)
 {
+    if (panic_pend) {                                   /* (left over from a full queue) */
+        panic_pend = 0;
+        panic();
+    }
     while (q_r != q_w) {
         cmd_t c = q[q_r % QN];
         BARRIER();
@@ -3217,29 +3309,19 @@ static void drain(void)
         case C_PUNCHK:
             pu_k[c.a / PU_KN][c.a % PU_KN] = (uint8_t)c.b;
             break;
-        case C_PANIC: {
-            int i;
-            pu_held = pu_wait = pu_short = 0;
-            mono_n = 0;
-            for (i = 0; i < SY_NVOICE; i++) {
-                vc[i].gate = 0;
-                vc[i].stage = ST_OFF;
-                vc[i].env = 0.0f;
-            }
-            dr_on = 0;
-            db.amp = dk.amp = dp.amp = 0.0f;
-            sn_env = cl_env = h_env = oh_env = 0.0f;
-            sy_tel.drums_on = 0;
-            rec_state = 0;
-            cnt_on = 0;
-            sy_tel.rec = 0;
-            for (i = 0; i < loop_n; i++)
-                loop_ev[i].flags = 0;
-            arp_cur = -1;
-            arp_nh = 0;
+        case C_PANIC:
+            panic();
             break;
         }
-        }
+    }
+    if (off_any) {                                      /* (the note-offs a full queue left aside: after what came before them) */
+        int k;
+        off_any = 0;
+        for (k = 0; k < 128; k++)
+            if (off_pend[k]) {
+                off_pend[k] = 0;
+                note_off(k);
+            }
     }
 }
 
@@ -3269,6 +3351,7 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
     float chorus_amt, dsend, rsend;
     mods_t md = MODS_NONE;
     static float was_ch, was_dl, was_rv;                 /* last block's effect amounts: this one glides from them */
+    rend_a++;                                           /* (sy_loop_copy: a block is running) */
     float to_ch, to_dl, to_rv;
     const float synth_g = pf(P_SYNTH) * 1.25f;
     const float tape = pf(P_TAPE), drum_g = pf(P_DRUMS) * 0.5f, bass_g = pf(P_BASS) * 0.55f;
@@ -3433,7 +3516,7 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
             sy_tel.punch_ph = pu_rep_ph;
         else if (pu_cur == PU_REVERSE) {
             const float len = pu_slice * 2.0f;
-            sy_tel.punch_ph = len > 0.0f ? (pu_t - mm_floorf(pu_t / len) * len) / len : 0.0f;
+            sy_tel.punch_ph = len > 0.0f ? pu_rep_ph / len : 0.0f;   /* (REVERSE counts its slice in pu_rep_ph too) */
         } else
             sy_tel.punch_ph = (pu_held >> PU_GATE & 1u) ? pu_gate_ph : 0.0f;
         for (j = 0; j < (uint32_t)PU_N; j++)
@@ -3453,6 +3536,8 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
     sy_tel.verb = mm_clampf(room_peak * 2.0f, 0.0f, 1.0f);
     for (j = 0; j < SY_NVOICE; j++)
         vc[j].s1[0] = mm_flush(vc[j].s1[0]);
+    BARRIER();
+    rend_b = rend_a;
 }
 
 void sy_init(void)

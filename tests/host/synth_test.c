@@ -1113,6 +1113,58 @@ int main(int argc, char **argv)
         sy_set(P_SIZE, 62);
         sy_set(P_REVERB, 38);
     }
+    printf("robustness\n");
+    {
+        int k, back = 0, last = -1;
+        for (k = 0; k < P_NPARAMS; k++)
+            sy_set(k, sy_param_info(k)->def);
+        quiet();
+        /* a flood of MIDI (more than the queue holds, before the engine runs): no note left hanging */
+        for (k = 0; k < 300; k++)                       /* (all the ons first: the offs come when the queue is full) */
+            sy_note_on(30 + k % 60, 100);
+        for (k = 0; k < 60; k++)
+            sy_note_off(30 + k);
+        run(300);
+        CHECK(sy_tel.gates == 0, "a flood of notes: none left held (%d)", sy_tel.gates);
+        quiet();
+        /* UNISON while the FM-1 is overloaded: the next note takes no more voices than there is room for */
+        sy_set(P_VMODE, VM_UNISON);
+        sy_note_on(60, 100);
+        run(100);
+        for (k = 0; k < 20; k++) {
+            sy_load(99);
+            run(6);
+        }
+        sy_note_on(64, 100);
+        run(50);
+        CHECK(sy_tel.voices < 4, "UNISON, overloaded: fewer than four voices (%d)", sy_tel.voices);
+        sy_note_off(64);
+        sy_note_off(60);
+        for (k = 0; k < 3000; k++)                      /* (calm again: all the voices back) */
+            sy_load(10);
+        sy_load(0);
+        sy_set(P_VMODE, VM_POLY);
+        quiet();
+        /* the loop's playhead through tempo changes: it never steps back (each step's notes once, none missed) */
+        for (k = 0; k < 16; k++)
+            sy_loop_step(k, 48 + k);
+        sy_drums(1);
+        for (k = 0; k < 600; k++) {
+            int p;
+            sy_set(P_TEMPO, (k / 4) & 1 ? 200 : 50);
+            run(10);
+            p = sy_tel.loop_pos;
+            if (last >= 0 && p < last && last - p < (int)sy_tel.loop_ticks / 2)
+                back++;
+            last = p;
+        }
+        sy_drums(0);
+        sy_loop_clear();
+        sy_set(P_TEMPO, sy_param_info(P_TEMPO)->def);
+        run(200);
+        CHECK(back == 0, "tempo 50 <-> 200 while the loop plays: the playhead never steps back (%d)", back);
+        quiet();
+    }
     printf(fails ? "SYNTH TESTS FAILED (%d)\n" : "synth: all passed\n", fails);
     return fails != 0;
 }
