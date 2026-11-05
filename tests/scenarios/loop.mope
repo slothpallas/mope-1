@@ -22,48 +22,68 @@ tap REC
 expect rec 0
 expect loopn 3
 wait 1500
-# its steps: SEQ opens the loop's drawer, and while it is open the white keys are its steps
+# SEQ: the loop full screen (it stays until HOME); the cursor starts on the last note played. While it is
+# open the white keys are the bar's steps.
 tap SEQ
 wait 300
 expect page 10
-expect loopsel -1
+expect latch 1
+expect curnote 72
 shot 02_steps.png
-# nothing chosen: the knobs edit the whole loop (NOTE up two: every note)
-expect lnote0 65
-turn K1 2
-wait 100
-expect lnote0 67
-expect lnote2 74
-turn K1 -2
-wait 100
-expect lnote0 65
-# an empty step: a note comes, chosen, and the knobs edit only it
+# an empty step: a note comes at the cursor's note
 tapkey w8
 wait 100
 expect loopn 4
-expect loopsel 8
-turn K1 3
-turn K2 2
-wait 200
-shot 03_step_edited.png
-expect lnote0 65
-# a step with notes, held while a knob turns: chosen and edited, it stays
-key w8 down
-wait 100
-turn K3 -2
-key w8 up
-wait 100
-expect loopn 4
-# ...tapped untouched: it goes
+expect curstep 8
+expect lnote3 72
+# a chord, a note at a time: knob 2 up to an empty note, the step again: another comes
+turn K2 4
 tapkey w8
 wait 100
-expect loopn 3
-expect loopsel -1
-# the last change undone (HOME + REC: the removed step is back), then saved and back after a restart
+turn K2 3
+tapkey w8
+wait 100
+expect loopn 6
+expect lnote5 79
+# knob 3: only the note under the cursor gets longer
+turn K3 3
+wait 100
+expect llen5 20
+expect llen3 11
+shot 03_chord.png
+# the middle note of the chord: knob 2 down onto it, the step again: only it goes
+turn K2 -3
+wait 100
+expect curnote 76
+shot 04_chord_note.png
+tapkey w8
+wait 100
+expect loopn 5
+expect lnote3 72
+expect lnote4 79
+shot 05_note_gone.png
+# another step with notes: the cursor goes there, onto its nearest note, and nothing changes
+turn K1 -8
+wait 100
+expect curstep 0
+tapkey w8
+wait 100
+expect loopn 5
+expect curstep 8
+expect curnote 79
+# knob 1 along the steps: past the start it wraps to the last bar's end (two bars here)
+turn K1 -9
+wait 100
+expect curstep 31
+press HOME
+release HOME
+wait 100
+expect latch 0
+# the last change undone (HOME + REC: the removed note is back), then saved and back after a restart
 press HOME
 tap REC
 release HOME
-expect loopn 4
+expect loopn 6
 tap PLAY
 wait 600
 tap SAVE
@@ -73,7 +93,7 @@ tap SAVE
 wait 200
 reboot
 wait 300
-expect loopn 4
+expect loopn 6
 # cleared (SAVE + REC)
 press SAVE
 tap REC

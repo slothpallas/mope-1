@@ -256,7 +256,9 @@ static void draw_room(const geo_t *g)
             } else {                                     /* the back wall: lit in the middle, its edges fading */
                 const float ex = mm_clampf(mm_minf((float)(x - x0), (float)(x1 - x)) / (g->bw * 0.45f + 1.0f), 0.0f, 1.0f);
                 const float ey = mm_clampf(mm_minf((float)(y - y0), (float)(y1 - y)) / (g->bh * 0.4f + 1.0f), 0.0f, 1.0f);
-                c = px_dith4(x, y) + 0.5f < ex * ey * (1.0f - 0.4f * (float)(y - y0) / (float)(y1 - y0 + 1)) ? PC_BG2 : PC_BG1;
+                /* (only its lit middle grey-blue; toward its edges and its foot it goes to black) */
+                const float v = ex * ey * (1.0f - 0.5f * (float)(y - y0) / (float)(y1 - y0 + 1)), d = px_dith4(x, y) + 0.5f;
+                c = d < v * 0.75f ? PC_BG2 : d < 0.15f + v * 1.1f ? PC_BG1 : PC_BG0;
             }
             px_fb[y * PX_W + x] = c;
         }
@@ -731,11 +733,28 @@ static void draw_face(const geo_t *g)
 static void draw_unlocks(const geo_t *g)
 {
     const uint32_t lv = xp_level(proj.xp);
-    if (lv >= 10u) {                                    /* a balloon, mostly air gone */
-        const float bx = g->cx + g->r * 1.05f, by = g->cy - g->r * 0.2f + 1.5f * mm_sin_turns(bs.t * 0.3f);
-        px_line((int32_t)(g->cx + g->r * 0.6f), (int32_t)(g->cy + 2.0f), (int32_t)bx, (int32_t)(by + 4.0f), PC_DIM);
-        px_ellipse(bx, by, 3.0f, 3.8f, PC_RED);
-        px_pset((int32_t)bx - 1, (int32_t)by - 2, PC_CORAL);
+    if (lv >= 10u) {   /* a balloon, half the air gone: it floats beside its head on a wavy string, sagging a little */
+        const float bob = 1.5f * mm_sin_turns(bs.t * 0.3f), sway = mm_sin_turns(bs.t * 0.21f);
+        const float bx = g->cx + g->r * 1.15f + 2.0f * sway, by = g->cy - g->r * 1.05f + bob;
+        const float hx = g->cx + g->r * 0.8f, hy = g->cy + g->r * 0.15f;   /* (where it holds it) */
+        int k;
+        for (k = 0; k < 6; k++) {                        /* the string: up from its side to the knot, waving */
+            const float t0 = (float)k / 6.0f, t1 = (float)(k + 1) / 6.0f;
+            const float w0 = 1.6f * mm_sin_turns(t0 * 1.5f + bs.t * 0.4f) * t0, w1 = 1.6f * mm_sin_turns(t1 * 1.5f + bs.t * 0.4f) * t1;
+            px_line((int32_t)(hx + (bx - hx) * t0 + w0), (int32_t)(hy + (by + 7.0f - hy) * t0),
+                    (int32_t)(hx + (bx - hx) * t1 + w1), (int32_t)(hy + (by + 7.0f - hy) * t1), PC_DIM);
+        }
+        px_ellipse(bx, by, 5.0f, 5.6f, PC_RED);          /* (a bit wider at the bottom: tired) */
+        px_ellipse(bx, by + 1.5f, 5.4f, 3.6f, PC_RED);
+        px_pset((int32_t)bx - 1, (int32_t)(by + 6.5f), PC_RED);   /* the knot */
+        px_pset((int32_t)bx, (int32_t)(by + 6.5f), PC_RED);
+        px_pset((int32_t)bx + 1, (int32_t)(by + 6.5f), PC_RED);
+        px_pset((int32_t)bx, (int32_t)(by + 7.5f), PC_RED);
+        px_pset((int32_t)bx - 2, (int32_t)by - 3, PC_CORAL);   /* the shine */
+        px_pset((int32_t)bx - 3, (int32_t)by - 2, PC_CORAL);
+        px_pset((int32_t)bx - 2, (int32_t)by - 2, PC_WHITE);
+        px_pset((int32_t)bx + 2, (int32_t)by + 3, PC_EMBER);   /* a wrinkle */
+        px_pset((int32_t)bx + 3, (int32_t)by + 2, PC_EMBER);
     }
 }
 
@@ -1956,7 +1975,7 @@ static const char *const PK_ICON[PK_NKIND][7] = {
     {"#.....#", "#.###.#", "#.###.#", "#.###.#", "#.###.#", "#.....#", "#.....#"},   /* slice: between two marks */
     {"##.##.#", "##.##.#", ".......", "##.##.#", "##.##.#", ".......", "#######"},   /* roll: the same, again */
     {".......", "..###..", ".#...#.", "#.....#", "#.....#", ".......", "#######"},   /* soft: a round hump */
-    {"#......", "#.#....", "#.#.#..", "#.#.#.#", "#.#.#.#", "#.#.#.#", "#.#.#.#"},   /* fading: smaller each */
+    {"...#...", "..###..", ".#.#.#.", "...#...", ".#.#.#.", "..###..", "...#..."},   /* pitch: up and down */
     {".......", "##.##.#", "##.##.#", "##.##.#", "##.##.#", ".......", "#######"},   /* rate: pulses */
     {"...###.", "..#####", "..#####", "...###.", ".......", "#......", "......."},   /* grain size: big, small */
     {"#...#..", "..#...#", "#...#..", ".#.#...", "...#.#.", "#.....#", "..#.#.."},   /* scatter: dots */
@@ -1965,6 +1984,7 @@ static const char *const PK_ICON[PK_NKIND][7] = {
     {"#..#..#", ".#.#.#.", "..###..", "#######", "..###..", ".#.#.#.", "#..#..#"},   /* hang: frozen */
     {"...#...", "..#.#..", ".#...#.", "#.....#", "#.....#", ".#...#.", "..###.."},   /* dry gone: an empty drop */
     {"#..#...", ".#..#..", "..#..#.", "...#..#", "..#..#.", ".#..#..", "#..#..."},   /* speed: >> */
+    {"###....", "...#...", "....#..", ".....#.", "......#", "......#", "......#"},   /* filter: the slope down */
 };
 _Static_assert(sizeof PK_ICON / sizeof PK_ICON[0] == PK_NKIND, "a symbol for every kind of knob");
 static void draw_punch_knobs(const geo_t *g)
@@ -2181,6 +2201,145 @@ static void draw_settings(void)
     }
 }
 
+/* SEQ, full screen: the bar on show as a piano roll (a row a semitone, a column a 1/16), the cursor on it
+ * (knob 1 its step, knob 2 its note), the chord at the cursor's step lit, the note under it white. Under it
+ * every bar small, the one on show outlined; under that what the knobs do. The blob, small, in its corner. */
+#define SQ_X 8
+#define SQ_Y 17
+#define SQ_CW 7                                          /* a step's width */
+#define SQ_RH 5                                          /* a row's height */
+#define SQ_ROWS 17
+static void draw_mini_blob(int32_t cx, int32_t cy)
+{
+    const uint32_t now = plat_ms();
+    const int bob = sy_tel.drums_on && (sy_tel.step & 3u) == 0u;
+    const int blink = (now / 100u) % 37u == 0u;
+    cy += bob;
+    px_ellipse((float)cx, (float)cy, 7.5f, 6.5f, PC_BLOBD);
+    px_ellipse((float)cx, (float)cy, 6.5f, 5.5f, PC_BLOB2);
+    px_ellipse((float)cx - 2.0f, (float)cy - 2.5f, 2.0f, 1.2f, PC_BLOB3);   /* (a gleam) */
+    if (blink) {
+        px_rect(cx - 3, cy - 1, 2, 1, PC_PUPIL);
+        px_rect(cx + 2, cy - 1, 2, 1, PC_PUPIL);
+    } else {
+        px_rect(cx - 3, cy - 2, 2, 2, PC_EYE);
+        px_rect(cx + 2, cy - 2, 2, 2, PC_EYE);
+        px_pset(cx - 2, cy - 1, PC_PUPIL);
+        px_pset(cx + 2, cy - 1, PC_PUPIL);
+    }
+    if (sy_tel.amp_env > 0.08f)                          /* singing: its mouth open */
+        px_rect(cx - 1, cy + 2, 3, 2, PC_MOUTH);
+    else
+        px_rect(cx - 2, cy + 2, 4, 1, PC_PUPIL);
+}
+static void draw_seq(void)
+{
+    static int lo = -1;                                  /* the lowest row's note (the roll scrolls with the cursor) */
+    int n, i, k;
+    const sy_ev_t *ev = sy_loop_events(&n);
+    const int lt = sy_tel.loop_ticks ? sy_tel.loop_ticks : SY_TPB, bars = lt / SY_TPB;
+    const int bar = ui.loop_bar < bars ? ui.loop_bar : 0, bt = bar * SY_TPB, cs = ui.cur_step, cn = ui.cur_note;
+    const int on_note = cs / 16 == bar ? loop_nearest(cs, cn) == cn : 0;
+    const int32_t gx1 = SQ_X + 16 * SQ_CW, gy1 = SQ_Y + SQ_ROWS * SQ_RH;
+    px_rect(0, 0, PX_W, PX_H, PC_BG0);
+    if (lo < 0)
+        lo = cn - SQ_ROWS / 2;
+    if (cn < lo + 1)
+        lo = cn - 1;
+    if (cn > lo + SQ_ROWS - 2)
+        lo = cn - SQ_ROWS + 2;
+    lo = lo < 0 ? 0 : lo > 127 - SQ_ROWS + 1 ? 127 - SQ_ROWS + 1 : lo;
+    /* the top: what it is doing (or what was just said), the bars, the blob */
+    if (ui.cap[0] && (int32_t)(ui.cap_until - plat_ms()) > 0) {
+        char b[19];
+        for (i = 0; ui.cap[i] && i < 18; i++)
+            b[i] = ui.cap[i];
+        b[i] = 0;
+        px_text(3, 4, b, PC_WHITE);
+    } else {
+        px_text(3, 4, "SEQ", PC_WHITE);
+        px_text(22, 4, sy_tel.rec == 2 ? "REC" : sy_tel.rec == 1 ? "READY" : n ? (on_note ? "THIS NOTE" : "") : "EMPTY",
+                sy_tel.rec ? PC_RED : PC_DIM);
+        for (k = 0; k < bars; k++)                       /* the bars: the one on show lit */
+            px_rect(76 + k * 5, 5, 4, 4, k == bar ? PC_TEAR : PC_WALL2);
+    }
+    draw_mini_blob(109, 8);
+    /* the roll: the keyboard down the side, a line on each C, the beats */
+    for (k = 0; k < SQ_ROWS; k++) {
+        const int note = lo + SQ_ROWS - 1 - k, pc = note % 12;
+        const int black = pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10;
+        const int32_t y = SQ_Y + k * SQ_RH;
+        px_rect(0, y, 6, SQ_RH - 1, black ? PC_BG1 : PC_DIM);
+        if (pc == 0)
+            px_rect(SQ_X, y + SQ_RH - 1, gx1 - SQ_X, 1, PC_WALL2);
+        if (note == cn)                                  /* the cursor's row */
+            px_rect(SQ_X, y, gx1 - SQ_X, SQ_RH - 1, PC_BG1);
+    }
+    for (k = 0; k <= 16; k++)
+        px_rect(SQ_X + k * SQ_CW - 1, SQ_Y, 1, gy1 - SQ_Y, k % 4 ? PC_BG1 : PC_WALL2);
+    if (cs / 16 == bar)                                  /* the cursor's column */
+        for (k = SQ_Y; k < gy1; k += 2)
+            px_pset(SQ_X + (cs % 16) * SQ_CW + SQ_CW / 2 - 1, k, PC_WALL);
+    for (i = 0; i < n; i++) {                            /* the notes of the bar on show */
+        const sy_ev_t *e = &ev[i];
+        const int at = (int)e->t - bt;
+        int32_t x, w, y;
+        uint8_t c;
+        if (at < 0 || at >= SY_TPB || (int)e->t >= lt)
+            continue;
+        x = SQ_X + at * SQ_CW / 12;
+        w = (int32_t)e->len * SQ_CW / 12;
+        w = w < 3 ? 3 : x + w > gx1 ? gx1 - x : w;
+        if (e->note < lo || e->note > lo + SQ_ROWS - 1) { /* out of sight: a mark at the edge, that way */
+            px_rect(x, e->note < lo ? gy1 - 1 : SQ_Y, 3, 1, PC_DIM);
+            continue;
+        }
+        y = SQ_Y + (lo + SQ_ROWS - 1 - e->note) * SQ_RH;
+        c = (int)e->t / 12 == cs ? (e->note == cn ? PC_WHITE : PC_TEAR) : (e->flags & 1u) ? PC_BLOB3 : PC_BLOB2;
+        px_rect(x, y, w, SQ_RH - 1, c);
+        px_rect(x, y + SQ_RH - 2, w, 1, (int)e->t / 12 == cs ? (e->note == cn ? PC_SPEC : PC_TEAR2) : PC_BLOBD);
+    }
+    if (cs / 16 == bar && cn >= lo && cn <= lo + SQ_ROWS - 1) {   /* the cursor: a box, blinking a little */
+        const int32_t x = SQ_X + (cs % 16) * SQ_CW - 1, y = SQ_Y + (lo + SQ_ROWS - 1 - cn) * SQ_RH - 1;
+        const uint8_t c = (plat_ms() / 400u) & 1u ? PC_ORANGE : PC_AMBER;
+        px_rect(x, y, SQ_CW + 1, 1, c);
+        px_rect(x, y + SQ_RH, SQ_CW + 1, 1, c);
+        px_rect(x, y, 1, SQ_RH + 1, c);
+        px_rect(x + SQ_CW, y, 1, SQ_RH + 1, c);
+    }
+    if (sy_tel.drums_on && sy_tel.loop_pos / SY_TPB == (uint16_t)bar) {   /* the playhead */
+        const int32_t x = SQ_X + ((int)sy_tel.loop_pos - bt) * SQ_CW / 12;
+        for (k = SQ_Y; k < gy1; k += sy_tel.rec == 2 ? 1 : 2)
+            px_pset(x, k, sy_tel.rec == 2 ? PC_RED : PC_SPEC);
+    }
+    if (sy_tel.rec == 1) {                               /* counting in: four lights, one a beat */
+        for (k = 0; k < 4; k++)
+            px_rect(SQ_X + 32 + k * 12, (SQ_Y + gy1) / 2 - 3, 7, 7, k <= sy_tel.count ? PC_RED : PC_DIM);
+    } else if (!n) {
+        px_text_c((SQ_X + gx1) / 2, (SQ_Y + gy1) / 2 - 8, "TAP A STEP", PC_DIM, PC_BG0);
+        px_text_c((SQ_X + gx1) / 2, (SQ_Y + gy1) / 2 + 2, "OR REC", PC_DIM, PC_BG0);
+    }
+    {   /* every bar, small: a dot a note, the one on show outlined, the playhead */
+        const int32_t y = gy1 + 3, w = gx1 - SQ_X;
+        px_rect(SQ_X + bar * w / bars, y - 1, w / bars, 1, PC_TEAR);
+        px_rect(SQ_X + bar * w / bars, y + 5, w / bars, 1, PC_TEAR);
+        for (i = 0; i < n; i++)
+            if ((int)ev[i].t < lt)
+                px_pset(SQ_X + (int32_t)ev[i].t * w / lt, y + 4 - (ev[i].note % 24) * 5 / 24, PC_BLOB2);
+        if (sy_tel.drums_on)
+            px_rect(SQ_X + (int32_t)sy_tel.loop_pos * w / lt, y - 1, 1, 7, PC_SPEC);
+    }
+    {   /* the knobs (in their colours, as the OP-1's) */
+        static const char *const KN[4] = {"STEP", "NOTE", "LEN", "BARS"};
+        static const uint8_t KC[4] = {PC_TEAR, PC_XP, PC_ORANGE, PC_PINK};
+        const int32_t y = PX_H - 8;
+        for (k = 0; k < 4; k++) {
+            px_rect(3 + k * 29, y + 1, 4, 4, KC[k]);
+            px_text(9 + k * 29, y, KN[k], ui.touched == k && plat_ms() - ui.focus_t < 1500u ? PC_WHITE : PC_DIM);
+        }
+    }
+}
+
 static void blob_draw(void)
 {
     const uint32_t now = plat_ms();
@@ -2194,6 +2353,11 @@ static void blob_draw(void)
     bs.last_ms = now;
     if (ui.panel && ui.page == PG_SETUP) {               /* (the settings: no room, no blob) */
         draw_settings();                                 /* (no captions here: the list says it all) */
+        px_present();
+        return;
+    }
+    if (ui.panel && ui.page == PG_LOOP) {                /* (the loop: the whole screen, the blob small in its corner) */
+        draw_seq();
         px_present();
         return;
     }
