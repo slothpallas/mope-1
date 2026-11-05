@@ -53,7 +53,6 @@ static struct {
     int rep_n;                                          /* REPEAT: times round so far (its copies) */
     float eye_close, grey, grain;                       /* the punches' marks on the body: shut eyes, colour gone, dissolving */
     uint32_t rng;
-    float bal_x, bal_y, bal_vx, bal_vy;                 /* the balloon: where it is, how it moves (it lags, then bobs) */
 } bs;
 
 enum { PK_SPLASH, PK_FIRE, PK_ZZZ, PK_STEAM, PK_YEET, PK_PUFF, PK_SWEAT, PK_SPARK };
@@ -730,46 +729,12 @@ static void draw_face(const geo_t *g)
     }
 }
 
-/* what the levels give it: nothing useful */
+/* what the levels give it: nothing, for now (a balloon was here: the screen is crowded enough) */
 static void draw_unlocks(const geo_t *g)
 {
     const uint32_t lv = xp_level(proj.xp);
-    if (lv >= 10u) {   /* a balloon, half the air gone: it floats beside its head on a wavy string, sagging a little */
-        /* (a spring pulls it to beside its head, air holds it back: when the blob jumps, squashes or dances it
-         * lags, overshoots, and settles bobbing) */
-        const float tx = g->cx + g->r * 1.15f + 2.0f * mm_sin_turns(bs.t * 0.21f), ty = g->cy - g->r * 1.05f + 1.5f * mm_sin_turns(bs.t * 0.3f);
-        const float dt = mm_minf(bs.dt, 0.05f), hx = g->cx + g->r * 0.8f, hy = g->cy + g->r * 0.15f;   /* (where it holds it) */
-        float bx, by;
-        if (bs.bal_x == 0.0f || mm_fabsf(bs.bal_x - tx) + mm_fabsf(bs.bal_y - ty) > 80.0f) {
-            bs.bal_x = tx;                               /* (first seen, or the camera jumped: there at once) */
-            bs.bal_y = ty;
-            bs.bal_vx = bs.bal_vy = 0.0f;
-        }
-        bs.bal_vx += (28.0f * (tx - bs.bal_x) - 3.2f * bs.bal_vx) * dt;
-        bs.bal_vy += (28.0f * (ty - bs.bal_y) - 3.2f * bs.bal_vy) * dt;
-        bs.bal_x += bs.bal_vx * dt;
-        bs.bal_y += bs.bal_vy * dt;
-        bx = bs.bal_x;
-        by = bs.bal_y;
-        int k;
-        for (k = 0; k < 6; k++) {                        /* the string: up from its side to the knot, waving */
-            const float t0 = (float)k / 6.0f, t1 = (float)(k + 1) / 6.0f;
-            const float w0 = 1.6f * mm_sin_turns(t0 * 1.5f + bs.t * 0.4f) * t0, w1 = 1.6f * mm_sin_turns(t1 * 1.5f + bs.t * 0.4f) * t1;
-            px_line((int32_t)(hx + (bx - hx) * t0 + w0), (int32_t)(hy + (by + 7.0f - hy) * t0),
-                    (int32_t)(hx + (bx - hx) * t1 + w1), (int32_t)(hy + (by + 7.0f - hy) * t1), PC_DIM);
-        }
-        px_ellipse(bx, by, 5.0f, 5.6f, PC_RED);          /* (a bit wider at the bottom: tired) */
-        px_ellipse(bx, by + 1.5f, 5.4f, 3.6f, PC_RED);
-        px_pset((int32_t)bx - 1, (int32_t)(by + 6.5f), PC_RED);   /* the knot */
-        px_pset((int32_t)bx, (int32_t)(by + 6.5f), PC_RED);
-        px_pset((int32_t)bx + 1, (int32_t)(by + 6.5f), PC_RED);
-        px_pset((int32_t)bx, (int32_t)(by + 7.5f), PC_RED);
-        px_pset((int32_t)bx - 2, (int32_t)by - 3, PC_CORAL);   /* the shine */
-        px_pset((int32_t)bx - 3, (int32_t)by - 2, PC_CORAL);
-        px_pset((int32_t)bx - 2, (int32_t)by - 2, PC_WHITE);
-        px_pset((int32_t)bx + 2, (int32_t)by + 3, PC_EMBER);   /* a wrinkle */
-        px_pset((int32_t)bx + 3, (int32_t)by + 2, PC_EMBER);
-    }
+    (void)lv;
+    (void)g;
 }
 
 /* The drums: a cassette, smoked see-through plastic, up in the corner. Its label has the style on it,
@@ -1640,8 +1605,23 @@ static void draw_panel(const geo_t *g)
         draw_preset_card(p.y0);
         return;
     }
-    /* the tab: the page's name, and what it is set to */
+    /* the tab: the page's name, its place among its button's pages (a dot each: SEL's four, say), and what it is
+     * set to */
     px_text(3, p.y0 + 3, PAGE_NAME[ui.page], PC_BLOB2);
+    int32_t dots_w = 0;
+    {
+        int n = 1, pg = PAGE_AGAIN[ui.page], k;
+        while (pg >= 0 && pg != ui.page && n < 8) {
+            n++;
+            pg = PAGE_AGAIN[pg];
+        }
+        if (n > 1) {
+            const int32_t dx = 3 + px_text_w(PAGE_NAME[ui.page]) + 4;
+            for (k = 0; k < n; k++)
+                px_rect(dx + k * 5, p.y0 + 5, 3, 3, k == PAGE_NTH[ui.page] ? PC_TEAR : PC_WALL2);
+            dots_w = n * 5 + 2;
+        }
+    }
     {
         const char *what = 0;
         switch (ui.page) {
@@ -1670,7 +1650,7 @@ static void draw_panel(const geo_t *g)
         }
         if (what) {
             char b[24];
-            const int32_t room = PX_W - 3 - (3 + px_text_w(PAGE_NAME[ui.page]) + 6);
+            const int32_t room = PX_W - 3 - (3 + px_text_w(PAGE_NAME[ui.page]) + 6) - dots_w;
             int n = 0;
             while (what[n] && n < 23 && (n + 1) * 5 - 1 <= room)
                 n++;

@@ -434,6 +434,18 @@ int main(int argc, char **argv)
         sy_punch(PU_STOP, 0);
         run(50);
         CHECK(level(100) > before * 0.5f, "...and back when let go");
+        /* STOP, knob 1 all the way: a turntable left to stop, still turning after a second and a half, gone by 3.5 s */
+        sy_punch_knob(PU_STOP, 0, PU_KMAX);
+        sy_punch(PU_STOP, 1);
+        run(1400);
+        mid = level(100);
+        run(2000);
+        after = level(100);
+        sy_punch(PU_STOP, 0);
+        sy_punch_knob(PU_STOP, 0, SY_PUNCH_KDEF[PU_STOP][0]);
+        run(100);
+        CHECK(mid > before * 0.03f && after < before * 0.01f, "STOP, knob 1 up: long (%.3f at 1.5 s, %.4f at 3.5 s)",
+              (double)(mid / before), (double)(after / before));
         /* GATE: open, shut, open, shut */
         sy_punch(PU_GATE, 1);
         run(100);
