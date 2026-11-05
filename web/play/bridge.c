@@ -82,7 +82,8 @@ EXPORT void play_volume(uint32_t v) { master = v > 4096u ? 4096u : v; }
 EXPORT void play_midi(uint32_t st, uint32_t d1, uint32_t d2)
 {
     if (mi_w - mi_r < MQ)
-        min_q[mi_w++ % MQ] = (st >> 4) | (st & 0xFFu) << 8 | (d1 & 0x7Fu) << 16 | (d2 & 0x7Fu) << 24;
+        min_q[mi_w++ % MQ] = st >= 0xF0u ? 0xFu | (st & 0xFFu) << 8 | (now_ms & 0xFFFFu) << 16   /* (real time: when) */
+                                         : (st >> 4) | (st & 0xFFu) << 8 | (d1 & 0x7Fu) << 16 | (d2 & 0x7Fu) << 24;
 }
 
 /* saved objects: the page keeps them between visits and hands them back before play_start */

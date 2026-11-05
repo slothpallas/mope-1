@@ -1,0 +1,127 @@
+# MIDI: follow a clock (its tempo, its Start and Stop, where it is), lead with one, the band's notes out
+# (the arpeggiator, the bass on the next channel, the drums on 10), the pedal, aftertouch, tap tempo.
+wait 300
+# CLOCK: FOLLOW (CC 102 picks a setting, 68 is the clock; CC 103 sets it)
+midi B0 66 44
+midi B0 67 40
+wait 20
+expect par68 1
+clockin 126
+wait 800
+expect extbpm 126
+# their Start: the band from the top, at their tempo, where they are
+midi FA 0 0
+wait 40
+expect drums 1
+expect clockerr <30
+wait 2000
+# with them: within a few ms of their beat (a clock is 20 ms); a sudden new tempo: with it in ~3 s
+expect clockerr <4
+expect bar 1
+# their tempo changes: it follows, and stays with them
+clockin 90
+wait 5000
+expect extbpm 90
+expect clockerr <4
+shot 00_following.png
+# their Stop
+midi FC 0 0
+wait 100
+expect drums 0
+# their clock gone: its own tempo again
+clockin 0
+wait 2500
+expect extbpm 0
+# tap tempo is theirs while they lead, its own again now: on the mixer, HOME tapped at 120 (a tap: 80 ms)
+tap GLO
+wait 200
+expect page 8
+tap HOME
+wait 420
+tap HOME
+wait 420
+tap HOME
+wait 420
+tap HOME
+wait 100
+expect par25 120
+expect page 8
+shot 01_tapped.png
+# one HOME alone: HOME, a moment later
+wait 1500
+tap HOME
+wait 200
+expect page 8
+wait 1400
+expect page 0
+# LEAD: 24 clocks a beat, Start and Stop with the band
+midi B0 67 7F
+wait 20
+expect par68 2
+wait 1000
+expect clocks_out >45
+expect clocks_out <51
+tap PLAY
+wait 500
+expect starts_out 1
+# MIDI OUT: ALL (CC 103 at 127 for setting 31): the drums on 10, the bass on 2
+midi B0 66 1F
+midi B0 67 7F
+wait 20
+expect par31 3
+wait 2500
+expect notes_out10 >4
+expect notes_out2 >0
+tap PLAY
+wait 300
+expect stops_out 1
+expect hung_out 0
+# the keys go out on 1; with the arpeggiator on, its notes (not the keys held)
+tapkey w0
+wait 100
+expect notes_out1 1
+tap ARP
+wait 100
+key w0 down
+key w2 down
+wait 1500
+expect notes_out1 >4
+key w0 up
+key w2 up
+wait 300
+tap ARP
+wait 200
+expect hung_out 0
+# the pedal: a note let go keeps sounding until it is up
+midi B0 40 7F
+wait 50
+expect sustain 1
+key w4 down
+wait 200
+key w4 up
+wait 400
+expect voices 1
+midi B0 40 00
+wait 600
+expect sustain 0
+expect gates 0
+# aftertouch: pressing harder (VIBRATO, as it comes)
+expect par69 1
+midi 90 3c 64
+midi D0 7F 00
+wait 300
+expect press >95
+midi D0 00 00
+midi 80 3c 00
+wait 300
+expect press <5
+# the settings: the new rows, scrolled
+tap GLO
+wait 500
+tap GLO
+wait 200
+expect page 7
+spin K1 10
+wait 100
+shot 02_settings_scrolled.png
+tap HOME

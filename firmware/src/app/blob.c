@@ -1528,7 +1528,14 @@ static void schem_setup(const drawer_t *p)               /* the glide: a note sl
         v[i] = t < 0.3f ? 0.2f : 0.2f + 0.6f * (1.0f - mm_expf(-(t - 0.3f) / (0.01f + gl * 0.3f)));
     }
     curve(p, v, 48, PC_BLOB2, PC_BLOBD, 0);
-    px_text(p->gx1 - 30, p->gy1 - 6, proj.par[P_MIDIOUT] ? "OUT ON" : "OUT OFF", proj.par[P_MIDIOUT] ? PC_TEAR : PC_DIM);
+    {
+        static char o[12] = "OUT ";
+        int i;
+        for (i = 0; SW_MOUT[proj.par[P_MIDIOUT]][i] && i < 7; i++)
+            o[4 + i] = SW_MOUT[proj.par[P_MIDIOUT]][i];
+        o[4 + i] = 0;
+        px_text(p->gx1 - 30, p->gy1 - 6, o, proj.par[P_MIDIOUT] ? PC_TEAR : PC_DIM);
+    }
     px_text(p->gx1 - 30, p->gy0 + 1, proj.par[P_MIDICH] ? "CH ONE" : "CH ALL", PC_DIM);
 }
 
@@ -2158,8 +2165,13 @@ static void draw_settings(void)
     px_text(PX_W - 4 - px_text_w(OM_VERSION), 3, OM_VERSION, PC_DIM);
 #endif
     px_rect(4, 11, PX_W - 8, 1, PC_WALL);
-    for (r = 0; r < NSET; r++) {
-        const int32_t y = 15 + r * 9;
+    const int vis = 10, top = ui.set_row < vis ? 0 : ui.set_row - vis + 1;   /* (more rows than room: it scrolls) */
+    if (top > 0)
+        px_rect(PX_W / 2 - 2, 12, 5, 1, PC_DIM);         /* (more above) */
+    if (top + vis < NSET)
+        px_rect(PX_W / 2 - 2, 15 + vis * 9 - 3, 5, 1, PC_DIM);   /* (more below) */
+    for (r = top; r < NSET && r < top + vis; r++) {
+        const int32_t y = 15 + (r - top) * 9;
         const int on = r == ui.set_row;
         const char *t = set_text(r);
         if (on)

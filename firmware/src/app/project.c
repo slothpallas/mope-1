@@ -27,12 +27,14 @@ static int project_valid(int bytes)
         static sy_ev_t loop[SY_LOOP_MAX];
         const int at = (8 + 2 * PROJ_NPAR_OF(proj.format) + 3) & ~3, at_loop = at + 4 + 28;
         uint32_t xp = 0;
-        uint8_t seen = 0;
+        uint8_t seen = 0, pk[sizeof proj.pk] = {0};
         loop_n = 0;
         if (bytes >= at + 4)
             memcpy(&xp, (const uint8_t *)&proj + at, 4);
         if (proj.format >= 4u && bytes >= at + 5)
             seen = ((const uint8_t *)&proj)[at + 4];
+        if (proj.format >= 6u && bytes >= at + 5 + (int)sizeof pk)   /* (the punches' knobs, format 6 on) */
+            memcpy(pk, (const uint8_t *)&proj + at + 5, sizeof pk);
         if (proj.format >= 3u && bytes >= at_loop + 2) {
             memcpy(&loop_n, (const uint8_t *)&proj + at_loop, 2);
             if (loop_n > SY_LOOP_MAX || bytes < at_loop + 2 + (int)(loop_n * sizeof(sy_ev_t)))
@@ -42,6 +44,7 @@ static int project_valid(int bytes)
         memset((uint8_t *)&proj + at, 0, sizeof proj - (uint32_t)at);
         proj.xp = xp;
         proj.seen = seen;
+        memcpy(proj.pk, pk, sizeof pk);
         proj.loop_n = loop_n;
         memcpy(proj.loop, loop, loop_n * sizeof(sy_ev_t));
     } else if (bytes < (int)sizeof proj) {           /* (shorter than this one: no loop) */
