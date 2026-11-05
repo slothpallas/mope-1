@@ -53,6 +53,7 @@ static struct {
     int rep_n;                                          /* REPEAT: times round so far (its copies) */
     float eye_close, grey, grain;                       /* the punches' marks on the body: shut eyes, colour gone, dissolving */
     uint32_t rng;
+    float bal_x, bal_y, bal_vx, bal_vy;                 /* the balloon: where it is, how it moves (it lags, then bobs) */
 } bs;
 
 enum { PK_SPLASH, PK_FIRE, PK_ZZZ, PK_STEAM, PK_YEET, PK_PUFF, PK_SWEAT, PK_SPARK };
@@ -734,9 +735,22 @@ static void draw_unlocks(const geo_t *g)
 {
     const uint32_t lv = xp_level(proj.xp);
     if (lv >= 10u) {   /* a balloon, half the air gone: it floats beside its head on a wavy string, sagging a little */
-        const float bob = 1.5f * mm_sin_turns(bs.t * 0.3f), sway = mm_sin_turns(bs.t * 0.21f);
-        const float bx = g->cx + g->r * 1.15f + 2.0f * sway, by = g->cy - g->r * 1.05f + bob;
-        const float hx = g->cx + g->r * 0.8f, hy = g->cy + g->r * 0.15f;   /* (where it holds it) */
+        /* (a spring pulls it to beside its head, air holds it back: when the blob jumps, squashes or dances it
+         * lags, overshoots, and settles bobbing) */
+        const float tx = g->cx + g->r * 1.15f + 2.0f * mm_sin_turns(bs.t * 0.21f), ty = g->cy - g->r * 1.05f + 1.5f * mm_sin_turns(bs.t * 0.3f);
+        const float dt = mm_minf(bs.dt, 0.05f), hx = g->cx + g->r * 0.8f, hy = g->cy + g->r * 0.15f;   /* (where it holds it) */
+        float bx, by;
+        if (bs.bal_x == 0.0f || mm_fabsf(bs.bal_x - tx) + mm_fabsf(bs.bal_y - ty) > 80.0f) {
+            bs.bal_x = tx;                               /* (first seen, or the camera jumped: there at once) */
+            bs.bal_y = ty;
+            bs.bal_vx = bs.bal_vy = 0.0f;
+        }
+        bs.bal_vx += (28.0f * (tx - bs.bal_x) - 3.2f * bs.bal_vx) * dt;
+        bs.bal_vy += (28.0f * (ty - bs.bal_y) - 3.2f * bs.bal_vy) * dt;
+        bs.bal_x += bs.bal_vx * dt;
+        bs.bal_y += bs.bal_vy * dt;
+        bx = bs.bal_x;
+        by = bs.bal_y;
         int k;
         for (k = 0; k < 6; k++) {                        /* the string: up from its side to the knot, waving */
             const float t0 = (float)k / 6.0f, t1 = (float)(k + 1) / 6.0f;
