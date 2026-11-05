@@ -1,15 +1,15 @@
 # The punches' knobs: the last one punched, its two knobs, the ones a DJ rides (HALF: how low; REPEAT: the
-# roll's length; GATE: its rate; SWEEP: how long...), shown as symbols at the blob's top corners. GRAIN comes
+# roll's length; GATE: its rate; SWEEP: how long...), shown as big dials with their names at the bottom corners. GRAIN comes
 # in slowly. Kept over a restart.
 wait 300
 midi 90 30 64
 midi 90 37 64
 midi 90 3c 64
 wait 600
-# FX twice: the punches stay, the hands free for the knobs
-tap FX
+# SEL twice: the punches stay, the hands free for the knobs
+tap SEL
 wait 100
-tap FX
+tap SEL
 wait 100
 expect latch 1
 # nothing punched yet: the knobs say so
@@ -52,7 +52,7 @@ spin K1 -4
 expect pk4_0 4
 wait 100
 shot 05_roll_knobs.png
-tap FX
+tap SEL
 wait 100
 expect latch 0
 midi 80 30 00

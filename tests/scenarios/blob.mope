@@ -60,15 +60,15 @@ shot 04b_preset_card.png
 turn ALGO 1
 wait 300
 shot 04c_algorithm_wave.png
-# TEARS (SEL, then SEL again): delay and feedback up; COPIES (SEL again): the chorus; then a note: tears fall
-tap SEL
+# TEARS (FX, then FX again): delay and feedback up; COPIES (FX again): the chorus; then a note: tears fall
+tap FX
 wait 1000
-tap SEL
+tap FX
 expect page 4
 spin K1 60
 spin K3 40
 wait 1000
-tap SEL
+tap FX
 expect page 14
 spin K1 70
 tapkey 14
@@ -83,7 +83,7 @@ shot 05b_puddle.png
 tap HOME
 wait 1000
 # WALLS: a big room, the blob gets small; then the void
-tap SEL
+tap FX
 expect page 5
 spin K1 50
 spin K2 30
@@ -94,13 +94,13 @@ spin K2 20
 wait 200
 shot 07_void.png
 spin K2 -60
-# fry it (DUST: SEL round to it, the fourth)
+# fry it (DUST: FX round to it, the fourth)
 wait 1000
-tap SEL
+tap FX
 wait 1000
-tap SEL
+tap FX
 wait 1000
-tap SEL
+tap FX
 expect page 15
 spin K4 100
 tapkey 10
@@ -216,7 +216,7 @@ tap EDIT
 wait 6000
 expect page 1
 expect latch 1
-tap SEL
+tap FX
 wait 4000
 expect page 5
 tap HOME

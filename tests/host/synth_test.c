@@ -202,6 +202,35 @@ static int first_echo(int time)
     return -1;
 }
 
+/* how long the first echo lasts (ms above a small level), Time at that place */
+static int echo_spread(int time)
+{
+    uint32_t b, k, n = 0, first = 0, last = 0;
+    int silent = 0;
+    sy_set(P_TIME, time);
+    quiet();
+    run(3000);
+    sy_note_on(69, 110);
+    for (b = 0; b < 600; b++, n += 64u) {
+        float most = 0.0f;
+        if (b == 4)
+            sy_note_off(69);
+        sy_render(blk, 64, 4096);
+        for (k = 0; k < 128; k++) {
+            const float a = mm_fabsf((float)blk[k] / 8388608.0f);
+            if (silent && a > 0.003f) {
+                if (!first)
+                    first = n + k / 2u;
+                last = n + k / 2u;
+            }
+            most = a > most ? a : most;
+        }
+        if (b > 4 && most < 0.002f && !first)
+            silent = 1;
+    }
+    return first ? (int)((last - first) * 1000u / 44100u) : -1;
+}
+
 int main(int argc, char **argv)
 {
     const char *dir = argc > 1 ? argv[1] : ".";
@@ -1103,10 +1132,28 @@ int main(int argc, char **argv)
         sy_set(P_REVERB, 0);
         sy_set(P_SIZE, 0);                              /* (the void would ring on under the echoes) */
         sy_set(P_FEEDBACK, 0);
+        sy_set(P_TEMPO, 120);                           /* (Time is in the tempo: at 120 a beat is 500 ms) */
         e1 = first_echo(0);
         e2 = first_echo(50);
-        CHECK(e1 > 45 && e1 < 80, "Time 0: the first tear at ~60 ms (%d)", e1);
-        CHECK(e2 > 340 && e2 < 420, "Time 50: at ~380 ms (%d)", e2);
+        CHECK(e1 > 115 && e1 < 140, "Time 0: the first tear a sixteenth on, 125 ms at 120 (%d)", e1);
+        CHECK(e2 > 318 && e2 < 350, "Time 50: a slow triplet, 333 ms (%d)", e2);
+        e1 = first_echo(85);
+        CHECK(e1 > 485 && e1 < 520, "Time 85: on the beat, 500 ms (%d)", e1);
+        e2 = first_echo(100);
+        CHECK(e2 > 360 && e2 < 395, "Time 100: a dotted quarter (750 ms) is too long for the line: half, 375 (%d)", e2);
+        sy_set(P_TEMPO, 60);
+        e1 = first_echo(42);
+        CHECK(e1 > 485 && e1 < 520, "the tempo halved: the eighths twice as far apart, 500 ms (%d)", e1);
+        sy_set(P_TEMPO, 120);
+        {   /* Dark past halfway smears the echo: its energy spread over more time, not one blip */
+            sy_set(P_FEEDBACK, 0);
+            sy_set(P_DDARK, 40);
+            e1 = echo_spread(0);
+            sy_set(P_DDARK, 100);
+            e2 = echo_spread(0);
+            CHECK(e2 > e1 + 5, "Dark past halfway: the echo smeared (%d ms -> %d ms long)", e1, e2);
+            sy_set(P_DDARK, sy_param_info(P_DDARK)->def);
+        }
         sy_set(P_DELAY, 22);
         sy_set(P_FEEDBACK, 45);
         sy_set(P_TIME, 50);

@@ -101,6 +101,8 @@ enum { SY_TR_KICK, SY_TR_SNARE, SY_TR_CLAP, SY_TR_HAT, SY_TR_OHAT, SY_TR_PERC, S
 char sy_style_step(int s, int track, int fill, int step);
 int sy_style_steps(int s);
 int sy_style_tempo(int s);                         /* its usual tempo, bpm */
+#define SY_ECHO_N 7                                /* the delay's Time: sixteenths .. dotted quarters */
+int sy_echo_div(int time);                         /* which of them Time (0..100) is */
 
 extern const char *const SY_TABLE_NAME[SY_NTABLE];
 

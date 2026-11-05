@@ -9,8 +9,8 @@
  *   EDIT  EYES       Cutoff  Reso  Env amount  Mod decay
  *   ENV   MOUTH      Attack  Decay  Sustain  Release
  *   LFO   VIBE       Rate  Depth  Shape  Destination
- *   FX    TEARS      Chorus  Delay  Time  Feedback
- *   SEL   WALLS      Reverb  Size  Fry  Tape
+ *   FX    WALLS      Reverb  Size  Tone  Rain; again TEARS (the delay), COPIES (chorus), DUST (an old record)
+ *   SEL   PUNCH      held (or pressed twice): the black keys punch, the whites beside one change it
  *   SEQ   LOOP       full screen: the cursor's Step and Note, the note's Length, the loop's Bars
  *         held (or pressed twice): the 16 white keys are its steps, OCT- / OCT+ its bars
  *   SEQ again: TAPE DECK  Style  Tempo  Swing  Human
@@ -36,9 +36,9 @@ static const char *const PAGE_NAME[NPAGES] = {"BODY", "EYES", "MOUTH", "VIBE", "
                                               "PUNCH", "SAVE AS"};
 /* the button that opens it (PG_SAVE: none, SAVE's own flow opens it) */
 #define B_NONE 255
-static const uint8_t PAGE_BTN[NPAGES] = {B_HOME, B_EDIT, B_ENV, B_LFO, B_SEL, B_SEL, B_SEQ, B_GLO, B_GLO, B_ARP, B_SEQ,
-                                         B_HOME, B_ENV, B_LFO, B_SEL, B_SEL, B_FX, B_NONE};
-/* the next of its button's pages (pressed again, this one open), round: -1 none. SEL goes round four:
+static const uint8_t PAGE_BTN[NPAGES] = {B_HOME, B_EDIT, B_ENV, B_LFO, B_FX, B_FX, B_SEQ, B_GLO, B_GLO, B_ARP, B_SEQ,
+                                         B_HOME, B_ENV, B_LFO, B_FX, B_FX, B_SEL, B_NONE};
+/* the next of its button's pages (pressed again, this one open), round: -1 none. FX goes round four:
  * the walls, the tears, the copies, the dust. */
 static const int8_t PAGE_AGAIN[NPAGES] = {PG_SHADOW, -1, PG_SIGH, PG_TREMBLE, PG_COPIES, PG_TEARS, PG_LOOP, PG_MIX, PG_SETUP,
                                           -1, PG_DECK, PG_BODY, PG_MOUTH, PG_VIBE, PG_DUST, PG_WALLS, -1, -1};
@@ -258,7 +258,7 @@ static struct {
     uint32_t preset_t;                 /* when PRESETS last turned: its card shows a moment (0: never) */
     uint8_t key_note[NKEYS];           /* the note each key started (its note off) */
     uint32_t stepped;                  /* keys pressed as the loop's steps (their preview to stop) */
-    uint32_t punched;                   /* keys punching (FX held when they went down): up, the punch ends */
+    uint32_t punched;                   /* keys punching (SEL held when they went down): up, the punch ends */
     uint32_t modkeys;                   /* white keys beside a punch, held: they change it (no note) */
     int8_t pk_fx;                       /* the punch the knobs turn (the last one punched), -1 none yet */
     uint8_t loop_bar, step_note;       /* the bar the steps show; the note a new step gets */
@@ -485,6 +485,12 @@ static void say_choice(int k)
     case P_PRESS: {
         static const char *const W[AT_N] = {"PRESSING: NOTHING.", "PRESS: IT TREMBLES", "PRESS: EYES OPEN", "PRESS: IT MORPHS", "PRESS: MORE LFO"};
         ui_caption(W[proj.par[k]], 1400u);
+        break;
+    }
+    case P_TIME: {                                       /* the echo, in the band's time */
+        static const char *const W[SY_ECHO_N] = {"TEARS: SIXTEENTHS", "TEARS: TRIPLETS", "TEARS: EIGHTHS", "TEARS: SLOW TRIPLETS",
+                                                 "TEARS: DOTTED EIGHTHS", "TEARS: ON THE BEAT", "TEARS: DOTTED QUARTERS"};
+        ui_caption(W[sy_echo_div(proj.par[k])], 1200u);
         break;
     }
     case P_ARPMODE: ui_caption(ARP_MODE_NAME[proj.par[k]], 1200u); break;
@@ -805,11 +811,11 @@ static int white_of(int k)
     return -1;
 }
 
-/* the punches are on the black keys (FX held, or FX pressed twice: it stays), PU_* each; STUTTER is
+/* the punches are on the black keys (SEL held, or SEL pressed twice: it stays), PU_* each; STUTTER is
  * REPEAT with MORE. The white key below a punching black key: MORE (stronger); above: TWIST (another way). */
 static const int8_t PUNCH_KEY[NKEYS] = {-1, PU_HALF, -1, PU_DOUBLE, -1, PU_STOP, -1, -1, PU_REVERSE, -1, PU_REPEAT, -1, -1,
                                         PU_GATE, -1, PU_GRAIN, -1, PU_CRUSH, -1, -1, PU_SWEEP, -1, PU_WASH, -1, -1, PU_WOBBLE, -1};
-static int punch_mode(void) { return (ui.btn >> B_FX & 1u) || (ui.latch && ui.page == PG_PUNCH); }
+static int punch_mode(void) { return (ui.btn >> B_SEL & 1u) || (ui.latch && ui.page == PG_PUNCH); }
 static int punch_mods(int k)                             /* a punching key: its whites beside, held */
 {
     return (k > 0 && (ui.modkeys >> (k - 1) & 1u) ? PM_MORE : 0) | (k < NKEYS - 1 && (ui.modkeys >> (k + 1) & 1u) ? PM_TWIST : 0);
@@ -857,7 +863,7 @@ static void seq_knob(int k, int32_t e)
         ui_caption("NO NOTE HERE.", 800u);
 }
 
-/* the punches' knobs, what each is called (said when turned; the screen shows them as symbols) */
+/* the punches' knobs, what each is called (said when turned, and written by their dials) */
 static void punch_knob(int k, int32_t e)
 {
     static char b[32];
@@ -921,7 +927,7 @@ static void key_down(int k)
         ui.punched |= 1u << k;
         ui.pk_fx = (int8_t)fx;                           /* (the knobs turn this one now) */
         sy_punch(fx, 1 + punch_mods(k));
-        ui.btn_used |= 1u << B_FX;
+        ui.btn_used |= 1u << B_SEL;
         ui_caption(PUNCH_SAID[fx], 900u);
         ui.page_until = plat_ms() + STAY_MS;
         return;
@@ -970,7 +976,7 @@ static void key_down(int k)
 }
 static void key_up(int k)
 {
-    if (ui.punched >> k & 1u) {                          /* a punch lasts until its key is up (FX let go or not) */
+    if (ui.punched >> k & 1u) {                          /* a punch lasts until its key is up (SEL let go or not) */
         ui.punched &= ~(1u << k);
         sy_punch(PUNCH_KEY[k], 0);
         return;
@@ -1051,8 +1057,8 @@ static void button(int b)
         tap_tempo();                                     /* the tempo pages: HOME in time sets it (one tap: HOME) */
         return;
     }
-    if (b == B_FX && ui.latch && ui.page == PG_PUNCH && !(plat_ms() - ui.last_up_t < DOUBLE_MS && ui.last_up_btn == B_FX)) {
-        ui.latch = 0;                                    /* the punches staying: FX again lets them go */
+    if (b == B_SEL && ui.latch && ui.page == PG_PUNCH && !(plat_ms() - ui.last_up_t < DOUBLE_MS && ui.last_up_btn == B_SEL)) {
+        ui.latch = 0;                                    /* the punches staying: SEL again lets them go */
         ui.held_btn = -1;
         ui.panel = 0;
         ui.page = PG_BODY;
@@ -1112,7 +1118,7 @@ static void button(int b)
                 ui.latch = 1;                            /* (the settings and the loop, full screen: they stay until HOME) */
             if (dbl && !ui.latch) {
                 ui.latch = 1;                            /* twice: it stays (other pages too) until HOME */
-                ui_caption(pg == PG_PUNCH ? "PUNCHES STAY. FX: AWAY." : "STAYS OPEN.", 1200u);
+                ui_caption(pg == PG_PUNCH ? "PUNCHES STAY. SEL: AWAY." : "STAYS OPEN.", 1200u);
             }
             return;
         }
@@ -1455,7 +1461,7 @@ static void input(void)
 /* ------------------------------------------------------------- lights --- */
 static void leds(void)
 {
-    uint32_t b = PAGE_BTN[ui.page] < NB ? 1u << PAGE_BTN[ui.page] : 0u, dim = 0u;
+    uint32_t b = PAGE_BTN[ui.page] < NB ? 1u << PAGE_BTN[ui.page] : 0u, dim = 0u, beside = 0u;
     if (sy_tel.drums_on && sy_tel.step % (sy_tel.steps / 4u ? sy_tel.steps / 4u : 4u) != 0u)
         b |= 1u << B_PLAY;                               /* lit, dark on each beat */
     if (sy_tel.rec == 2 || (sy_tel.rec == 1 && (plat_ms() / 125u) & 1u))
@@ -1466,13 +1472,13 @@ static void leds(void)
         b |= 1u << B_OCTDN | 1u << B_OCTUP;
     else if (proj.par[P_OCTAVE] != 0)                    /* up or down an octave or more: that way lit */
         b |= 1u << (proj.par[P_OCTAVE] > 0 ? B_OCTUP : B_OCTDN);
-    if (punch_mode() || ui.punched) {                    /* punching: the black pads dim, the whites beside a punch dim too */
+    if (punch_mode() || ui.punched) {                    /* punching: the black pads dim, the whites beside a punch lit */
         int k;
         for (k = 0; k < NKEYS; k++) {
             if (punch_mode() && PUNCH_KEY[k] >= 0)
                 dim |= 1u << k;
             if (ui.punched >> k & 1u)
-                dim |= (k > 0 ? 1u << (k - 1) : 0u) | (k < NKEYS - 1 ? 1u << (k + 1) : 0u);
+                beside |= (k > 0 ? 1u << (k - 1) : 0u) | (k < NKEYS - 1 ? 1u << (k + 1) : 0u);
         }
     }
     if (step_mode()) {   /* SEQ: the cursor's step lit (where a tap lands), the bar's steps with notes dim */
@@ -1498,7 +1504,7 @@ static void leds(void)
         plat_leds(b, ui.keys | b2, dim & ~b2);
         return;
     }
-    plat_leds(b, ui.keys | ui.punched, dim & ~ui.punched);
+    plat_leds(b, ui.keys | ui.punched | beside, dim & ~(ui.punched | beside));
 }
 
 /* AUTOSAVE: a few seconds after a change, when it is quiet (a flash erase silences the audio a moment) */

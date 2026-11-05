@@ -1568,16 +1568,47 @@ static inline void chorus(float *l, float *r, float amt, const float *d, float n
 
 /* -------------------------------------------------------------- delay --- */
 /* The tears: two lines that hand each echo across, left to right to left, at half rate in int16.
- * Every crossing the tear gets darker and thinner (a low-pass and a high-pass in the loop), a soft
- * clip keeps a long feedback from screaming, and Tape makes the time wobble. */
+ * Time is in the band's tempo (sixteenths .. dotted quarters; too long for the line: half of it). Every
+ * crossing the tear gets darker and thinner (a low-pass and a high-pass in the loop) and a little more
+ * worn, like tape: it saturates, more with more Feedback, and the time wanders slowly and flutters
+ * (Tape: much more). Dark past halfway smears each echo too (two all-passes a side): a cloud, not a copy. */
 #define TEAR_N 16384u                                 /* per side: 743 ms at 22.05 kHz */
 static int16_t tear_l[TEAR_N] SY_POOL, tear_r[TEAR_N] SY_POOL;
 static uint32_t tear_w;
 static float tear_t = 8000.0f, tear_wob, tear_peak;   /* time in half-rate samples; Tape's wobble; level */
 static float tear_dark_l, tear_dark_r, tear_thin_l, tear_thin_r;
 static float tear_out_l, tear_out_r, tear_was_l, tear_was_r;
-static float tear_last_in;
+static float tear_last_in, tear_want = 8000.0f;       /* (Time in the tempo, worked out once a chunk) */
+static float tear_ew_ph, tear_ef_ph;                  /* the echoes' slow wander, their flutter */
 static int tear_odd;
+/* the smear: two all-passes on each side, int16 (lengths at half rate, apart from each other) */
+#define SMEAR_A 179u
+#define SMEAR_B 431u
+#define SMEAR_C 211u
+#define SMEAR_D 389u
+static int16_t sm_a[SMEAR_A], sm_b[SMEAR_B], sm_c[SMEAR_C], sm_d[SMEAR_D];
+static uint32_t sm_ia, sm_ib, sm_ic, sm_id;
+static inline float smear_ap(int16_t *buf, uint32_t n, uint32_t *i, float x)
+{
+    const float old = (float)buf[*i] * (1.0f / 8192.0f), v = x - 0.6f * old;
+    const float c = v < -3.99f ? -3.99f : v > 3.99f ? 3.99f : v;
+    buf[*i] = (int16_t)(c * 8192.0f);
+    *i = *i + 1u < n ? *i + 1u : 0u;
+    return old + 0.6f * v;
+}
+/* the echo's length in the tempo: Time's seven places (sixteenths .. dotted quarters), in half-rate samples */
+static const float ECHO_BEATS[SY_ECHO_N] = {0.25f, 1.0f / 3.0f, 0.5f, 2.0f / 3.0f, 0.75f, 1.0f, 1.5f};
+int sy_echo_div(int time) { const int i = time * SY_ECHO_N / 101; return i < 0 ? 0 : i >= SY_ECHO_N ? SY_ECHO_N - 1 : i; }
+static float echo_len(void)
+{
+    const float b = bpm();
+    float t = ECHO_BEATS[sy_echo_div(par[P_TIME])] * 60.0f * 22050.0f / (b > 20.0f ? b : 20.0f);
+    while (t > (float)(TEAR_N - 600u))                  /* (longer than the line holds: half, the same feel) */
+        t *= 0.5f;
+    return t;
+}
+/* a worn crossing: saturated, a little lopsided (tape), harder with more Feedback */
+static inline float tear_wear(float x, float g) { return mm_tanhf(g * (x + 0.12f * x * x)) / g; }
 #define TEAR_IN 0.35f                                 /* into the int16 line, with headroom */
 static inline int16_t tear_pack(float x)
 {
@@ -1600,16 +1631,24 @@ static inline float tear_fall(float x, float *dark, float *thin, float k)
 static inline void delay(float in, float *l, float *r)
 {
     if (!tear_odd) {                                    /* the line moves every other sample */
-        const float hop = 0.95f * pf(P_FEEDBACK),       /* what each crossing keeps */
-                    want = (60.0f + 640.0f * pf(P_TIME)) * 22.05f,
-                    dk = 0.85f - 0.8f * pf(P_DDARK);    /* (Dark: how much each crossing loses of its top) */
-        float back, from_l, from_r;
-        tear_t += 0.0008f * (want - tear_t);           /* (a new Time glides there) */
+        const float fb = pf(P_FEEDBACK), hop = 0.95f * fb,   /* what each crossing keeps */
+                    dark = pf(P_DDARK), dk = 0.85f - 0.8f * dark,   /* (Dark: how much each crossing loses of its top) */
+                    smear = dark > 0.5f ? (dark - 0.5f) * 2.0f : 0.0f, g = 1.1f + 2.2f * fb;
+        float back, from_l, from_r, al, ar;
+        tear_t += 0.0008f * (tear_want - tear_t);      /* (a new Time glides there: the pitch bends) */
         back = tear_t * (1.0f + tear_wob);
         from_l = tear_at(tear_l, back);                /* the echo arriving on the left... */
         from_r = tear_at(tear_r, back);                /* ...and the one on the right */
-        tear_l[tear_w] = tear_pack(0.5f * (in + tear_last_in) + hop * tear_fall(from_r, &tear_dark_r, &tear_thin_r, dk));
-        tear_r[tear_w] = tear_pack(hop * tear_fall(from_l, &tear_dark_l, &tear_thin_l, dk));
+        {                                              /* (the smear, always running: it comes in without a click) */
+            const float sl = smear_ap(sm_b, SMEAR_B, &sm_ib, smear_ap(sm_a, SMEAR_A, &sm_ia, from_l));
+            const float sr = smear_ap(sm_d, SMEAR_D, &sm_id, smear_ap(sm_c, SMEAR_C, &sm_ic, from_r));
+            from_l += smear * (sl - from_l);
+            from_r += smear * (sr - from_r);
+        }
+        al = tear_wear(tear_fall(from_r, &tear_dark_r, &tear_thin_r, dk), g);
+        ar = tear_wear(tear_fall(from_l, &tear_dark_l, &tear_thin_l, dk), g);
+        tear_l[tear_w] = tear_pack(0.5f * (in + tear_last_in) + hop * al);
+        tear_r[tear_w] = tear_pack(hop * ar);
         tear_w = (tear_w + 1u) & (TEAR_N - 1u);
         tear_was_l = tear_out_l;
         tear_was_r = tear_out_r;
@@ -3679,6 +3718,7 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
         }
     to_ch = mm_clampf(pf(P_CHORUS) + md.copies, 0.0f, 1.0f);
     to_dl = mm_clampf(pf(P_DELAY) + md.echo, 0.0f, 1.0f) * 0.8f;
+    tear_want = echo_len();                             /* (the tempo's echo) */
     to_rv = mm_clampf(pf(P_REVERB) + md.verb, 0.0f, 1.0f) * 0.6f;
     dusty = mm_clampf(pf(P_DUST) + md.dust, 0.0f, 1.0f);
     du_lp = 0.94f - 0.55f * dusty;
@@ -3711,7 +3751,12 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
         gunk_chunk();
         punch_chunk();
         flut_ph -= (float)(int)flut_ph;
-        tear_wob = tape * 0.004f * mm_sin_turns(wow_ph);
+        tear_ew_ph += 0.31f * 16.0f / SY_SR;            /* the echoes: a slow wander and a flutter, always a little */
+        tear_ew_ph -= (float)(int)tear_ew_ph;
+        tear_ef_ph += 4.3f * 16.0f / SY_SR;
+        tear_ef_ph -= (float)(int)tear_ef_ph;
+        tear_wob = tape * 0.004f * mm_sin_turns(wow_ph) + (0.0012f + 0.003f * tape) * mm_sin_turns(tear_ew_ph) +
+                   (0.00025f + 0.0008f * tape) * mm_sin_turns(tear_ef_ph);
         for (j = j0; j < j0 + 16u && j < n; j++) {
             float l = bl[j], r = br[j], el, er, rl, rr, dm, bass;
             fry(&l, &r);
