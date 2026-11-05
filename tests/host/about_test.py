@@ -5,6 +5,7 @@ front page is there, 120 x 120 and described; every link inside the site and eve
 site's bar (web/nav.html) is on both pages unchanged; the front page stays light.
   about_test.py SITE          (e.g. build/site)"""
 import pathlib
+import re
 import struct
 import sys
 from html.parser import HTMLParser
@@ -86,6 +87,9 @@ def main():
     player = site / "play" / "index.html"
     if player.exists():
         check(nav in player.read_text(), "the player carries the same bar")
+    # what's new, in the player (web/play): each item lands on its part of the front page's manual
+    for m in re.findall(r'data-m="([a-z-]+)"', (pathlib.Path(__file__).resolve().parents[2] / "web" / "play" / "index.html").read_text()):
+        check(m in page.ids, f"what's new: #{m} is on the front page")
     old = site / "about" / "index.html"
     check(old.exists() and 'url=../' in old.read_text(), "about/ sends old links on to the front page")
     size = (about / "index.html").stat().st_size + sum(f.stat().st_size for f in (about / "img").iterdir() if f.name != "og.png")
