@@ -1386,6 +1386,34 @@ static void schem_punch(const drawer_t *p)
     }
 }
 
+/* SAVE AS: the name, the cursor blinking under its letter; under it your sixteen places, the filled ones
+ * lit, the chosen one outlined (pink: it goes over one of yours) */
+static void schem_save(const drawer_t *p)
+{
+    const int32_t x0 = p->gx0 + 2, y0 = p->gy0 + 2, sy = p->gy0 + 12;
+    char one[2] = {0, 0};
+    int i;
+    for (i = 0; i < PRESET_NAME; i++) {
+        one[0] = ui.name[i];
+        if (one[0] && one[0] != ' ')
+            px_text(x0 + i * 5, y0, one, i == ui.cursor ? PC_WHITE : PC_SPEC);
+    }
+    if ((plat_ms() / 250u) & 1u || ui.focus_t + 600u > plat_ms())   /* (the cursor: steady while you turn) */
+        px_rect(x0 + ui.cursor * 5, y0 + 7, 4, 1, PC_WHITE);
+    for (i = 0; i < PRESET_SLOTS; i++) {
+        const int32_t x = x0 + i * 6;
+        const int full = presets.used >> i & 1u;
+        if (i == ui.save_slot) {
+            px_rect(x - 1, sy - 1, 7, 7, PC_WHITE);
+            px_rect(x, sy, 5, 5, full ? PC_PINK : PC_BG0);
+        } else {
+            px_rect(x, sy, 5, 5, full ? PC_TEAR : PC_WALL2);
+            if (!full)
+                px_rect(x + 1, sy + 1, 3, 3, PC_BG0);
+        }
+    }
+}
+
 /* a round step: d 3 (a plus) or 4/5 (corners cut); ring: only its edge */
 static void step_dot(int32_t x, int32_t y, int32_t d, uint8_t c, int ring)
 {
@@ -1694,6 +1722,21 @@ static void draw_panel(const geo_t *g)
             what = KIND[proj.par[P_FTYPE]];
             break;
         }
+        case PG_SAVE: {                                  /* the place: empty, or whose it was */
+            static char was[PRESET_NAME + 1];
+            const int sl = ui.save_slot;
+            if (presets.used >> sl & 1u) {
+                int n = 0;
+                for (const char *q = "OVER "; *q; q++)
+                    was[n++] = *q;
+                for (i = 0; i < PRESET_NAME - 5 && presets.slot[sl].name[i]; i++)
+                    was[n++] = presets.slot[sl].name[i];
+                was[n] = 0;
+                what = was;
+            } else
+                what = "EMPTY";
+            break;
+        }
         case PG_LOOP: what = sy_tel.rec == 2 ? "REC" : sy_tel.rec == 1 ? "READY" : sy_tel.loop_sel >= 0 ? "STEP" : "ALL"; break;
         default: break;
         }
@@ -1712,7 +1755,7 @@ static void draw_panel(const geo_t *g)
     p.gx0 = 4;
     p.gx1 = PX_W - 5;
     p.gy0 = p.y0 + 12;
-    p.gy1 = ui.page == PG_PUNCH || ui.page == PG_SAVE ? p.y0 + 41 : p.y0 + 30;   /* (no knob row: the whole drawer) */
+    p.gy1 = ui.page == PG_PUNCH ? p.y0 + 41 : p.y0 + 30;   /* (no knob row: the whole drawer) */
     grid(&p);
     switch (ui.page) {
     case PG_BODY: schem_body(&p); break;
@@ -1731,6 +1774,7 @@ static void draw_panel(const geo_t *g)
     case PG_SHADOW: schem_shadow(&p); break;
     case PG_SIGH: schem_sigh(&p); break;
     case PG_TREMBLE: schem_tremble(&p); break;
+    case PG_SAVE: schem_save(&p); break;
     default: schem_setup(&p); break;
     }
     /* the knobs: a name over a meter, the one being turned lit up */
@@ -1752,6 +1796,10 @@ static void draw_panel(const geo_t *g)
             px_rect(x, y + 8, 26, 2, PC_GRID);
             w = (int32_t)(mm_clampf(lv, 0.0f, 1.0f) * 26.0f + 0.5f);
             px_rect(x, y + 8, w, 2, hot ? PC_SPEC : PC_TEAR);
+            continue;
+        }
+        if (k == K_NONE && ui.page == PG_SAVE) {         /* SAVE AS: what each knob does, no meter */
+            px_text(x, y, PAGE_LABEL[ui.page][i], hot ? PC_WHITE : PC_DIM);
             continue;
         }
         if (k == K_NONE)

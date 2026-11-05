@@ -52,7 +52,7 @@ static const char *const PAGE_LABEL[NPAGES][4] = {
     {"STYL", "BPM", "SWNG", "HUMN"}, {"MOVE", "SET", "", ""}, {"BPM", "VOX", "DRUM", "BASS"},
     {"MODE", "RATE", "OCT", "GATE"}, {"STEP", "NOTE", "LEN", "BARS"},
     {"WAVE", "TUNE", "MEET", "LVL"}, {"ATK", "DEC", "WAVE", "EYES"}, {"RATE", "DPTH", "SHPE", "DEST"},
-    {"CHOR", "RATE", "DPTH", "WIDE"}, {"TAPE", "CRKL", "DUST", "FRY"}, {"", "", "", ""}, {"CURS", "CHAR", "NAME", "SLOT"}};
+    {"CHOR", "RATE", "DPTH", "WIDE"}, {"TAPE", "CRKL", "DUST", "FRY"}, {"", "", "", ""}, {"MOVE", "ABC", "NEW", "SLOT"}};
 #define STAY_MS 3000u                  /* a drawer stays this long after the last touch (a press, a turn) */
 #define DOUBLE_MS 350u                 /* a part's button pressed twice this fast: its page stays until HOME */
 #define TAP_MS 300u                    /* ARP let go sooner: a tap (on / off), not a look at its page */
@@ -272,6 +272,7 @@ static struct {
     uint32_t save_t, reset_ask;
     uint32_t last_draw;
     uint8_t naming;                    /* SAVE AS open: the knobs (and typing) edit the name, SAVE keeps it */
+    uint8_t name_fresh;                /* the name as it was offered: the first letter typed replaces it */
     uint8_t set_row;                   /* SETTINGS: the row chosen (knob 1 moves, knob 2 sets) */
     uint32_t tempo_t;                  /* the tempo just changed (turned, tapped, a clock found): its number shows */
     uint8_t mute;                      /* SY_MUTE_*: the drums, the bass, the loop quiet (not saved) */
@@ -644,6 +645,7 @@ static void name_slot(int slot)                          /* a slot chosen: its n
             ui.name[i] = ' ';
     ui.name[PRESET_NAME] = 0;
     ui.cursor = (uint8_t)(name_len() < PRESET_NAME ? name_len() : PRESET_NAME - 1);
+    ui.name_fresh = 1;
 }
 static void set_page(int pg);
 static void save_open(void)                              /* SAVE tapped: SAVE AS, a slot and a name */
@@ -714,11 +716,18 @@ static void name_type(int c)                             /* a typed character, o
         for (q = NAME_CHARS; *q && *q != u; q++)
             ;
         if (*q) {                                        /* (only what the screen's font can draw) */
+            if (ui.name_fresh) {                         /* (typing over the offered name: a new one) */
+                int i;
+                for (i = 0; i < PRESET_NAME; i++)
+                    ui.name[i] = ' ';
+                ui.cursor = 0;
+            }
             ui.name[ui.cursor] = u;
             if (ui.cursor < PRESET_NAME - 1)
                 ui.cursor++;
         }
     }
+    ui.name_fresh = 0;
     ui.page_until = plat_ms() + STAY_MS;
 }
 static void name_knob(int i, int32_t e)                  /* SAVE AS: 1 the cursor, 2 its letter, 3 a new name, 4 the slot */
@@ -732,6 +741,7 @@ static void name_knob(int i, int32_t e)                  /* SAVE AS: 1 the curso
             at++;
         at = ((at + (e > 0 ? 1 : -1)) % n + n) % n;
         ui.name[ui.cursor] = NAME_CHARS[at];
+        ui.name_fresh = 0;
     } else if (i == 2) {
         int k;
         sad_name(ui.name);
@@ -740,6 +750,8 @@ static void name_knob(int i, int32_t e)                  /* SAVE AS: 1 the curso
                 ui.name[k] = ' ';
         ui.name[PRESET_NAME] = 0;
         ui.cursor = (uint8_t)(name_len() < PRESET_NAME ? name_len() : PRESET_NAME - 1);
+        ui.name_fresh = 1;
+        ui_caption("ANOTHER NAME.", 700u);
     } else
         name_slot((ui.save_slot + (e > 0 ? 1 : PRESET_SLOTS - 1)) % PRESET_SLOTS);
 }

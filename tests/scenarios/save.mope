@@ -1,0 +1,67 @@
+# SAVE AS: SAVE tapped opens it with a sad name in the first empty place; typed letters replace that name,
+# SAVE keeps it (a preset of yours: the sound only), any other button leaves it unsaved. Your presets come
+# after the factory ones and survive a restart. SAVE + REC still clears the loop without saving.
+wait 300
+expect presets_used 0
+tap SAVE
+wait 300
+expect naming 1
+expect save_slot 0
+shot 00_offered.png
+# typing over the offered name: a name of its own
+type "BIG SAD BASS"
+wait 100
+shot 01_typed.png
+# knob 2: the letter under the cursor (the end: a space becomes an A, and back); backspace: the S before it,
+# typed again
+spin K2 1
+spin K2 -1
+type "\bS"
+tap SAVE
+wait 600
+expect naming 0
+expect presets_used 1
+expect mood >50
+shot 02_kept.png
+# again, playing yours: its own place offered, over it (pink); knob 4: the next place
+tap SAVE
+wait 300
+expect save_slot 0
+shot 03_over_it.png
+spin K4 1
+wait 100
+expect save_slot 1
+# another button: never mind
+tap HOME
+wait 300
+expect naming 0
+expect presets_used 1
+# a second one, in the second place, its name from knob 3 (another sad one)
+spin K1 3
+tap SAVE
+wait 200
+spin K4 1
+expect save_slot 1
+spin K3 1
+wait 50
+tap SAVE
+wait 600
+expect presets_used 3
+# Enter keeps, Escape doesn't (the web player's keyboard)
+tap SAVE
+wait 200
+type "NOPE\e"
+wait 100
+expect naming 0
+expect presets_used 3
+# a restart: both still there
+reboot
+wait 500
+expect presets_used 3
+# SAVE + REC: the loop gone, nothing saved, SAVE AS not opened
+press SAVE
+tap REC
+release SAVE
+wait 300
+expect naming 0
+expect presets_used 3
