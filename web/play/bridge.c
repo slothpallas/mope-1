@@ -37,6 +37,7 @@ typedef struct {
     uint32_t cpu;             /* the share of the FM-1's time the app takes, % */
     uint32_t save_ver;        /* goes up when something was saved */
     uint32_t ms;              /* the simulated clock */
+    uint32_t naming;          /* SAVE AS open: the computer's keys type the name */
 } play_status_t;
 static play_status_t status;
 
@@ -64,6 +65,7 @@ EXPORT float *play_pull(uint32_t n)
     status.cpu = cpu_pct;
     status.save_ver = store_writes;
     status.ms = now_ms;
+    status.naming = (uint32_t)ui_naming();
     return pulled;
 }
 EXPORT play_status_t *play_status(void) { return &status; }
@@ -76,6 +78,8 @@ EXPORT void play_turn(int knob, int32_t detents)
     if (knob >= 0 && knob < NE)
         enc_acc[knob] += detents;
 }
+/* a typed character (SAVE AS's name): 1 left, 2 right, 8 backspace, 13 keep, 27 never mind, else ASCII */
+EXPORT void play_type(int c) { type_char(c); }
 EXPORT void play_volume(uint32_t v) { master = v > 4096u ? 4096u : v; }
 
 /* a MIDI channel message, into the queue the FM-1's USB and its jack fill (as a USB-MIDI packet) */

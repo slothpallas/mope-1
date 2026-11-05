@@ -5,8 +5,8 @@
 // screen and anything saved.
 //
 // Messages in:  {is: "start", wasm, saves, volume}  {is: "hold", buttons, keys}  {is: "turn", knob, by}
-//               {is: "midi", bytes: [st, d1, d2]}   {is: "volume", to}
-// Messages out: {is: "on"}  {is: "frame", buttons, keys, dim, screen?, saves?, cpu?}
+//               {is: "midi", bytes: [st, d1, d2]}   {is: "volume", to}   {is: "type", c}
+// Messages out: {is: "on"}  {is: "frame", buttons, keys, dim, naming, screen?, saves?, cpu?}
 
 const TAP = 1536;                 // frames (35 ms): a press shorter than this still reaches the firmware's scan
 const FRAME = 44100 / 30;         // frames between two frames for the page
@@ -39,6 +39,7 @@ class MopeVoice extends AudioWorkletProcessor {
     } else if (m.is === "turn") this.app.play_turn(m.knob, m.by | 0);
     else if (m.is === "midi") this.app.play_midi(m.bytes[0], m.bytes[1] | 0, m.bytes[2] | 0);
     else if (m.is === "volume") this.app.play_volume(m.to | 0);
+    else if (m.is === "type") this.app.play_type(m.c | 0);
   }
 
   async start(m) {
@@ -72,8 +73,8 @@ class MopeVoice extends AudioWorkletProcessor {
 
   report() {
     const app = this.app;
-    const st = new Uint32Array(this.memory.buffer, app.play_status(), 7);
-    const msg = { is: "frame", buttons: st[1], keys: st[2], dim: st[3] };
+    const st = new Uint32Array(this.memory.buffer, app.play_status(), 8);
+    const msg = { is: "frame", buttons: st[1], keys: st[2], dim: st[3], naming: st[7] };
     const moving = [];
     if (st[0] !== this.seen.screen) {
       this.seen.screen = st[0];
