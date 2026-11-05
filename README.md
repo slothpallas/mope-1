@@ -85,8 +85,11 @@ Press or hold a part's button: its schematic opens in a dark glass drawer over t
 | ENV again | Sigh | Its attack (0: the mouth's) | Its decay | Wave (how far it sweeps the table, either way) | Eyes (how far it opens the filter) |
 | LFO | Vibe | Rate | Depth | Shape (sway, bob, bounce, nod, twitch, heave, wander, stagger, throb) | Destination (shape, eyes, voice, volume, shadow) |
 | LFO again | Tremble | Rate | Depth | Shape | Destination |
-| FX | Tears | Chorus | Delay | Time | Feedback |
-| SEL | Walls | Reverb | Size | Fry | Tape |
+| FX | Walls | Reverb | Size | Tone | Rain |
+| FX again | Tears | Delay | Time (in the tempo: sixteenths, triplets, eighths, slow triplets, dotted eighths, the beat, dotted quarters) | Feedback (each echo more worn, like tape) | Dark (past halfway: each echo smeared into a cloud) |
+| FX again | Copies | Chorus | Rate | Depth | Width |
+| FX again | Dust | Tape | Crackle | Dust | Fry |
+| SEL | Punch | Held (or pressed twice): the last punch's first knob | Its second knob | | |
 | SEQ | Loop | Note | Length | Velocity (of the chosen step, or the whole loop) | Bars (1, 2, 4) |
 | SEQ again | Tape deck | Style | Tempo | Swing | Human (looser timing and velocity) |
 | GLO | Mixer | Voice | Drums | Bass (0: no bass) | Gunk |
@@ -98,7 +101,7 @@ Press or hold a part's button: its schematic opens in a dark glass drawer over t
 - **SELECT**: the drum tape (the blob swaps the cassette and shrugs).
 - **Close-ups:** while you hold EDIT (Eyes) the view moves in on its eyes; while you hold ENV (Mouth), on its mouth.
 - **Tap tempo:** on the tape deck or the mixer, tap **HOME** in time (two taps or more). Turning or tapping the tempo shows its number big at the top for a moment (BPM in blue while it follows a MIDI clock).
-- **Punches (hold FX):** the drawer shows the keyboard, each black key with its punch's symbol: lit while it plays, blinking while it waits for the step; the white key beside a held punch lights when it changes it (left: more, right: twist).
+- **Punches (hold SEL, or press it twice to keep them):** a black key punches while it is held. The drawer shows the keyboard, each black key with its punch's symbol: lit while it plays, blinking while it waits for the step. The two white keys beside a held punch light up, on the screen and on the pads: hold the left one for more, the right one for a twist. The punch's two knobs sit at the bottom corners over the drawer, as big dials with their names (HOW LOW, SMEAR, GRAIN SIZE...).
 - **Captions** sit in their own dark band at the top (right of the cassette when it is up), never on the blob. One tap alone is HOME, as always (a moment later).
 - **PLAY**: the band on and off: drums, bass and your loop. **ARP**: tap for the arpeggiator on or off; hold for its page: the keys you hold become its pattern, at the tempo, starting each bar with the drums.
 

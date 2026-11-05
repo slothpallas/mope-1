@@ -26,9 +26,9 @@ STATES = [
      "The blob with half-closed, heavy eyelids."),
     ("lasers", "Resonance up. It has seen something.", "EDIT · knob 2 up",
      "Red laser beams coming out of the blob's eyes."),
-    ("cry", "Delay: one tear per echo, and they collect on the floor.", "FX · knobs 2 and 4",
+    ("cry", "Delay: one tear per echo, and they collect on the floor.", "FX twice · knobs 1 and 3",
      "Tears falling from the blob into a dark puddle on the floor that mirrors it."),
-    ("void", "Reverb. The room got bigger and it didn't.", "SEL · knobs 1 and 2 up",
+    ("void", "Reverb. The room got bigger and it didn't.", "FX · knobs 1 and 2 up",
      "The walls gone: a small blob floating in the dark, among stars."),
     ("fire", "Too loud, so it catches fire. It's fine.", "everything up at once",
      "Embers flying off the blob, which looks calm."),
@@ -48,10 +48,12 @@ PARTS = [
                                  "note, and open the eyes.")),
     ("LFO", "Vibe", "page_vibe", "It dances at the rate, as far as the depth: sway, bob, bounce, nod, twitch, heave, "
      "wander, stagger, throb.", ("Tremble", "page_tremble", "a second LFO, for the things the first one is busy with.")),
-    ("FX", "Tears", "page_tears", "One tear per echo, each smaller than the last. Chorus: see-through copies of it peek "
-     "out from behind.", None),
-    ("SEL", "Walls", "page_walls", "The reverb is the room: the bigger it gets, the smaller the blob looks, and past the "
-     "walls there's only the void. Fry deep-fries it, and Tape makes everything wobble a little.", None),
+    ("FX", "Walls", "page_walls", "The reverb is the room: the bigger it gets, the smaller the blob looks, and past the "
+     "walls there's only the void. Again: copies (chorus, see-through copies of it peek out from behind) and dust (an old "
+     "record: tape, crackle, fry).", ("Tears", "page_tears", "the delay, in the band's tempo: one tear per echo, each smaller "
+                                      "and more worn than the last. Dark past halfway smears them into a cloud.")),
+    ("SEL", "Punch", None, "Hold it (or press it twice) and a black key punches the sound while it is held: half speed, tape stop, reverse, "
+     "repeats, gate, grains, crush. The white keys beside a punch light up: more, or a twist.", None),
     ("GLO", "Mixer", "page_mixer", "How loud each part is: the blob, the drums, the bass and the rain.",
      ("Setup", None, "the settings, a list on the whole screen: how notes take voices, glide, the tempo, the room, the auto-bass, MIDI in and out, the clock (its own, following, leading), aftertouch and the tuning.")),
     ("SEQ", "Loop", None, "Record what you play (REC), then fix it one step at a time.",

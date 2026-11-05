@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""A random session heavy on punches: FX held or let go, black keys and the whites beside them, the knobs spun,
+"""A random session heavy on punches: SEL held or let go, black keys and the whites beside them, the knobs spun,
 parameters thrown about over MIDI (CC 102/103), chords, punches by CC 105, SEQ steps, saves, restarts. It found
 HALF/DOUBLE heads reading past the write head when MORE or knob 1 changed mid-splice.
 
@@ -15,7 +15,7 @@ fx=False; held=set()
 for _ in range(n):
     x=r.random()
     if x<0.12:
-        if not fx: A("press FX"); fx=True
+        if not fx: A("press SEL"); fx=True
         k=r.choice(BL)
         if k in held: A(f"key {k} up"); held.discard(k)
         else: A(f"key {k} down"); held.add(k)
@@ -23,8 +23,8 @@ for _ in range(n):
         w=f"w{r.randint(0,15)}"
         A(f"key {w} down" if w not in held else f"key {w} up"); held ^= {w}
     elif x<0.22:
-        if fx: A("release FX"); fx=False
-        else: A("tap FX")
+        if fx: A("release SEL"); fx=False
+        else: A("tap SEL")
     elif x<0.40:
         A(f"spin {r.choice(['K1','K2','K3','K4','SELECT','ALGO','PRESET'])} {r.choice([1,-1,4,-4,30,-30])}")
     elif x<0.52:
@@ -37,7 +37,7 @@ for _ in range(n):
     elif x<0.70:
         A(f"midi b0 69 {r.choice([64,0])+r.randint(0,11):02x}")
     elif x<0.74:
-        A(f"tap {r.choice(['SEQ','HOME','ARP','REC','PLAY','OCT+','OCT-','ENV','LFO','EDIT','GLO','SEL'])}")
+        A(f"tap {r.choice(['SEQ','HOME','ARP','REC','PLAY','OCT+','OCT-','ENV','LFO','EDIT','GLO','FX'])}")
     elif x<0.78:
         A(f"tapkey w{r.randint(0,15)}")
     elif x<0.79:

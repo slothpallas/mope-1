@@ -28,9 +28,9 @@ midi 80 30 00
 wait 800
 # CRYING: the delay, one tear an echo, the puddle filling
 midi c0 00 00
-tap SEL
+tap FX
 wait 1000
-tap SEL
+tap FX
 spin K1 70
 spin K3 50
 midi 90 30 64
@@ -47,7 +47,7 @@ midi 80 37 00
 wait 1500
 # THE VOID: the room past its walls
 midi c0 00 00
-tap SEL
+tap FX
 spin K1 60
 spin K2 100
 midi 90 30 64
@@ -108,16 +108,16 @@ shot page_mouth.png
 tap LFO
 wait 1500
 shot page_vibe.png
-tap SEL
+tap FX
 wait 1500
 shot page_walls.png
-tap SEL
+tap FX
 wait 1500
 shot page_tears.png
-tap SEL
+tap FX
 wait 1500
 shot page_copies.png
-tap SEL
+tap FX
 wait 1500
 shot page_dust.png
 tap GLO

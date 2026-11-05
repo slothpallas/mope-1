@@ -1348,12 +1348,16 @@ static void schem_punch(const drawer_t *p)
     int k, w = 0, r, c;
     for (k = 0; k < NKEYS; k++) {                        /* the whites */
         const int pc = (5 + k) % 12, black = pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10;
+        const int left = k > 0 && KEYFX[k - 1] >= 0 && (sy_tel.punch >> KEYFX[k - 1] & 1u);   /* above a punch: TWIST */
+        const int right = k < NKEYS - 1 && KEYFX[k + 1] >= 0 && (sy_tel.punch >> KEYFX[k + 1] & 1u);   /* below: MORE */
         uint8_t col = PC_WALL2;
         if (black)
             continue;
-        if (k > 0 && KEYFX[k - 1] >= 0 && (sy_tel.punch_mod[KEYFX[k - 1]] & PM_TWIST) && (sy_tel.punch >> KEYFX[k - 1] & 1u))
+        if (left || right)                              /* (beside a punch: lit, there to be pressed) */
+            col = PC_WHITE;
+        if (left && (sy_tel.punch_mod[KEYFX[k - 1]] & PM_TWIST))
             col = PC_PINK;
-        if (k < NKEYS - 1 && KEYFX[k + 1] >= 0 && (sy_tel.punch_mod[KEYFX[k + 1]] & PM_MORE) && (sy_tel.punch >> KEYFX[k + 1] & 1u))
+        if (right && (sy_tel.punch_mod[KEYFX[k + 1]] & PM_MORE))
             col = PC_SPEC;
         px_rect(x0 + w * 7, y0, 6, h, col);
         w++;
@@ -2026,61 +2030,39 @@ static int is_blob(uint8_t c)
 }
 /* the punches, after everything in the room is drawn and before the drawer: mirrored, glitched, gated,
  * crushed, warped, washed */
-/* the punch's two knobs, at the blob's top corners (K1 left, K2 right): a little knob each, how far it is
- * turned lit in its colour, and a symbol for what it does. The one being turned lights up. */
-static const char *const PK_ICON[PK_NKIND][7] = {
-    {"..###..", "...#...", "...#...", "...#...", ".#.#.#.", "..###..", "...#..."},   /* how low: down */
-    {"...#...", "..###..", ".#.#.#.", "...#...", "...#...", "...#...", "..###.."},   /* how high: up */
-    {".#.....", "#.#....", "#.#....", "...#..#", "....#.#", "....#.#", ".....#."},   /* how deep: a big wave */
-    {".......", "####...", "..#####", ".......", "#####..", "...####", "......."},   /* smear: streaks */
-    {"##...##", "#.....#", "#.###.#", "#.###.#", "#.###.#", "#.....#", "##...##"},   /* window: brackets */
-    {"###....", "...#...", "....#..", "....#..", ".....#.", ".....#.", "......#"},   /* brake: slowing */
-    {"..###..", ".#.#.#.", "#..#..#", "#..##.#", "#.....#", ".#...#.", "..###.."},   /* how long: a clock */
-    {"#.....#", "#.###.#", "#.###.#", "#.###.#", "#.###.#", "#.....#", "#.....#"},   /* slice: between two marks */
-    {"##.##.#", "##.##.#", ".......", "##.##.#", "##.##.#", ".......", "#######"},   /* roll: the same, again */
-    {".......", "..###..", ".#...#.", "#.....#", "#.....#", ".......", "#######"},   /* soft: a round hump */
-    {"...#...", "..###..", ".#.#.#.", "...#...", ".#.#.#.", "..###..", "...#..."},   /* pitch: up and down */
-    {".......", "##.##.#", "##.##.#", "##.##.#", "##.##.#", ".......", "#######"},   /* rate: pulses */
-    {"...###.", "..#####", "..#####", "...###.", ".......", "#......", "......."},   /* grain size: big, small */
-    {"#...#..", "..#...#", "#...#..", ".#.#...", "...#.#.", "#.....#", "..#.#.."},   /* scatter: dots */
-    {"....###", "....#..", "..###..", "..#....", "###....", "#......", "#......"},   /* bits: stairs */
-    {"...#...", "...#...", "..#.#..", "..#.#..", "##...##", ".......", "#######"},   /* scream: a peak */
-    {"#..#..#", ".#.#.#.", "..###..", "#######", "..###..", ".#.#.#.", "#..#..#"},   /* hang: frozen */
-    {"...#...", "..#.#..", ".#...#.", "#.....#", "#.....#", ".#...#.", "..###.."},   /* dry gone: an empty drop */
-    {"#..#...", ".#..#..", "..#..#.", "...#..#", "..#..#.", ".#..#..", "#..#..."},   /* speed: >> */
-    {"###....", "...#...", "....#..", ".....#.", "......#", "......#", "......#"},   /* filter: the slope down */
-};
-_Static_assert(sizeof PK_ICON / sizeof PK_ICON[0] == PK_NKIND, "a symbol for every kind of knob");
+/* the punch's two knobs, at the bottom corners just over the drawer: a big dial each (lit as far as it's
+ * turned), its name over it */
 static void draw_punch_knobs(const geo_t *g)
 {
-    static const int8_t RING[13][3] = {{1, 5, 0}, {0, 4, 3}, {0, 3, 5}, {0, 2, 7}, {1, 1, 10}, {2, 0, 13}, {3, 0, 15},
-                                       {4, 0, 17}, {5, 1, 20}, {6, 2, 23}, {6, 3, 25}, {6, 4, 27}, {5, 5, 30}};   /* x, y, lit from 2v */
     static const uint8_t KC[PU_KN] = {PC_TEAR, PC_XP};
-    static const char *const KN[PU_KN] = {"K1", "K2"};
     const int fx = ui.pk_fx;
     const uint32_t since = plat_ms() - ui.focus_t;
-    int k, j, i;
-    (void)g;
-    if (fx < 0 || !ui.panel || ui.page != PG_PUNCH || preset_card())
+    const int32_t cy = (int32_t)g->drawer - 11;
+    int k, j;
+    if (fx < 0 || !ui.panel || ui.page != PG_PUNCH || preset_card() || cy < 40)
         return;
     for (k = 0; k < PU_KN; k++) {
-        const int32_t x = (k & 1) ? PX_W - 31 : 2, y = 20;
+        const int32_t cx = k ? PX_W - 11 : 10;
         const int v = project_pk(fx, k), hot = ui.touched == k && since < 1500u;
         const float a = -0.375f + 0.75f * (float)v / (float)PU_KMAX;
-        const char *const *ic = PK_ICON[PK_KIND[fx][k]];
-        if (y < 18)
-            continue;
-        px_rect(x - 1, y - 1, 31, 9, PC_BG0);
-        px_text(x, y, KN[k], hot ? PC_WHITE : PC_DIM);
-        for (j = 0; j < 13; j++)                         /* (the knob: lit as far as it's turned) */
-            px_pset(x + 11 + RING[j][0], y + RING[j][1], RING[j][2] <= 2 * v ? KC[k] : PC_WALL2);
-        px_line(x + 14, y + 3, x + 14 + (int32_t)(mm_sin_turns(a) * 2.6f + (mm_sin_turns(a) < 0.0f ? -0.5f : 0.5f)),
-                y + 3 - (int32_t)(mm_sin_turns(a + 0.25f) * 2.6f + (mm_sin_turns(a + 0.25f) < 0.0f ? -0.5f : 0.5f)),
-                PC_WHITE);
-        for (j = 0; j < 7; j++)                          /* (what it does) */
-            for (i = 0; i < 7; i++)
-                if (ic[j][i] == '#')
-                    px_pset(x + 22 + i, y + j, hot ? PC_WHITE : KC[k]);
+        const char *nm = PK_NAME[PK_KIND[fx][k]];
+        const int32_t tw = px_text_w(nm);
+        int32_t i;
+        for (j = -9; j <= 9; j++)                        /* (a dark round bed, so it reads over the blob) */
+            for (i = -9; i <= 9; i++)
+                if (i * i + j * j <= 82)
+                    px_pset(cx + i, cy + j, PC_BG0);
+        for (j = 0; j < 28; j++) {                       /* the dial: 3/4 of a ring, lit as far as it's turned */
+            const float t = -0.375f + 0.75f * (float)j / 27.0f;
+            const int32_t x = cx + (int32_t)(mm_sin_turns(t) * 7.0f + (mm_sin_turns(t) < 0.0f ? -0.5f : 0.5f)),
+                          y = cy - (int32_t)(mm_sin_turns(t + 0.25f) * 7.0f + (mm_sin_turns(t + 0.25f) < 0.0f ? -0.5f : 0.5f));
+            const uint8_t c = j * PU_KMAX <= 27 * v && v > 0 ? KC[k] : PC_WALL2;
+            px_pset(x, y, c);
+            px_pset(x + (x < cx ? 1 : x > cx ? -1 : 0), y + (y < cy ? 1 : y > cy ? -1 : 0), c);   /* (two thick) */
+        }
+        px_line(cx, cy, cx + (int32_t)(mm_sin_turns(a) * 4.6f + (mm_sin_turns(a) < 0.0f ? -0.5f : 0.5f)),
+                cy - (int32_t)(mm_sin_turns(a + 0.25f) * 4.6f + (mm_sin_turns(a + 0.25f) < 0.0f ? -0.5f : 0.5f)), PC_WHITE);
+        px_text_o(k ? PX_W - 2 - tw : 2, cy - 18, nm, hot ? PC_WHITE : KC[k], PC_BG0);   /* (its name over it) */
     }
 }
 

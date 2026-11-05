@@ -127,7 +127,7 @@ if (/[?&]bare\b/.test(location.search)) document.documentElement.classList.add("
       <li>The blob is the sound. Its body is the wavetable, its eyes the filter, its mouth the envelope, its tears the delay, the room around it the reverb.</li>
       <li>Press a part's button: its drawer opens under the blob and the four knobs turn that part. The drawer hides after 3 s, the page stays (its button lit). Press twice: the drawer stays until <b>HOME</b>.</li>
       <li>Some parts have a second page: press the button again (not twice fast). The caption says so (AGAIN: SHADOW.).</li>
-      <li><b>HOME</b> body, again shadow (a second oscillator) · <b>EDIT</b> eyes (the filter, its kind and drive) · <b>ENV</b> mouth, again sigh (a second envelope that sweeps the wavetable) · <b>LFO</b> vibe, again tremble (a second LFO) · <b>FX</b> tears · <b>SEL</b> walls · <b>GLO</b> mixer, again setup · <b>ARP</b> held: the arpeggiator · <b>SEQ</b> the loop, again the tape deck.</li>
+      <li><b>HOME</b> body, again shadow (a second oscillator) · <b>EDIT</b> eyes (the filter, its kind and drive) · <b>ENV</b> mouth, again sigh (a second envelope that sweeps the wavetable) · <b>LFO</b> vibe, again tremble (a second LFO) · <b>FX</b> walls, again tears (the delay, in the tempo), copies (chorus), dust · <b>SEL</b> held: punches on the black keys (the whites beside one light up: more, twist) · <b>GLO</b> mixer, again setup · <b>ARP</b> held: the arpeggiator · <b>SEQ</b> the loop, again the tape deck.</li>
     </ul>
   </div>
   <div>
@@ -194,7 +194,7 @@ if (/[?&]bare\b/.test(location.search)) document.documentElement.classList.add("
 // numbers are its encoders (SELECT, ALGORITHM, PRESETS, then KNOB1..4), the master volume is apart.
 const BUTTONS = [
   // row by row, as on the panel
-  ["FX", 0, "Tears: chorus, delay, time, feedback"], ["SEL", 1, "Walls: reverb, size, fry, tape"],
+  ["FX", 0, "Effects: walls (reverb), again tears (delay), copies (chorus), dust"], ["SEL", 1, "Hold: the black keys punch"],
   ["ENV", 2, "Mouth: attack, decay, sustain, release; again: sigh"], ["LFO", 3, "Vibe: rate, depth, shape, where it goes; again: tremble"],
   ["EDIT", 4, "Eyes: cutoff, resonance, filter kind, drive"], ["GLO", 5, "Mixer; again: setup"],
   ["HOME", 6, "Body: wavetable, position, detune, sub; again: shadow"], ["SAVE", 7, "Save (hold 1.5 s: factory settings)"],

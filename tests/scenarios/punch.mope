@@ -1,19 +1,20 @@
-# The punches: hold FX, and a black key punches while it is held (F#3 .. F#5: HALF DOUBLE STOP REVERSE REPEAT
+# The punches: hold SEL, and a black key punches while it is held (F#3 .. F#5: HALF DOUBLE STOP REVERSE REPEAT
 # GATE GRAIN CRUSH SWEEP WASH WOBBLE). The white key below it held too: MORE; above: TWIST. White keys
-# on their own still play. FX pressed twice: the punches stay until FX again. A chord plays under it all.
+# on their own still play. SEL pressed twice: the punches stay until SEL again. A chord plays under it all.
 wait 300
 midi 90 30 64
 midi 90 37 64
 midi 90 3c 64
 wait 600
-press FX
+press SEL
 expect page 16
 key b0 down
 wait 300
 expect punch 1
 expect punchbuf 0
-# the whites beside it lit dim (F3, G3), the other black pads dim
-expect leds_dim 38970669
+# the whites beside it lit (F3, G3: there to be pressed), the other black pads dim
+expect leds_dim 38970664
+expect leds_lit 7
 shot 00_half.png
 # MORE (F3 below): two octaves down
 key w0 down
@@ -103,28 +104,28 @@ wait 200
 key b10 down
 wait 500
 shot 11_wobble.png
-# FX let go, the key still held: still punching
-release FX
+# SEL let go, the key still held: still punching
+release SEL
 wait 200
 expect punch 2048
 key b10 up
 wait 600
 expect punch 0
-# a white key with FX held still plays
-press FX
+# a white key with SEL held still plays
+press SEL
 key w2 down
 wait 200
 expect voices >3
 key w2 up
-release FX
-# and without FX a black key is a note again
+release SEL
+# and without SEL a black key is a note again
 tapkey b2
 wait 100
 expect punch 0
-# FX twice: the punches stay without holding it
-tap FX
+# SEL twice: the punches stay without holding it
+tap SEL
 wait 100
-tap FX
+tap SEL
 wait 100
 expect latch 1
 key b0 down
@@ -132,7 +133,7 @@ wait 200
 expect punch 1
 key b0 up
 wait 300
-tap FX
+tap SEL
 wait 100
 expect latch 0
 key b0 down
