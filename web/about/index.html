@@ -173,10 +173,10 @@ footer p { color: var(--quiet); font-size: 12px; line-height: 20px; max-width: 3
     <div class="facts" aria-label="In numbers">
       <div class="fact"><b>6</b><span>voices</span></div>
       <div class="fact"><b>16</b><span>wavetables</span></div>
-      <div class="fact"><b>38</b><span>presets</span></div>
+      <div class="fact"><b>54</b><span>presets</span></div>
       <div class="fact"><b>13</b><span>sad beats</span></div>
-      <div class="fact"><b>5</b><span>filters, low-pass to comb</span></div>
-      <div class="fact"><b>192</b><span>notes in a loop, 4 bars</span></div>
+      <div class="fact"><b>6</b><span>filters, low-pass to a vowel</span></div>
+      <div class="fact"><b>12</b><span>punches, on the black keys</span></div>
     </div>
   </section>
 
@@ -216,18 +216,20 @@ footer p { color: var(--quiet); font-size: 12px; line-height: 20px; max-width: 3
       <div class="combo"><span class="keys"><span class="btn">REC</span></span>Again: it stops recording. The loop keeps playing.</div>
       <div class="combo"><span class="keys"><span class="btn">HOME</span><span class="plus">+</span><span class="btn">REC</span></span>Undo the last take.</div>
       <div class="combo"><span class="keys"><span class="btn">SAVE</span><span class="plus">+</span><span class="btn">REC</span></span>Delete the whole loop.</div>
-      <div class="combo"><span class="keys"><span class="btn">SEQ</span><span class="plus">then</span>tap a white key</span>Delete that step's notes. The 16 white keys are the bar's steps.</div>
-      <div class="combo"><span class="keys"><span class="btn">SEQ</span><span class="plus">then</span>press a step</span>Turn NOTE, LEN and VEL to change it. <span class="btn">OCT−</span> <span class="btn">OCT+</span> go to the other bars.</div>
+      <div class="combo"><span class="keys"><span class="btn">SEQ</span><span class="plus">then</span>a white key</span>The cursor goes to that step (the 16 white keys are the bar's steps). Again: its note goes, or one comes.</div>
+      <div class="combo"><span class="keys"><span class="btn">SEQ</span><span class="plus">then</span>the knobs</span>Move the cursor, its note, the note's length, the bars. <span class="btn">OCT−</span> <span class="btn">OCT+</span> go to the other bars.</div>
+      <div class="combo"><span class="keys"><span class="btn">SEQ</span><span class="plus">then</span>a black key</span>The first four: four patterns (the next one starts on the next bar). The next three: mute the drums, the bass, the loop.</div>
       <div class="combo"><span class="keys">hold <span class="btn">SAVE</span><span class="plus">then</span><span class="btn">SAVE</span></span>Hold 1.5 s, press again: everything back to the start (sound, settings, loop).</div>
     </div>
 
     <h2 class="sub-h">The rest of the panel</h2>
     <div class="combos">
-      <div class="combo"><span class="keys"><span class="btn">PRESETS</span></span>38 whole sounds.</div>
+      <div class="combo"><span class="keys"><span class="btn">PRESETS</span></span>54 whole sounds, then yours.</div>
       <div class="combo"><span class="keys"><span class="btn">ALGORITHM</span></span>Only the wavetable.</div>
       <div class="combo"><span class="keys"><span class="btn">SELECT</span></span>The band's tape.</div>
       <div class="combo"><span class="keys"><span class="btn">PLAY</span></span>The band on and off.</div>
-      <div class="combo"><span class="keys"><span class="btn">SAVE</span></span>Keeps everything (it also saves by itself).</div>
+      <div class="combo"><span class="keys"><span class="btn">SAVE</span></span>Keep the sound as a preset of yours, with a name (everything else saves by itself).</div>
+      <div class="combo"><span class="keys">hold <span class="btn">SEL</span><span class="plus">+</span>a black key</span>A punch while it is held: half speed, tape stop, reverse, repeats, grains... The white keys beside it: more, or a twist.</div>
       <div class="combo"><span class="keys"><span class="btn">OCT−</span> <span class="btn">OCT+</span></span>Move the keys an octave.</div>
     </div>
     <p class="note">Every setting with its range is in the <a href="https://github.com/slothpallas/mope-1#controls">README</a>.</p>
