@@ -125,7 +125,11 @@ static uint32_t sx_out_q[SXQ];
 static volatile uint32_t so_w, so_r;
 #endif
 
-/* MIDI rings: 4-byte USB-MIDI event packets */
+/* MIDI rings: 4-byte USB-MIDI event packets. Real-time ones carry their arrival (ms) in the unused bytes,
+ * when the includer says how (main.c; the update loader has no clock: 0) */
+#ifndef USB_MIDI_STAMP
+#define USB_MIDI_STAMP() 0u
+#endif
 #define MQ 64u
 static uint32_t midi_in_q[MQ], midi_out_q[MQ];
 static volatile uint32_t mi_w, mi_r, mo_w, mo_r;
@@ -642,7 +646,7 @@ static void ep1_rx(void)
             /* CIN 0xF: a single byte; the real-time ones (clock, start, continue, stop) matter. Their
              * arrival (ms) goes in the two unused bytes: the clock's tempo is measured from it */
             if (cin == 0xFu)
-                pkt = (pkt & 0xFFFFu) | (fm1_ms & 0xFFFFu) << 16;
+                pkt = (pkt & 0xFFFFu) | (USB_MIDI_STAMP() & 0xFFFFu) << 16;
             midi_in_q[mi_w % MQ] = pkt;
             RING_PUBLISH();
             mi_w++;

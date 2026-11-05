@@ -90,7 +90,7 @@ Press or hold a part's button: its schematic opens in a dark glass drawer over t
 | SEQ | Loop | Note | Length | Velocity (of the chosen step, or the whole loop) | Bars (1, 2, 4) |
 | SEQ again | Tape deck | Style | Tempo | Swing | Human (looser timing and velocity) |
 | GLO | Mixer | Voice | Drums | Bass (0: no bass) | Gunk |
-| GLO again | Settings | a list, full screen: knob 1 picks a row, knob 2 sets it: Voices, Glide, Tempo, Room, Room level, Auto bass, Bass way, MIDI in, MIDI out, Clock, Aftertouch, Tune | | | |
+| GLO again | Setup | Row (a list, full screen: Voices, Glide, Tempo, Room, Room level, Auto bass, Bass way, MIDI in, MIDI out, Clock, Aftertouch, Tune) | Its value | | |
 | ARP | Arp | Mode (up, down, up and down, wander, stab) | Rate (1/4 .. 1/32, triplets) | Octaves (1-3) | Gate |
 
 - **ALGORITHM** changes only the instrument's sound source, its wavetable (the blob's body shape). The caption says which ("WAVE: SIGH"); everything else stays.

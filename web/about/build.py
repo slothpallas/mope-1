@@ -53,7 +53,7 @@ PARTS = [
     ("SEL", "Walls", "page_walls", "The reverb is the room: the bigger it gets, the smaller the blob looks, and past the "
      "walls there's only the void. Fry deep-fries it, and Tape makes everything wobble a little.", None),
     ("GLO", "Mixer", "page_mixer", "How loud each part is: the blob, the drums, the bass and the rain.",
-     ("Setup", None, "glide, the MIDI channel, MIDI out and the tuning.")),
+     ("Setup", None, "the settings, a list on the whole screen: how notes take voices, glide, the tempo, the room, the auto-bass, MIDI in and out, the clock (its own, following, leading), aftertouch and the tuning.")),
     ("SEQ", "Loop", None, "Record what you play (REC), then fix it one step at a time.",
      ("Tape deck", "page_deck", "the backing band: a cassette in the corner. Kicks squash it, snares make it blink.")),
     ("ARP", "Arp", None, "Tap it to turn the arpeggiator on or off, or hold it for its page. The keys you hold become its pattern.", None),
