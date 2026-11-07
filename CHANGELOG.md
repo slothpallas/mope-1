@@ -4,6 +4,19 @@ A release is a push to `main` that changes `VERSION` to a version with no tag ye
 release build, tags the commit `vX.Y.Z` and publishes the GitHub Release with that version's notes,
 taken from its section below. Add the section in the same pull request as the `VERSION` change.
 
+## 0.4.1
+
+Punches stay clean with the whole band playing.
+
+- **No more grinding under punches.** With the arpeggiator, the drums and the bass all going, HALF,
+  DOUBLE, STOP and GRAIN could push the FM-1 past what it can do in time, and the sound broke up into
+  something like a bit crusher. The sound engine now runs from the FM-1's fast memory instead of its
+  flash, and the drums, the bass, the echoes and the tape do fewer sums per sample: a punch costs a
+  few percent now instead of a tenth of the FM-1's time. The sound is the same.
+- **STOP ends smoothly.** The last moment of a tape stop, when it is barely turning, no longer grinds.
+- With the FM-1 very busy, the buffer punches switch to a lighter way of reading the sound until things
+  calm down; you shouldn't hear the difference.
+
 ## 0.4.0
 
 Punches, more effects, presets of your own, a band that keeps time with others, and a sequencer you
