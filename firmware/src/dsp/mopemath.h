@@ -119,6 +119,22 @@ static inline float mm_tanhf(float x)
     t = 1.0f - 2.0f / (mm_exp2f(2.0f * MM_LOG2E * a) + 1.0f);   /* beyond: tanh a = 1 - 2 / (e^2a + 1) */
     return x > 0.0f ? t : -t;
 }
+/* two at once, one divide between them (the FM-1 divides slowly): a/b and c/d as a*d and c*b over b*d */
+static inline void mm_tanh2(float *x, float *y)
+{
+    const float a = *x, c = *y;
+    if (mm_fabsf(a) < 2.0f && mm_fabsf(c) < 2.0f) {
+        const float a2 = a * a, c2 = c * c;
+        const float na = a * (135135.0f + a2 * (17325.0f + a2 * (378.0f + a2))), da = 135135.0f + a2 * (62370.0f + a2 * (3150.0f + a2 * 28.0f));
+        const float nc = c * (135135.0f + c2 * (17325.0f + c2 * (378.0f + c2))), dc = 135135.0f + c2 * (62370.0f + c2 * (3150.0f + c2 * 28.0f));
+        const float q = 1.0f / (da * dc);
+        *x = na * dc * q;
+        *y = nc * da * q;
+    } else {
+        *x = mm_tanhf(a);
+        *y = mm_tanhf(c);
+    }
+}
 
 static inline float mm_sqrtf(float x)
 {
