@@ -5,8 +5,10 @@
 
 #ifdef OM_HOST
 #define SY_POOL
+#define SY_FAST
 #else
 #define SY_POOL __attribute__((section(".pool")))
+#define SY_FAST __attribute__((section(".fast_text")))   /* (runs from RAM: see app.ld) */
 #endif
 #define BARRIER() __asm__ volatile("" ::: "memory")
 
@@ -3750,7 +3752,7 @@ static float wake_gain(uint32_t n)
     wake = mm_minf(wake + wake_step * (float)n, 1.0f);
     return wake * wake * wake;
 }
-void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
+SY_FAST void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
 {
     uint32_t j0, j;
     float lfo, lfo_b, peak = 0.0f, gr_min = 1.0f, busy = 0.0f, lv[4] = {0.0f, 0.0f, 0.0f, 0.0f};
