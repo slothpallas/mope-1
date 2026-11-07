@@ -3862,7 +3862,16 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
             }
             gunk(&l, &r, &lv[3]);
             dust(&l, &r, crackle, dusty, du_lp, du_hp);
-            punch(&l, &r);
+            bl[j] = l;
+            br[j] = r;
+        }
+        /* the punches, then the tape and the rest, each over the chunk on its own: the FM-1 runs its code
+         * from flash through a small cache, and all of it a sample at a time missed the cache over and over
+         * (a punch held with the band and the arp ran blocks late, and late blocks grind) */
+        for (j = j0; j < j0 + 16u && j < n; j++)
+            punch(&bl[j], &br[j]);
+        for (j = j0; j < j0 + 16u && j < n; j++) {
+            float l = bl[j], r = br[j];
             /* tape: a wandering line, saturation, a softer top */
             tp_l[tp_w] = l;
             tp_r[tp_w] = r;
