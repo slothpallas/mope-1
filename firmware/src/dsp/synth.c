@@ -1610,7 +1610,7 @@ static float echo_len(void)
     return t;
 }
 /* a worn crossing: saturated, a little lopsided (tape), harder with more Feedback */
-static inline float tear_wear(float x, float g) { return mm_tanhf(g * (x + 0.12f * x * x)) / g; }
+static inline float tear_wear(float x, float g, float ig) { return mm_tanhf(g * (x + 0.12f * x * x)) * ig; }   /* (ig: 1 / g) */
 #define TEAR_IN 0.35f                                 /* into the int16 line, with headroom */
 static inline int16_t tear_pack(float x)
 {
@@ -1635,7 +1635,7 @@ static inline void delay(float in, float *l, float *r)
     if (!tear_odd) {                                    /* the line moves every other sample */
         const float fb = pf(P_FEEDBACK), hop = 0.95f * fb,   /* what each crossing keeps */
                     dark = pf(P_DDARK), dk = 0.85f - 0.8f * dark,   /* (Dark: how much each crossing loses of its top) */
-                    smear = dark > 0.5f ? (dark - 0.5f) * 2.0f : 0.0f, g = 1.1f + 2.2f * fb;
+                    smear = dark > 0.5f ? (dark - 0.5f) * 2.0f : 0.0f, g = 1.1f + 2.2f * fb, ig = 1.0f / g;
         float back, from_l, from_r, al, ar;
         tear_t += 0.0008f * (tear_want - tear_t);      /* (a new Time glides there: the pitch bends) */
         back = tear_t * (1.0f + tear_wob);
@@ -1647,8 +1647,8 @@ static inline void delay(float in, float *l, float *r)
             from_l += smear * (sl - from_l);
             from_r += smear * (sr - from_r);
         }
-        al = tear_wear(tear_fall(from_r, &tear_dark_r, &tear_thin_r, dk), g);
-        ar = tear_wear(tear_fall(from_l, &tear_dark_l, &tear_thin_l, dk), g);
+        al = tear_wear(tear_fall(from_r, &tear_dark_r, &tear_thin_r, dk), g, ig);
+        ar = tear_wear(tear_fall(from_l, &tear_dark_l, &tear_thin_l, dk), g, ig);
         tear_l[tear_w] = tear_pack(0.5f * (in + tear_last_in) + hop * al);
         tear_r[tear_w] = tear_pack(hop * ar);
         tear_w = (tear_w + 1u) & (TEAR_N - 1u);
@@ -2554,6 +2554,33 @@ static const kit_t KITS[K_NKIT] = {
     {95.0f, 48.0f, 0.02f, 0.35f, 1.3f, 200.0f, 0.2f, 0.4f, 0.04f, 0.3f, PERC_RIM, 1200.0f, 0.05f, 0.6f, 1.2f, 0.05f, 0.0f, 1.0f},
 };
 
+/* each kit's falls and drives as the samples want them: worked out once (sy_init), not a dozen divides and four
+ * tanh a sample (the FM-1 divides slowly: with the arp and a punch the band ran blocks late) */
+typedef struct {
+    float pdec, kdec, sdec2, sdec, hdec, ohdec, pcdec, bdec;   /* (each: 2.3 / SY_SR / the time; pdec 1 / SY_SR / it) */
+    float kdrive, bdrive;                                       /* (the drives' make-up: 0.72 / tanh, 1 / tanh) */
+} kit_d_t;
+static kit_d_t KITD[K_NKIT];
+static void kits_derive(void)
+{
+    int i;
+    for (i = 0; i < K_NKIT; i++) {
+        const kit_t *k = &KITS[i];
+        kit_d_t *d = &KITD[i];
+        const float f = 2.3f / SY_SR;
+        d->pdec = 1.0f / (SY_SR * k->k_pdec);
+        d->kdec = f / k->k_dec;
+        d->sdec2 = f / (k->s_dec * 0.5f);
+        d->sdec = f / k->s_dec;
+        d->hdec = f / k->h_dec;
+        d->ohdec = f / k->oh_dec;
+        d->pcdec = f / k->p_dec;
+        d->bdec = f / k->b_dec;
+        d->kdrive = 0.8f / mm_tanhf(k->k_drive) * 0.9f;
+        d->bdrive = 1.0f / mm_tanhf(k->b_drive);
+    }
+}
+
 typedef struct {
     const char *name;
     uint8_t bpm, steps, swing, kit;
@@ -2946,17 +2973,18 @@ static void drum_step(void)
 static inline float drums_sample(float *bass_out)
 {
     const kit_t *k = &KITS[STYLES[dr_style].kit];
+    const kit_d_t *kd = &KITD[STYLES[dr_style].kit];
     float o = 0.0f, n = rnds(), x;
     const float inv = 1.0f / SY_SR;
     /* kick: a sine falling in pitch, then driven */
     if (dk.amp > 1e-4f) {
         dk.f = k->k_f1 + (k->k_f0 - k->k_f1) * dk.pe;
-        dk.pe -= dk.pe * inv / k->k_pdec;
+        dk.pe -= dk.pe * kd->pdec;
         dk.ph += dk.f * inv;
         dk.ph -= (float)(int)dk.ph;
         x = mm_sin_turns(dk.ph) * dk.amp;
-        dk.amp -= dk.amp * inv * 2.3f / k->k_dec;
-        o += mm_tanhf(x * k->k_drive) * (0.8f / mm_tanhf(k->k_drive)) * 0.9f;
+        dk.amp -= dk.amp * kd->kdec;
+        o += mm_tanhf(x * k->k_drive) * kd->kdrive;
     }
     /* snare: a tone and a hiss */
     if (sn_env > 1e-4f) {
@@ -2966,8 +2994,8 @@ static inline float drums_sample(float *bass_out)
         sn_hp += 0.6f * (n - sn_hpx);
         sn_hpx = n;
         x = mm_sin_turns(dsn.ph) * dsn.amp * (1.0f - k->s_noise) + (n - sn_hp * 0.5f) * k->s_noise * sn_env;
-        dsn.amp -= dsn.amp * inv * 2.3f / (k->s_dec * 0.5f);
-        sn_env -= sn_env * inv * 2.3f / k->s_dec;
+        dsn.amp -= dsn.amp * kd->sdec2;
+        sn_env -= sn_env * kd->sdec;
         o += x * 0.5f;
     }
     /* clap: three quick bursts, then the tail */
@@ -2979,7 +3007,7 @@ static inline float drums_sample(float *bass_out)
         e = cl_t < 0.03f ? (mm_floorf(cl_t * 100.0f) - cl_t * 100.0f + 1.0f) : 1.0f;
         o += x * cl_env * e * 0.45f;
         if (cl_t > 0.03f)
-            cl_env -= cl_env * inv * 2.3f / 0.14f;
+            cl_env -= cl_env * (2.3f / 0.14f / SY_SR);
     }
     /* hats: noise through two high-passes */
     if (h_env > 1e-4f || oh_env > 1e-4f) {
@@ -2989,8 +3017,8 @@ static inline float drums_sample(float *bass_out)
         hp2 = 0.8f * (hp2 + hp1 - hp2x);
         hp2x = hp1;
         h = hp2 * (h_env + oh_env);
-        h_env -= h_env * inv * 2.3f / k->h_dec;
-        oh_env -= oh_env * inv * 2.3f / k->oh_dec;
+        h_env -= h_env * kd->hdec;
+        oh_env -= oh_env * kd->ohdec;
         o += h * 0.32f;
     }
     /* perc */
@@ -3020,7 +3048,7 @@ static inline float drums_sample(float *bass_out)
             break;
         }
         o += x * dp.amp * 0.35f;
-        dp.amp -= dp.amp * inv * 2.3f / k->p_dec;
+        dp.amp -= dp.amp * kd->pcdec;
     }
     /* a record's surface (lofi kits): sparse crackle and a hum of dust */
     if (k->crackle > 0.0f && dr_on) {
@@ -3036,10 +3064,10 @@ static inline float drums_sample(float *bass_out)
         db.ph += db.f * inv;
         db.ph -= (float)(int)db.ph;
         x = mm_sin_turns(db.ph) + 0.15f * mm_sin_turns(2.0f * db.ph);
-        x = mm_tanhf(x * k->b_drive * db.amp) / mm_tanhf(k->b_drive);
+        x = mm_tanhf(x * k->b_drive * db.amp) * kd->bdrive;
         b_lp += 0.25f * (x - b_lp);
         *bass_out = b_lp * 0.7f;
-        db.amp -= db.amp * inv * 2.3f / (b_gate > 0.0f ? (b_hold ? 4.0f : k->b_dec) : 0.04f);
+        db.amp -= db.amp * (b_gate > 0.0f ? (b_hold ? 2.3f / 4.0f / SY_SR : kd->bdec) : 2.3f / 0.04f / SY_SR);
     }
     return o;
 }
@@ -3882,8 +3910,11 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
                 l = line_read4(tp_l, TP_N - 1u, tp_w, back);   /* (cubic: the wobble keeps its top) */
                 r = line_read4(tp_r, TP_N - 1u, tp_w, back);
                 if (tape > 0.0f) {
-                    l = mm_tanhf(l * tp_sat) * tp_comp;
-                    r = mm_tanhf(r * tp_sat) * tp_comp;
+                    l *= tp_sat;
+                    r *= tp_sat;
+                    mm_tanh2(&l, &r);
+                    l *= tp_comp;
+                    r *= tp_comp;
                     tp_lpl += tp_lp * (l - tp_lpl);
                     tp_lpr += tp_lp * (r - tp_lpr);
                     l = tp_lpl;
@@ -3961,6 +3992,7 @@ void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
 void sy_init(void)
 {
     int i, s, t;
+    kits_derive();
     for (i = 0; i < P_NPARAMS; i++)
         par[i] = PARAMS[i].def;
     for (i = 0; i < PU_N * PU_KN; i++)
