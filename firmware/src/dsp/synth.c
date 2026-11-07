@@ -1,6 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* MOPE-1's instrument: see synth.h. */
 #include "synth.h"
+#ifndef OM_HOST
+#define MM_FN static inline __attribute__((always_inline))   /* (the engine runs from RAM: no outlined copies in XIP) */
+#endif
 #include "mopemath.h"
 
 #ifdef OM_HOST

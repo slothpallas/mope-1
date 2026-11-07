@@ -28,20 +28,25 @@ typedef union {
     int32_t i;
 } mm_bits_t;
 
-static inline float mm_fabsf(float x) { mm_bits_t b; b.f = x; b.u &= 0x7FFFFFFFu; return b.f; }
-static inline float mm_minf(float a, float b) { return a < b ? a : b; }
-static inline float mm_maxf(float a, float b) { return a > b ? a : b; }
-static inline float mm_clampf(float x, float lo, float hi) { return x < lo ? lo : x > hi ? hi : x; }
+/* (MM_FN: a caller may want them inlined for sure, the engine in RAM: an outlined copy would sit in XIP,
+ * beyond its calls' reach) */
+#ifndef MM_FN
+#define MM_FN static inline
+#endif
+MM_FN float mm_fabsf(float x) { mm_bits_t b; b.f = x; b.u &= 0x7FFFFFFFu; return b.f; }
+MM_FN float mm_minf(float a, float b) { return a < b ? a : b; }
+MM_FN float mm_maxf(float a, float b) { return a > b ? a : b; }
+MM_FN float mm_clampf(float x, float lo, float hi) { return x < lo ? lo : x > hi ? hi : x; }
 /* below 1e-20: zero (a denormal in a feedback loop is slow on some FPUs, and never heard) */
-static inline float mm_flush(float x) { return mm_fabsf(x) < 1e-20f ? 0.0f : x; }
+MM_FN float mm_flush(float x) { return mm_fabsf(x) < 1e-20f ? 0.0f : x; }
 
-static inline float mm_floorf(float x)
+MM_FN float mm_floorf(float x)
 {
     const float t = (float)(int32_t)x;                  /* toward zero ... */
     return t > x ? t - 1.0f : t;                        /* ... then down, for negatives */
 }
 
-static inline float mm_exp2f(float x)
+MM_FN float mm_exp2f(float x)
 {
     mm_bits_t p;
     int32_t n;
@@ -61,9 +66,9 @@ static inline float mm_exp2f(float x)
     p.u = (uint32_t)(n + 127) << 23;
     return y * p.f;
 }
-static inline float mm_expf(float x) { return mm_exp2f(x * MM_LOG2E); }
+MM_FN float mm_expf(float x) { return mm_exp2f(x * MM_LOG2E); }
 
-static inline float mm_log2f(float x)
+MM_FN float mm_log2f(float x)
 {
     mm_bits_t b;
     int32_t e;
@@ -82,11 +87,11 @@ static inline float mm_log2f(float x)
     z2 = z * z;
     return (float)e + 2.88539008f * z * (1.0f + z2 * (0.333333333f + z2 * (0.2f + z2 * (0.142857143f + z2 * 0.111111111f))));
 }
-static inline float mm_logf(float x) { return mm_log2f(x) * MM_LN2; }
-static inline float mm_powf(float x, float y) { return x > 0.0f ? mm_exp2f(y * mm_log2f(x)) : 0.0f; }
+MM_FN float mm_logf(float x) { return mm_log2f(x) * MM_LN2; }
+MM_FN float mm_powf(float x, float y) { return x > 0.0f ? mm_exp2f(y * mm_log2f(x)) : 0.0f; }
 
 /* a sine of a phase in turns: one cycle is 0..1 */
-static inline float mm_sin_turns(float ph)
+MM_FN float mm_sin_turns(float ph)
 {
     float t = ph - mm_floorf(ph + 0.5f), w, w2;          /* [-1/2, 1/2) */
     if (t > 0.25f)                                       /* the far quarters mirror the near ones */
@@ -98,15 +103,15 @@ static inline float mm_sin_turns(float ph)
     return w * (1.0f + w2 * (-0.166666667f + w2 * (0.00833333333f + w2 * (-0.000198412698f + w2 * (2.75573192e-6f +
            w2 * (-2.50521084e-8f + w2 * 1.60590438e-10f))))));
 }
-static inline float mm_sinf(float x) { return mm_sin_turns(x * (1.0f / MM_TWO_PI)); }
-static inline float mm_cosf(float x) { return mm_sin_turns(x * (1.0f / MM_TWO_PI) + 0.25f); }
-static inline float mm_tanf(float x)
+MM_FN float mm_sinf(float x) { return mm_sin_turns(x * (1.0f / MM_TWO_PI)); }
+MM_FN float mm_cosf(float x) { return mm_sin_turns(x * (1.0f / MM_TWO_PI) + 0.25f); }
+MM_FN float mm_tanf(float x)
 {
     const float c = mm_cosf(x);
     return mm_sinf(x) / (mm_fabsf(c) < 1e-9f ? 1e-9f : c);
 }
 
-static inline float mm_tanhf(float x)
+MM_FN float mm_tanhf(float x)
 {
     float a = mm_fabsf(x), x2, t;
     if (a < 2.0f) {                                      /* where most samples are: one divide, no exp */
@@ -120,7 +125,7 @@ static inline float mm_tanhf(float x)
     return x > 0.0f ? t : -t;
 }
 /* two at once, one divide between them (the FM-1 divides slowly): a/b and c/d as a*d and c*b over b*d */
-static inline void mm_tanh2(float *x, float *y)
+MM_FN void mm_tanh2(float *x, float *y)
 {
     const float a = *x, c = *y;
     if (mm_fabsf(a) < 2.0f && mm_fabsf(c) < 2.0f) {
@@ -136,7 +141,7 @@ static inline void mm_tanh2(float *x, float *y)
     }
 }
 
-static inline float mm_sqrtf(float x)
+MM_FN float mm_sqrtf(float x)
 {
     mm_bits_t b;
     float y;
@@ -149,6 +154,6 @@ static inline float mm_sqrtf(float x)
     y = 0.5f * (y + x / y);
     return 0.5f * (y + x / y);
 }
-static inline float mm_rsqrtf(float x) { return x > 0.0f ? 1.0f / mm_sqrtf(x) : 0.0f; }
+MM_FN float mm_rsqrtf(float x) { return x > 0.0f ? 1.0f / mm_sqrtf(x) : 0.0f; }
 
 #endif
