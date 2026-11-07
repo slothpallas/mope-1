@@ -155,7 +155,7 @@ static inline uint32_t rnd(void)
 }
 static inline float rndf(void) { return (float)(rnd() >> 8) * (1.0f / 16777216.0f); }
 static inline float rnds(void) { return rndf() * 2.0f - 1.0f; }
-static inline float pf(int p) { return (float)par[p] * 0.01f; }        /* a 0..100 value as 0..1 */
+static inline __attribute__((always_inline)) float pf(int p) { return (float)par[p] * 0.01f; }        /* a 0..100 value as 0..1 */
 /* the tempo: its own (Tempo), or a MIDI clock's while one comes (CK_FOLLOW), that one a little faster or
  * slower until the band is where the clock is (ck_rate) */
 static float ck_bpm, ck_rate = 1.0f;
@@ -455,7 +455,7 @@ static int voice_room(void)                             /* the most voices that 
     }
     return cap;
 }
-static int voice_oldest(int released_only)
+static inline __attribute__((always_inline)) int voice_oldest(int released_only)
 {
     int i, best = -1;
     uint32_t oldest = 0xFFFFFFFFu;
@@ -534,7 +534,7 @@ static int voice_find(int note)
     return best;
 }
 
-static void voice_take(int i, int note, int vel, float c, int again)   /* voice i to a note (again: its envelope from the start) */
+SY_FAST static void voice_take(int i, int note, int vel, float c, int again)   /* voice i to a note (again: its envelope from the start) */
 {
     voice_t *v = &vc[i];
     if (v->stage == ST_OFF || v->shed > 0.0f) {         /* a fresh voice: from silence, no glide */
@@ -578,7 +578,7 @@ static int mono_voices(void)                            /* (UNISON: four, or as 
     const int room = voice_room();
     return par[P_VMODE] == VM_UNISON ? (room < 4 ? room : 4) : 1;
 }
-static void mono_play(int note, int vel, int again)
+SY_FAST static void mono_play(int note, int vel, int again)
 {
     const int u = mono_voices();
     int k;
@@ -590,7 +590,7 @@ static void mono_play(int note, int vel, int again)
             vc[k].stage = ST_REL;
         }
 }
-static void note_on(int note, int vel)
+SY_FAST static void note_on(int note, int vel)
 {
     if (par[P_VMODE] == VM_POLY)
         voice_take(voice_find(note), note, vel, (float)note * 100.0f, 1);
@@ -617,7 +617,7 @@ static void note_on(int note, int vel)
     sy_tel.last_note = (int16_t)note;
 }
 
-static void note_off(int note)
+SY_FAST static void note_off(int note)
 {
     int i, j;
     if (par[P_VMODE] != VM_POLY && mono_n) {
@@ -662,7 +662,7 @@ static void mo_send(uint32_t st, int d1, int d2)
         sy_midi_out(st >> 4 | st << 8 | (uint32_t)(d1 & 127) << 16 | (uint32_t)(d2 & 127) << 24);
 }
 static void mo_note(int ch, int on, int n, int vel) { mo_send((on ? 0x90u : 0x80u) | (uint32_t)ch, n, on ? vel : 0); }
-static void band_on(int n, int vel)                     /* a note of the band's: it sounds, and goes out */
+SY_FAST static void band_on(int n, int vel)                     /* a note of the band's: it sounds, and goes out */
 {
     note_on(n, vel);
     if (par[P_MIDIOUT] < MO_NOTES)
@@ -686,7 +686,7 @@ static void mo_bass_off(void)
         mo_note(mo_bass_ch, 0, mo_bass, 0);
     mo_bass = -1;
 }
-static void mo_drums_off(void)
+SY_FAST static void mo_drums_off(void)
 {
     int i;
     for (i = 0; i < 6; i++)
@@ -781,7 +781,7 @@ int sy_arp_note(int held_n, int seq)
     k = arp_index(total, (uint32_t)seq);
     return arp_held[k % held_n] + 12 * (k / held_n);
 }
-static void arp_release(void)
+SY_FAST static void arp_release(void)
 {
     int i;
     if (arp_cur == -2) {
@@ -1096,7 +1096,7 @@ static inline float lfo_beat(float ph, float c)
     const float d = ph - c;
     return d < -0.04f || d > 0.12f ? 0.0f : d < 0.0f ? 1.0f + d * 25.0f : 1.0f - d * (1.0f / 0.12f);
 }
-float sy_lfo_shape(int shape, float ph, float from, float to)
+SY_FAST float sy_lfo_shape(int shape, float ph, float from, float to)
 {
     switch (shape) {
     case LFO_TRI: return tri(ph + 0.25f);
@@ -1113,7 +1113,7 @@ float sy_lfo_shape(int shape, float ph, float from, float to)
     default: return mm_sin_turns(ph);
     }
 }
-static float lfo_tick(lfo_t *l, int rate, int shape, uint32_t n)
+SY_FAST static float lfo_tick(lfo_t *l, int rate, int shape, uint32_t n)
 {
     const float hz = 0.05f * mm_exp2f(pf(rate) * 9.0f);
     float v;
@@ -1192,7 +1192,7 @@ static inline wtsel_t wt_pick(int table, float pos, float hz_top)
 
 /* the amp envelope, a sample at a time */
 /* FT_VOWEL: a mouth's two formants, sliding A -> E -> I -> O -> U as x goes 0 .. 1 (on octaves between) */
-void sy_vowel(float x, float *f1, float *f2)
+static inline __attribute__((always_inline)) void vowel_at(float x, float *f1, float *f2)
 {
     static const float F1[5] = {760.0f, 500.0f, 290.0f, 520.0f, 320.0f}, F2[5] = {1250.0f, 1900.0f, 2300.0f, 900.0f, 800.0f};
     const float at = mm_clampf(x, 0.0f, 1.0f) * 4.0f;
@@ -1201,6 +1201,7 @@ void sy_vowel(float x, float *f1, float *f2)
     *f1 = F1[i] * mm_exp2f(f * mm_log2f(F1[i + 1] / F1[i]));
     *f2 = F2[i] * mm_exp2f(f * mm_log2f(F2[i + 1] / F2[i]));
 }
+void sy_vowel(float x, float *f1, float *f2) { vowel_at(x, f1, f2); }   /* (the panel's: in XIP) */
 static inline float amp_step(voice_t *v, float att, float dec, float sus, float rel)
 {
     float e = v->env;
@@ -1318,7 +1319,7 @@ static void render_voices(float *ol, float *or_, uint32_t n, const mods_t *mods)
                 comb_fb = 0.35f + 0.6f * pf(P_RESO);
             } else if (ftype == FT_VOWEL) {             /* the cutoff (with its envelope and LFOs) is the vowel; Reso sharpens it */
                 float f1, f2, gg;
-                sy_vowel(mm_log2f(cut / 30.0f) / 9.3f, &f1, &f2);
+                vowel_at(mm_log2f(cut / 30.0f) / 9.3f, &f1, &f2);
                 vk = 0.5f - 0.38f * pf(P_RESO);
                 gg = mm_tanf(MM_PI * f1 / SY_SR);
                 va1[0] = 1.0f / (1.0f + gg * (gg + vk));
@@ -1590,7 +1591,7 @@ static int tear_odd;
 #define SMEAR_B 431u
 #define SMEAR_C 211u
 #define SMEAR_D 389u
-static int16_t sm_a[SMEAR_A], sm_b[SMEAR_B], sm_c[SMEAR_C], sm_d[SMEAR_D];
+static int16_t sm_a[SMEAR_A] SY_POOL, sm_b[SMEAR_B] SY_POOL, sm_c[SMEAR_C] SY_POOL, sm_d[SMEAR_D] SY_POOL;   /* (pool: RAM is the engine's code now) */
 static uint32_t sm_ia, sm_ib, sm_ic, sm_id;
 static inline float smear_ap(int16_t *buf, uint32_t n, uint32_t *i, float x)
 {
@@ -1614,7 +1615,7 @@ static float echo_len(void)
 /* a worn crossing: saturated, a little lopsided (tape), harder with more Feedback */
 static inline float tear_wear(float x, float g, float ig) { return mm_tanhf(g * (x + 0.12f * x * x)) * ig; }   /* (ig: 1 / g) */
 #define TEAR_IN 0.35f                                 /* into the int16 line, with headroom */
-static inline int16_t tear_pack(float x)
+SY_FAST static inline int16_t tear_pack(float x)
 {
     x = mm_tanhf(x * TEAR_IN) * 32767.0f;
     return (int16_t)(x < 0.0f ? x - 0.5f : x + 0.5f);
@@ -1880,7 +1881,7 @@ static inline int16_t pu_pack(float x) { x = mm_clampf(x * (PU_IN * 32767.0f), -
  * between four, so the slow and fast reads stay clean. pu_eco: between two, cheaper (the FM-1 near its limit:
  * the band, the arp and a punch together ran blocks late, and late blocks grind like a bit crusher) */
 static int pu_eco;
-static inline void pu_at2(float lag, float *l, float *r)
+SY_FAST static inline void pu_at2(float lag, float *l, float *r)
 {
     const float lg = mm_clampf(lag, 1.0f, (float)PU_LEN - 4.0f);
     const uint32_t k = (uint32_t)lg, p = (pu_w - 1u - k) & (PU_LEN - 1u), q = (p - 1u) & (PU_LEN - 1u);
@@ -1933,7 +1934,7 @@ static inline float pu_interval(int fx)
 
 /* REVERSE, REPEAT, STUTTER: the slice for its keys now (MORE: half as long; TWIST: REVERSE twice as long,
  * REPEAT in triplets) */
-static void pu_reslice(int fx)
+SY_FAST static void pu_reslice(int fx)
 {
     const float hr = SY_SR * 0.5f, m = (pu_mod[fx] & PM_MORE) ? 0.5f : 1.0f;
     if (fx == PU_REVERSE) {
@@ -2699,7 +2700,7 @@ int sy_style_steps(int s) { return STYLES[s < 0 ? 0 : s >= ST_N ? ST_N - 1 : s].
 /* parsed: per style, per track, main and fill, a byte per step */
 enum { TR_KICK, TR_SNARE, TR_CLAP, TR_HAT, TR_OHAT, TR_PERC, TR_BASS, TR_N };
 #define MAXSTEP 24
-static uint8_t pat[ST_N][TR_N][2][MAXSTEP];
+static uint8_t pat[ST_N][TR_N][2][MAXSTEP] SY_POOL;   /* (pool: RAM is the engine's code now) */
 char sy_style_step(int s, int track, int fill, int step)
 {
     if (s < 0 || s >= ST_N || track < 0 || track >= TR_N || step < 0 || step >= MAXSTEP)
@@ -2785,7 +2786,7 @@ static float hv(uint8_t c) { return hit_vel(c) * (1.0f - pf(P_HUMAN) * 0.35f * r
  * third over the lowest, no major third) are their own minor; anything else (a major chord, one note) is
  * taken as a major key, and the bass plays its relative minor, a minor third down: hold C, it plays A
  * minor, every note of it in C major too. In E1..D#2. */
-static int bass_root(void)
+SY_FAST static int bass_root(void)
 {
     int i, lo = 128, r, minor = 0, major = 0, n = 0;
     uint8_t held[16];
@@ -2831,7 +2832,7 @@ static int held_low(void)
     return lo < 128 ? lo : -1;
 }
 /* the bass on a note (slide: glide into it; hold: it rings on, ROOT's way) */
-static void bass_hit(int bn, int slide, int hold)
+SY_FAST static void bass_hit(int bn, int slide, int hold)
 {
     const kit_t *k = &KITS[STYLES[dr_style].kit];
     const float hz = 8.1757989f * mm_exp2f((float)bn * (1.0f / 12.0f));
@@ -3234,7 +3235,7 @@ static void loop_remove(int i)
         band_off(loop_ev[i].note);
     loop_ev[i] = loop_ev[--loop_n];
 }
-static void rec_on(int note, int vel)                   /* a note played while recording: into the loop */
+SY_FAST static void rec_on(int note, int vel)                   /* a note played while recording: into the loop */
 {
     const int lt = loop_ticks();
     float now;
@@ -3252,7 +3253,7 @@ static void rec_on(int note, int vel)                   /* a note played while r
     loop_n++;
     loop_changed();
 }
-static void rec_off(int note)                           /* its key up: how long it was held */
+SY_FAST static void rec_off(int note)                           /* its key up: how long it was held */
 {
     const int lt = loop_ticks();
     int i;
@@ -3276,7 +3277,7 @@ static void rec_end(void)                               /* recording stops: note
     cnt_on = 0;
     sy_tel.rec = 0;
 }
-static void loop_tick(int p)                            /* one tick of the playhead */
+SY_FAST static void loop_tick(int p)                            /* one tick of the playhead */
 {
     const int lt = loop_ticks();
     int i;
@@ -3358,7 +3359,7 @@ static inline float click_sample(void)
     click_env *= 0.9985f;
     return x;
 }
-static void loop_swap(void)                             /* the pattern waiting: in, now (the one playing: back to its slot) */
+SY_FAST static void loop_swap(void)                             /* the pattern waiting: in, now (the one playing: back to its slot) */
 {
     const int out = sw_slots >> 4, in = sw_slots & 15;
     int i, n = 0;
@@ -3546,7 +3547,7 @@ const sy_ev_t *sy_loop_events(int *n)
 }
 
 /* ------------------------------------------------------------ commands --- */
-static void panic(void)                                 /* everything quiet, at once */
+SY_FAST static void panic(void)                                 /* everything quiet, at once */
 {
     int i;
     if (dr_on && par[P_CLOCK] == CK_LEAD)
@@ -3604,7 +3605,10 @@ static void drain(void)
                 if (c.a == P_MIDIOUT || c.a == P_MIDICH)  /* (out there: nothing left hanging) */
                     mo_all_off();
                 if (c.a == P_SIZE || c.a == P_RTONE)
-                    room_size(pf(P_SIZE));
+                    {   /* (room_size stays in XIP, sy_init's too: from RAM, through a pointer) */
+                        void (*volatile rs)(float) = room_size;
+                        rs(pf(P_SIZE));
+                    }
                 if (c.a == P_VMODE) {                   /* (another way of taking voices: what sounds lets go) */
                     int i;
                     for (i = 0; i < SY_NVOICE; i++)
@@ -3735,7 +3739,7 @@ static void drain(void)
 
 /* ------------------------------------------------------------- render --- */
 #define BLK 256u
-static float bl[BLK], br[BLK];
+static float bl[BLK] SY_POOL, br[BLK] SY_POOL;
 static float lim_g = 1.0f;
 
 /* power-on: up from silence, slowly (a curve: the first second barely there) */
