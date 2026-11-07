@@ -35,7 +35,10 @@ static void render_block(int32_t *o)                /* ALNK0: one half, measured
     {
         uint32_t k;
         for (k = 0; k < HALF_FRAMES; k += REND_FRAMES) {
-            sy_render(o + 2u * k, REND_FRAMES, master_q12);
+            /* (sy_render runs from RAM, .fast_text: beyond the 23-bit call range from XIP, so through a
+             * pointer the compiler cannot fold back, as the flash driver's entry points) */
+            void (*volatile render)(int32_t *, uint32_t, uint32_t) = sy_render;
+            render(o + 2u * k, REND_FRAMES, master_q12);
 #if FELUCCA_UAC
             uac_tap(o + 2u * k, REND_FRAMES);       /* the USB audio input: the same master output */
 #endif
