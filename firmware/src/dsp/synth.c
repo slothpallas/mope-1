@@ -79,7 +79,7 @@ static void post(int c, int a, int b)
     BARRIER();
     q_w = w + 1;
 }
-static int clampi(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
+static inline __attribute__((always_inline)) int clampi(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
 void sy_set(int p, int v) { post(C_SET, p, v); }
 void sy_note_on(int note, int vel) { post(C_ON, clampi(note, 0, 127), clampi(vel, 1, 127)); }
 void sy_note_off(int note) { post(C_OFF, clampi(note, 0, 127), 0); }
@@ -145,7 +145,7 @@ void sy_punch_knob(int fx, int k, int v)
 
 static int16_t par[P_NPARAMS];
 static uint32_t rng = 0x2545F491u;
-static inline uint32_t rnd(void)
+SY_FAST static inline uint32_t rnd(void)
 {
     uint32_t x = rng;
     x ^= x << 13;
@@ -153,19 +153,19 @@ static inline uint32_t rnd(void)
     x ^= x << 5;
     return rng = x;
 }
-static inline float rndf(void) { return (float)(rnd() >> 8) * (1.0f / 16777216.0f); }
-static inline float rnds(void) { return rndf() * 2.0f - 1.0f; }
+SY_FAST static inline float rndf(void) { return (float)(rnd() >> 8) * (1.0f / 16777216.0f); }
+SY_FAST static inline float rnds(void) { return rndf() * 2.0f - 1.0f; }
 static inline __attribute__((always_inline)) float pf(int p) { return (float)par[p] * 0.01f; }        /* a 0..100 value as 0..1 */
 /* the tempo: its own (Tempo), or a MIDI clock's while one comes (CK_FOLLOW), that one a little faster or
  * slower until the band is where the clock is (ck_rate) */
 static float ck_bpm, ck_rate = 1.0f;
-static inline float bpm(void) { return ck_bpm > 0.0f ? ck_bpm * ck_rate : (float)par[P_TEMPO]; }
+SY_FAST static inline float bpm(void) { return ck_bpm > 0.0f ? ck_bpm * ck_rate : (float)par[P_TEMPO]; }
 /* the tempo as the per-sample clocks want it, worked out once a block (tempo_block): a beat in samples, its
  * inverse, the clock out's step. (A division every sample, five times over, cost the FM-1 a few %.) */
 static float beat_n = SY_SR * 60.0f / 84.0f, beat_inv = 84.0f / (SY_SR * 60.0f), ck_out_inc;
 /* a time knob: 1 ms .. ~8 s, doubling every 7.7 steps */
-static inline float knob_s(int p) { return 0.001f * mm_exp2f(pf(p) * 13.0f); }
-static inline float coef_s(float s) { return 1.0f - mm_expf(-1.0f / (s * SY_SR)); }
+SY_FAST static inline float knob_s(int p) { return 0.001f * mm_exp2f(pf(p) * 13.0f); }
+SY_FAST static inline float coef_s(float s) { return 1.0f - mm_expf(-1.0f / (s * SY_SR)); }
 
 /* ------------------------------------------------------------- tables --- */
 /* Each frame is drawn in the time domain (1024 points), taken apart into its harmonics (a DFT), and
@@ -188,7 +188,7 @@ _Static_assert(2u * SRC_N * sizeof(float) <= sizeof pu_buf, "the tables' scratch
 #define WT_S (1.0f / 32767.0f)
 
 static inline float st(int i) { return sintab[i & (SRC_N - 1)]; }
-static inline float tri(float x) { x -= mm_floorf(x); return x < 0.5f ? 4.0f * x - 1.0f : 3.0f - 4.0f * x; }
+static inline __attribute__((always_inline)) float tri(float x) { x -= mm_floorf(x); return x < 0.5f ? 4.0f * x - 1.0f : 3.0f - 4.0f * x; }
 static inline float saw(float x) { x -= mm_floorf(x); return 2.0f * x - 1.0f; }
 
 /* frame f (0..1) of table t at x (0..1): the recipes */
@@ -375,7 +375,7 @@ static void tables_build(void)
 
 /* one table read: frames f0 and f0+1 mixed by fr, at phase ph, mip m */
 /* one frame only: the shadow's (half the reads; its position moves in frame steps) */
-static inline float wt_read1(const int16_t *a, uint32_t len, float ph)
+SY_FAST static inline float wt_read1(const int16_t *a, uint32_t len, float ph)
 {
     float x = ph * (float)len, k;
     uint32_t i = (uint32_t)x, j;
@@ -385,12 +385,12 @@ static inline float wt_read1(const int16_t *a, uint32_t len, float ph)
     return ((float)a[i] + ((float)a[j] - (float)a[i]) * k) * WT_S;
 }
 /* a soft clip with no divide: the drive's (a cubic, flat from 1.5) */
-static inline float soft_clip(float x)
+SY_FAST static inline float soft_clip(float x)
 {
     const float c = x < -1.5f ? -1.5f : x > 1.5f ? 1.5f : x;
     return c - 0.148148148f * c * c * c;
 }
-static inline float wt_read(const int16_t *a, const int16_t *b, float fr, uint32_t len, float ph)
+static inline __attribute__((always_inline)) float wt_read(const int16_t *a, const int16_t *b, float fr, uint32_t len, float ph)
 {
     float x = ph * (float)len, k;
     uint32_t i = (uint32_t)x, j;
@@ -446,7 +446,7 @@ static uint32_t load_hot, load_calm;
  * as there is room for (six at once used to run a block late before the guard could act) */
 static int load_pct, load_voices = SY_NVOICE;
 static float voice_cost = 6.6f;                         /* (this sound's, % of a block a voice: render_voices) */
-static int voice_room(void)                             /* the most voices that may sound now (the guard's, the sound's, the load's) */
+SY_FAST static int voice_room(void)                             /* the most voices that may sound now (the guard's, the sound's, the load's) */
 {
     int cap = vcap < vcap_sound ? vcap : vcap_sound;
     if (load_pct > 0) {                                 /* (the room the last block left, up to 80%: clear of the guard's 88) */
@@ -466,14 +466,14 @@ static inline __attribute__((always_inline)) int voice_oldest(int released_only)
         }
     return best;
 }
-static int voices_kept(void)
+static inline __attribute__((always_inline)) int voices_kept(void)
 {
     int i, n = 0;
     for (i = 0; i < SY_NVOICE; i++)
         n += vc[i].stage != ST_OFF && vc[i].shed == 0.0f;
     return n;
 }
-static void voice_shed(void)                           /* the oldest let go (or the oldest) fades in ~5 ms */
+static inline __attribute__((always_inline)) void voice_shed(void)                           /* the oldest let go (or the oldest) fades in ~5 ms */
 {
     int v = voice_oldest(1);
     if (v < 0)
@@ -506,7 +506,7 @@ void sy_load(int pct)
     }
 }
 
-static int voice_find(int note)
+SY_FAST static int voice_find(int note)
 {
     int i, best = -1, sounding = 0;
     uint32_t oldest = 0xFFFFFFFFu;
@@ -573,7 +573,7 @@ SY_FAST static void voice_take(int i, int note, int vel, float c, int again)   /
  * held slides there without starting again; letting the newest go goes back to the one before. */
 static uint8_t mono_held[16], mono_vel[16], mono_n;  /* (each one's velocity as played: going back, it plays as it was) */
 static const float UNI_CENTS[4] = {0.0f, -9.0f, 9.0f, -17.0f};   /* (UNISON: four, spread) */
-static int mono_voices(void)                            /* (UNISON: four, or as many as there is room for) */
+SY_FAST static int mono_voices(void)                            /* (UNISON: four, or as many as there is room for) */
 {
     const int room = voice_room();
     return par[P_VMODE] == VM_UNISON ? (room < 4 ? room : 4) : 1;
@@ -654,14 +654,14 @@ static uint8_t mo_held[128];                            /* notes sent on and not
 static int8_t mo_bass = -1;                             /* the bass's note sounding out there, -1 none */
 static uint8_t mo_bass_ch, mo_drum[6];                  /* its channel; each drum's note still on (0 none) */
 static const uint8_t MO_DRUM_NOTE[6] = {36, 38, 39, 42, 46, 37};   /* kick snare clap hat open-hat perc */
-static int mo_ch(void) { return par[P_MIDICH] ? par[P_MIDICH] - 1 : 0; }
-static int mo_bass_chan(void) { const int c = (mo_ch() + 1) % 16; return c == 9 ? 10 : c; }
-static void mo_send(uint32_t st, int d1, int d2)
+SY_FAST static int mo_ch(void) { return par[P_MIDICH] ? par[P_MIDICH] - 1 : 0; }
+SY_FAST static int mo_bass_chan(void) { const int c = (mo_ch() + 1) % 16; return c == 9 ? 10 : c; }
+SY_FAST static void mo_send(uint32_t st, int d1, int d2)
 {
     if (sy_midi_out)
         sy_midi_out(st >> 4 | st << 8 | (uint32_t)(d1 & 127) << 16 | (uint32_t)(d2 & 127) << 24);
 }
-static void mo_note(int ch, int on, int n, int vel) { mo_send((on ? 0x90u : 0x80u) | (uint32_t)ch, n, on ? vel : 0); }
+SY_FAST static void mo_note(int ch, int on, int n, int vel) { mo_send((on ? 0x90u : 0x80u) | (uint32_t)ch, n, on ? vel : 0); }
 SY_FAST static void band_on(int n, int vel)                     /* a note of the band's: it sounds, and goes out */
 {
     note_on(n, vel);
@@ -672,7 +672,7 @@ SY_FAST static void band_on(int n, int vel)                     /* a note of the
     mo_note(mo_ch(), 1, n, vel);
     mo_held[n] = (uint8_t)(mo_ch() + 1);
 }
-static void band_off(int n)
+SY_FAST static void band_off(int n)
 {
     note_off(n);
     if (mo_held[n]) {
@@ -680,7 +680,7 @@ static void band_off(int n)
         mo_held[n] = 0;
     }
 }
-static void mo_bass_off(void)
+SY_FAST static void mo_bass_off(void)
 {
     if (mo_bass >= 0)
         mo_note(mo_bass_ch, 0, mo_bass, 0);
@@ -695,7 +695,7 @@ SY_FAST static void mo_drums_off(void)
             mo_drum[i] = 0;
         }
 }
-static void mo_all_off(void)                            /* whatever the engine left on out there, off */
+SY_FAST static void mo_all_off(void)                            /* whatever the engine left on out there, off */
 {
     int k;
     for (k = 0; k < 128; k++)
@@ -717,7 +717,7 @@ static int16_t arp_cur = -1;                            /* sounding: a note, or 
 static float arp_t, arp_len = 1.0f;
 static uint32_t arp_seq;
 
-static void arp_add(int n)
+SY_FAST static void arp_add(int n)
 {
     int i, j;
     for (i = 0; i < arp_nh; i++)
@@ -736,7 +736,7 @@ static void arp_add(int n)
     }
     arp_nh++;
 }
-static void arp_remove(int n)
+SY_FAST static void arp_remove(int n)
 {
     int i, j;
     for (i = 0; i < arp_nh; i++)
@@ -755,7 +755,7 @@ int sy_arp_held(uint8_t *out, int max)
     return n;
 }
 /* the index into held x octaves at step seq (the same for the screen as for the sound, but WANDER) */
-static int arp_index(int total, uint32_t seq)
+static inline __attribute__((always_inline)) int arp_index(int total, uint32_t seq)
 {
     const int mode = par[P_ARPMODE];
     if (total <= 1)
@@ -770,7 +770,7 @@ static int arp_index(int total, uint32_t seq)
         return (int)((seq * 2654435761u >> 7) % (uint32_t)total);   /* (a fixed walk: the screen can draw it) */
     return (int)(seq % (uint32_t)total);
 }
-int sy_arp_note(int held_n, int seq)
+static inline __attribute__((always_inline)) int arp_note(int held_n, int seq)
 {
     const int oct = par[P_ARPOCT], total = held_n * (par[P_ARPMODE] == ARP_STAB ? 1 : oct);
     int k;
@@ -781,6 +781,7 @@ int sy_arp_note(int held_n, int seq)
     k = arp_index(total, (uint32_t)seq);
     return arp_held[k % held_n] + 12 * (k / held_n);
 }
+int sy_arp_note(int held_n, int seq) { return arp_note(held_n, seq); }   /* (the panel's: in XIP) */
 SY_FAST static void arp_release(void)
 {
     int i;
@@ -796,7 +797,7 @@ SY_FAST static void arp_release(void)
     arp_cur = -1;
     sy_tel.arp_note = -1;
 }
-static void arp_tick(void)                             /* one sample */
+SY_FAST static void arp_tick(void)                             /* one sample */
 {
     if (!arp_on)
         return;
@@ -823,7 +824,7 @@ static void arp_tick(void)                             /* one sample */
             arp_cur = -2;
             sy_tel.arp_note = arp_held[0];
         } else {
-            const int n = sy_arp_note(arp_nh, (int)arp_seq);
+            const int n = arp_note(arp_nh, (int)arp_seq);
             band_on(n > 127 ? 127 : n, arp_seq % (uint32_t)(arp_nh * par[P_ARPOCT]) == 0u ? 110 : arp_vel);
             rec_on(n > 127 ? 127 : n, arp_vel);
             arp_cur = (int16_t)(n > 127 ? 127 : n);
@@ -833,7 +834,7 @@ static void arp_tick(void)                             /* one sample */
         sy_tel.arp_seq = arp_seq;
     }
 }
-static void arp_set(int on)
+SY_FAST static void arp_set(int on)
 {
     int i;
     if (on && !arp_on) {                                /* what is held now becomes the pattern */
@@ -859,7 +860,7 @@ static void arp_set(int on)
 /* The room's texture: rain on the window (filtered noise and drops), a record's crackle, the room's
  * rumble. It swells when nothing plays and steps back when something does. */
 static float gk_idle, gk_rl, gk_rr, gk_hl, gk_hr, gk_rum, gk_crk, gk_drop, gk_dph, gk_dhz;
-static void gunk_chunk(void)
+SY_FAST static void gunk_chunk(void)
 {
     const float idle = sy_tel.voices || sy_tel.drums_on ? 0.0f : 1.0f;
     gk_idle += (idle - gk_idle) * (idle > gk_idle ? 0.002f : 0.03f);   /* slow back in, quick out */
@@ -871,8 +872,8 @@ static float am_gust, am_gust_to, am_ev, am_evt, am_evph, am_evhz, am_pan, am_hu
 static uint32_t am_next, am_next2, am_t;
 static int am_evn;
 static float am_ev2t, am_ev2ph;
-static inline float am_dice(float lo, float hi) { return lo + (hi - lo) * rndf(); }
-static void room_other(int kind, float g, float *ol, float *or_)
+SY_FAST static inline float am_dice(float lo, float hi) { return lo + (hi - lo) * rndf(); }
+SY_FAST static void room_other(int kind, float g, float *ol, float *or_)
 {
     const float n = rnds(), inv = 1.0f / SY_SR;
     float l = 0.0f, r = 0.0f, x;
@@ -1043,7 +1044,7 @@ static void room_other(int kind, float g, float *ol, float *or_)
     *ol = l * g;
     *or_ = r * g;
 }
-static inline void gunk(float *l, float *r, float *peak)
+SY_FAST static inline void gunk(float *l, float *r, float *peak)
 {
     const float a = pf(P_GUNK);
     float g, nl, nr, x;
@@ -1091,7 +1092,7 @@ typedef struct {
 } lfo_t;
 static lfo_t lfo1, lfo2 = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0x2545F491u};   /* (the second keeps out of the first's dice) */
 /* a heartbeat's pulse: up fast, down slower, centred on c */
-static inline float lfo_beat(float ph, float c)
+static inline __attribute__((always_inline)) float lfo_beat(float ph, float c)
 {
     const float d = ph - c;
     return d < -0.04f || d > 0.12f ? 0.0f : d < 0.0f ? 1.0f + d * 25.0f : 1.0f - d * (1.0f / 0.12f);
@@ -1148,7 +1149,7 @@ typedef struct {
     int scanning;                                    /* an LFO is on the tables: a second read, crossfading */
 } mods_t;
 #define MODS_NONE {0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0}
-static void lfo_into(mods_t *m, float lfo, float depth, int dest_p)
+SY_FAST static void lfo_into(mods_t *m, float lfo, float depth, int dest_p)
 {
     switch (par[dest_p]) {
     case LD_POS: m->pos += lfo * depth * 0.5f; break;
@@ -1174,7 +1175,7 @@ typedef struct {
     float fr;
     uint32_t len;
 } wtsel_t;
-static inline wtsel_t wt_pick(int table, float pos, float hz_top)
+SY_FAST static inline wtsel_t wt_pick(int table, float pos, float hz_top)
 {
     wtsel_t w;
     float p = mm_clampf(pos, 0.0f, 1.0f) * (float)(SY_NFRAME - 1);
@@ -1203,7 +1204,7 @@ static inline __attribute__((always_inline)) void vowel_at(float x, float *f1, f
     *f2 = F2[i] * mm_exp2f(f * mm_log2f(F2[i + 1] / F2[i]));
 }
 void sy_vowel(float x, float *f1, float *f2) { vowel_at(x, f1, f2); }   /* (the panel's: in XIP) */
-static inline float amp_step(voice_t *v, float att, float dec, float sus, float rel)
+SY_FAST static inline float amp_step(voice_t *v, float att, float dec, float sus, float rel)
 {
     float e = v->env;
     switch (v->stage) {
@@ -1232,7 +1233,7 @@ static inline float amp_step(voice_t *v, float att, float dec, float sus, float 
 
 static float tpos_was;                               /* last block's table (the scan glides between blocks) */
 static float fx_cost(void);
-static void render_voices(float *ol, float *or_, uint32_t n, const mods_t *mods)
+SY_FAST static void render_voices(float *ol, float *or_, uint32_t n, const mods_t *mods)
 {
     mods_t md = *mods;
     const float att = 1.0f / (knob_s(P_ATTACK) * SY_SR), dec = coef_s(knob_s(P_DECAY) * 0.3f);
@@ -1507,7 +1508,7 @@ static void render_voices(float *ol, float *or_, uint32_t n, const mods_t *mods)
 /* Level-matched: the drive's gain is taken back out as much as a typical level (0.3) would gain, so
  * more Fry is more grit, not more loud. It glides (a preset change doesn't slam it in). */
 static float fry_hold_l, fry_hold_r, fry_cnt, fry_now, fry_g = 1.0f, fry_comp = 1.0f;
-static void fry_chunk(void)                            /* every 16 frames */
+SY_FAST static void fry_chunk(void)                            /* every 16 frames */
 {
     fry_now += (pf(P_FRY) - fry_now) * 0.012f;
     if (fry_now < 1e-4f && par[P_FRY] == 0)
@@ -1515,7 +1516,7 @@ static void fry_chunk(void)                            /* every 16 frames */
     fry_g = 1.0f + fry_now * fry_now * 24.0f;
     fry_comp = 0.3f / mm_tanhf(0.3f * fry_g) / (1.0f + 1.86f * fry_now * fry_now);   /* (squashed is louder: fitted) */
 }
-static inline void fry(float *l, float *r)
+SY_FAST static inline void fry(float *l, float *r)
 {
     const float a = fry_now, g = fry_g, comp = fry_comp;
     float yl, yr;
@@ -1543,20 +1544,20 @@ static inline void fry(float *l, float *r)
 static float ch_buf[CH_N] SY_POOL;
 static uint32_t ch_w;
 static float ch_ph;
-static inline float line_read(const float *b, uint32_t mask, uint32_t w, float back)
+SY_FAST static inline float line_read(const float *b, uint32_t mask, uint32_t w, float back)
 {
     uint32_t ib = (uint32_t)back, i0 = (w - ib) & mask, i1 = (i0 - 1u) & mask;
     float f = back - (float)ib;
     return b[i0] + (b[i1] - b[i0]) * f;
 }
-static inline float line_read4(const float *b, uint32_t mask, uint32_t w, float back)   /* cubic: for the tape */
+SY_FAST static inline float line_read4(const float *b, uint32_t mask, uint32_t w, float back)   /* cubic: for the tape */
 {
     const uint32_t ib = (uint32_t)back, i1 = (w - ib) & mask, i0 = (i1 + 1u) & mask, i2 = (i1 - 1u) & mask, i3 = (i1 - 2u) & mask;
     const float f = back - (float)ib, x0 = b[i0], x1 = b[i1], x2 = b[i2], x3 = b[i3];
     const float c1 = 0.5f * (x2 - x0), c2 = x0 - 2.5f * x1 + 2.0f * x2 - 0.5f * x3, c3 = 0.5f * (x3 - x0) + 1.5f * (x1 - x2);
     return ((c3 * f + c2) * f + c1) * f + x1;
 }
-static inline void chorus(float *l, float *r, float amt, const float *d, float narrow)
+SY_FAST static inline void chorus(float *l, float *r, float amt, const float *d, float narrow)
 {
     float m = (*l + *r) * 0.5f, tl, tr, t;
     ch_buf[ch_w] = m;
@@ -1594,7 +1595,7 @@ static int tear_odd;
 #define SMEAR_D 389u
 static int16_t sm_a[SMEAR_A] SY_POOL, sm_b[SMEAR_B] SY_POOL, sm_c[SMEAR_C] SY_POOL, sm_d[SMEAR_D] SY_POOL;   /* (pool: RAM is the engine's code now) */
 static uint32_t sm_ia, sm_ib, sm_ic, sm_id;
-static inline float smear_ap(int16_t *buf, uint32_t n, uint32_t *i, float x)
+SY_FAST static inline float smear_ap(int16_t *buf, uint32_t n, uint32_t *i, float x)
 {
     const float old = (float)buf[*i] * (1.0f / 8192.0f), v = x - 0.6f * old;
     const float c = v < -3.99f ? -3.99f : v > 3.99f ? 3.99f : v;
@@ -1604,37 +1605,38 @@ static inline float smear_ap(int16_t *buf, uint32_t n, uint32_t *i, float x)
 }
 /* the echo's length in the tempo: Time's seven places (sixteenths .. dotted quarters), in half-rate samples */
 static const float ECHO_BEATS[SY_ECHO_N] = {0.25f, 1.0f / 3.0f, 0.5f, 2.0f / 3.0f, 0.75f, 1.0f, 1.5f};
-int sy_echo_div(int time) { const int i = time * SY_ECHO_N / 101; return i < 0 ? 0 : i >= SY_ECHO_N ? SY_ECHO_N - 1 : i; }
-static float echo_len(void)
+static inline __attribute__((always_inline)) int echo_div(int time) { const int i = time * SY_ECHO_N / 101; return i < 0 ? 0 : i >= SY_ECHO_N ? SY_ECHO_N - 1 : i; }
+int sy_echo_div(int time) { return echo_div(time); }   /* (the panel's: in XIP) */
+SY_FAST static float echo_len(void)
 {
     const float b = bpm();
-    float t = ECHO_BEATS[sy_echo_div(par[P_TIME])] * 60.0f * 22050.0f / (b > 20.0f ? b : 20.0f);
+    float t = ECHO_BEATS[echo_div(par[P_TIME])] * 60.0f * 22050.0f / (b > 20.0f ? b : 20.0f);
     while (t > (float)(TEAR_N - 600u))                  /* (longer than the line holds: half, the same feel) */
         t *= 0.5f;
     return t;
 }
 /* a worn crossing: saturated, a little lopsided (tape), harder with more Feedback */
-static inline float tear_wear(float x, float g, float ig) { return mm_tanhf(g * (x + 0.12f * x * x)) * ig; }   /* (ig: 1 / g) */
+SY_FAST static inline float tear_wear(float x, float g, float ig) { return mm_tanhf(g * (x + 0.12f * x * x)) * ig; }   /* (ig: 1 / g) */
 #define TEAR_IN 0.35f                                 /* into the int16 line, with headroom */
 SY_FAST static inline int16_t tear_pack(float x)
 {
     x = mm_tanhf(x * TEAR_IN) * 32767.0f;
     return (int16_t)(x < 0.0f ? x - 0.5f : x + 0.5f);
 }
-static inline float tear_at(const int16_t *line, float back)
+SY_FAST static inline float tear_at(const int16_t *line, float back)
 {
     const uint32_t whole = (uint32_t)back, i = (tear_w - whole) & (TEAR_N - 1u), j = (i - 1u) & (TEAR_N - 1u);
     const float frac = back - (float)whole, a = (float)line[i];
     return (a + ((float)line[j] - a) * frac) * (1.0f / (32767.0f * TEAR_IN));
 }
 /* one tear's fall: darker (a low-pass) and thinner (what a one-pole low-pass leaves of the lows, removed) */
-static inline float tear_fall(float x, float *dark, float *thin, float k)
+SY_FAST static inline float tear_fall(float x, float *dark, float *thin, float k)
 {
     *dark += k * (x - *dark);
     *thin += 0.012f * (*dark - *thin);
     return *dark - *thin;
 }
-static inline void delay(float in, float *l, float *r)
+SY_FAST static inline void delay(float in, float *l, float *r)
 {
     if (!tear_odd) {                                    /* the line moves every other sample */
         const float fb = pf(P_FEEDBACK), hop = 0.95f * fb,   /* what each crossing keeps */
@@ -1699,13 +1701,13 @@ static float room_last_in, room_l, room_r, room_was_l, room_was_r;
 static int room_odd;
 
 /* into a wall and out: rounded (truncating ends the tail early); the hum that rounding could leave is checked gone */
-static inline int16_t wall_pack(float x)
+SY_FAST static inline int16_t wall_pack(float x)
 {
     x = mm_clampf(x * (ROOM_IN * 32767.0f), -32767.0f, 32767.0f);
     return (int16_t)(x < 0.0f ? x - 0.5f : x + 0.5f);
 }
 #define WALL_OUT (1.0f / (32767.0f * ROOM_IN))
-static inline float wall_at(int i, uint32_t back) { return (float)room_wall[i][(room_w - back) & (ROOM_RING - 1u)] * WALL_OUT; }
+SY_FAST static inline float wall_at(int i, uint32_t back) { return (float)room_wall[i][(room_w - back) & (ROOM_RING - 1u)] * WALL_OUT; }
 
 #ifdef OM_HOST
 /* the device's .pool is 0x54000 bytes and the build keeps 8 KiB spare; the screen takes 120 x 120
@@ -1728,14 +1730,14 @@ static void room_size(float size)
     room_bright = 1.0f - (1.0f - at_full) * (1.0f - at_full);   /* (the same low-pass, at half the rate) */
     room_out = 0.34f * (1.0f - 0.3f * size * mm_sqrtf(size));   /* (a long tail piles up: as loud as a short one) */
 }
-static inline float wall_breath(int i, float sway)     /* a breathing wall, read between two samples */
+SY_FAST static inline float wall_breath(int i, float sway)     /* a breathing wall, read between two samples */
 {
     const float back = (float)ROOM_LEN[i] + sway;
     const uint32_t k = (uint32_t)back;
     const float a = wall_at(i, k), b = wall_at(i, k + 1u);
     return a + (b - a) * (back - (float)k);
 }
-static void room_step(float in)                        /* one half-rate step */
+SY_FAST static void room_step(float in)                        /* one half-rate step */
 {
     float x, h[ROOM_N], sum;
     uint32_t i;
@@ -1777,7 +1779,7 @@ static void room_step(float in)                        /* one half-rate step */
         room_r = room_out * (d[0] + d[1] - d[2] + d[3] + d[4] - d[5] - d[6] - d[7]);
     }
 }
-static inline void reverb(float in, float *ol, float *or_)
+SY_FAST static inline void reverb(float in, float *ol, float *or_)
 {
     if (!room_odd)
         room_step(0.5f * (in + room_last_in));          /* (two samples in one: no fold-back from the top) */
@@ -1806,7 +1808,7 @@ static void room_init(void)
 /* An old record: Crackle's ticks and hiss, Dust's narrowing band (the top and the bottom go, and some of
  * the stereo). Off (nothing spent) while both are 0. */
 static float du_lpl, du_lpr, du_hpl, du_hpr, du_crk;
-static inline void dust(float *l, float *r, float c, float u, float lpk, float hpk)
+SY_FAST static inline void dust(float *l, float *r, float c, float u, float lpk, float hpk)
 {
     float xl, xr, m, n;
     if (c <= 0.0f && u <= 0.0f)
@@ -1877,7 +1879,7 @@ static float pc_sp = 1.0f, pc_W = 1024.0f, pc_seam = 0.01f, pc_rate = 1.0f, pc_g
 static float pc_crush_q = 32.0f, pc_stop_dv, pc_stop_a, pc_stop_da, pc_twist_inc;
 static uint32_t pu_hbi;
 
-static inline int16_t pu_pack(float x) { x = mm_clampf(x * (PU_IN * 32767.0f), -32767.0f, 32767.0f); return (int16_t)x; }
+SY_FAST static inline int16_t pu_pack(float x) { x = mm_clampf(x * (PU_IN * 32767.0f), -32767.0f, 32767.0f); return (int16_t)x; }
 /* the buffer, lag half-rate samples back, both sides at once (the place worked out once): a cubic (Hermite)
  * between four, so the slow and fast reads stay clean. pu_eco: between two, cheaper (the FM-1 near its limit:
  * the band, the arp and a punch together ran blocks late, and late blocks grind like a bit crusher) */
@@ -1902,31 +1904,31 @@ SY_FAST static inline void pu_at2(float lag, float *l, float *r)
         *(c ? r : l) = y * sc;
     }
 }
-static inline float pu_at_lin(int c, float lag)          /* (between two: GRAIN's three heads, cheaper) */
+SY_FAST static inline float pu_at_lin(int c, float lag)          /* (between two: GRAIN's three heads, cheaper) */
 {
     const float lg = mm_clampf(lag, 1.0f, (float)PU_LEN - 4.0f);
     const uint32_t k = (uint32_t)lg, i = (pu_w - 1u - k) & (PU_LEN - 1u), j = (i - 1u) & (PU_LEN - 1u);
     const float a = (float)pu_buf[c][i];
     return (a + ((float)pu_buf[c][j] - a) * (lg - (float)k)) * (1.0f / (32767.0f * PU_IN));
 }
-static inline float pu_mono(uint32_t lag)               /* (the splice's search: both sides, whole samples) */
+SY_FAST static inline float pu_mono(uint32_t lag)               /* (the splice's search: both sides, whole samples) */
 {
     const uint32_t p = (pu_w - 1u - lag) & (PU_LEN - 1u);
     return (float)pu_buf[0][p] + (float)pu_buf[1][p];
 }
-static inline float pu_beat(void) { return beat_n * (1.0f / SY_SR); }   /* seconds (this block's tempo) */
-static inline float pkf(int fx, int k) { return (float)pu_k[fx][k] * (1.0f / (float)PU_KMAX); }   /* 0..1 */
-static inline float pke(int fx, int k, float mid, float per)   /* 2^((knob - mid) / per) */
+SY_FAST static inline float pu_beat(void) { return beat_n * (1.0f / SY_SR); }   /* seconds (this block's tempo) */
+SY_FAST static inline float pkf(int fx, int k) { return (float)pu_k[fx][k] * (1.0f / (float)PU_KMAX); }   /* 0..1 */
+SY_FAST static inline float pke(int fx, int k, float mid, float per)   /* 2^((knob - mid) / per) */
 {
     return mm_exp2f(((float)pu_k[fx][k] - mid) / per);
 }
 /* how quickly it comes in, per 16-frame chunk: at once (2 ms), GRAIN over half a second */
-static inline float pu_rise(int fx)
+SY_FAST static inline float pu_rise(int fx)
 {
     return 16.0f / ((fx == PU_GRAIN ? 0.5f : 0.002f) * SY_SR);
 }
 /* HALF / DOUBLE, knob 1: how far, in intervals (a fourth, a fifth, an octave, an octave and a fifth, two) */
-static inline float pu_interval(int fx)
+SY_FAST static inline float pu_interval(int fx)
 {
     static const float DOWN[5] = {0.75f, 2.0f / 3.0f, 0.5f, 1.0f / 3.0f, 0.25f}, UP[5] = {4.0f / 3.0f, 1.5f, 2.0f, 3.0f, 4.0f};
     const int i = pu_k[fx][0] * 5 / (PU_KMAX + 1);
@@ -1968,7 +1970,7 @@ SY_FAST static void pu_reslice(int fx)
 }
 /* HALF / DOUBLE: how far the head runs before it jumps back (knob 2): long, smooth; short, smeared and grainy */
 #define PU_LMIN 80.0f                                   /* (the nearest a head reads: room for the splice's search) */
-static inline float pu_win(int fx)
+SY_FAST static inline float pu_win(int fx)
 {
     return fx == PU_HALF ? mm_clampf(7400.0f * pke(fx, 1, 15.0f, 4.0f), 600.0f, 7400.0f)
                          : mm_clampf(2048.0f * pke(fx, 1, 8.0f, 4.0f), 400.0f, 6000.0f);
@@ -1977,7 +1979,7 @@ static inline float pu_win(int fx)
  * samples within +-128 of the plain jump), so it is heard as little as can be */
 #define PU_SPL_LO 200.0f                                /* (where a splice may land: the search and its 64 samples fit) */
 #define PU_SPL_HI ((float)PU_LEN - 300.0f)
-static float pu_match(float from, float cand)           /* how alike: xy|xy|/yy (no square root, the sign kept) */
+SY_FAST static float pu_match(float from, float cand)           /* how alike: xy|xy|/yy (no square root, the sign kept) */
 {
     float xy = 0.0f, yy = 1.0f;
     int i;
@@ -1988,7 +1990,7 @@ static float pu_match(float from, float cand)           /* how alike: xy|xy|/yy 
     }
     return xy * mm_fabsf(xy) / yy;
 }
-static float pu_splice(float from, float to)
+SY_FAST static float pu_splice(float from, float to)
 {
     float best, bv = -1e30f;
     int off;
@@ -2012,7 +2014,7 @@ static float pu_splice(float from, float to)
     }
     return best;
 }
-static void pu_start(int fx)                           /* a buffer punch takes over */
+SY_FAST static void pu_start(int fx)                           /* a buffer punch takes over */
 {
     pu_cur = (int8_t)fx;
     pu_t = 0.0f;
@@ -2045,7 +2047,7 @@ static void pu_start(int fx)                           /* a buffer punch takes o
     }
     }
 }
-static void pu_go(int fx)                              /* it starts now */
+SY_FAST static void pu_go(int fx)                              /* it starts now */
 {
     {
         pu_held |= (uint16_t)(1u << fx);
@@ -2062,7 +2064,7 @@ static void pu_go(int fx)                              /* it starts now */
 /* With the band playing a punch waits for its next step (on the beat, its slices and gates on the grid);
  * let go before that, it still plays that one step. Stopped: at once. */
 static uint8_t dr_on;
-static void pu_press(int fx, int on)
+SY_FAST static void pu_press(int fx, int on)
 {
     const uint16_t bit = (uint16_t)(1u << fx);
     if (on) {
@@ -2079,7 +2081,7 @@ static void pu_press(int fx, int on)
     else
         pu_held &= (uint16_t)~bit;
 }
-static void pu_grid_step(void)                          /* the band's next step: the waiting ones go, the tapped ones end */
+SY_FAST static void pu_grid_step(void)                          /* the band's next step: the waiting ones go, the tapped ones end */
 {
     int fx;
     const uint16_t done = (uint16_t)(pu_short & ~pu_wait);
@@ -2091,7 +2093,7 @@ static void pu_grid_step(void)                          /* the band's next step:
     pu_wait = 0;
 }
 /* the buffer punch that should be playing: the newest held, -1 none */
-static int pu_want(void)
+SY_FAST static int pu_want(void)
 {
     int fx, best = -1;
     uint32_t newest = 0;
@@ -2104,7 +2106,7 @@ static int pu_want(void)
 }
 
 /* one sample of the buffer punch playing, from the buffer */
-static inline void pu_read(float *l, float *r)
+SY_FAST static inline void pu_read(float *l, float *r)
 {
     const float hr_step = 0.5f;                         /* the buffer moves half a sample each output sample */
     float a, b, w;
@@ -2248,7 +2250,7 @@ static inline void pu_read(float *l, float *r)
 }
 
 /* the punches on one sample of the mix (after the rain and the dust, before the tape) */
-static inline void punch(float *l, float *r)
+SY_FAST static inline void punch(float *l, float *r)
 {
     /* keep the mix at half rate, through a half-band filter (19 taps, flat to 8 kHz, -50 dB from 15: what is
      * too high to keep is gone, not folded back down as hiss), 9 samples late */
@@ -2345,7 +2347,7 @@ static inline void punch(float *l, float *r)
 }
 
 /* the chunk's rates, for the punch playing now (after it has started) */
-static void pu_rates(void)
+SY_FAST static void pu_rates(void)
 {
     if (pu_cur >= 0) {   /* the buffer holds up to ~9 kHz: read at speed sp, up to 9 kHz * sp is music, above is mirror */
         const int md = pu_mod[pu_cur];
@@ -2390,7 +2392,7 @@ static void pu_rates(void)
 }
 
 /* once a 16-frame chunk: what each punch should be doing now (the buffer one's level, the tone ones) */
-static void punch_chunk(void)
+SY_FAST static void punch_chunk(void)
 {
     int want;
     if (pu_grid || (!dr_on && (pu_wait | pu_short))) {  /* (stopped while waiting: at once) */
@@ -2507,7 +2509,7 @@ static void punch_chunk(void)
 /* what the punches and the dust cost now (% of a block over the plain sound, measured on the FM-1: two
  * voices of MONDAY, each punch held, fm1_load.py --punch; the buffer's half-band is in the plain sound) */
 static const float PU_COST[PU_N] = {10.0f, 10.5f, 8.5f, 7.0f, 5.0f, 5.0f, 0.2f, 12.5f, 1.2f, 2.5f, 1.0f, 0.3f};
-static float fx_cost(void)
+SY_FAST static float fx_cost(void)
 {
     float c = par[P_DUST] || par[P_CRACKLE] ? 1.0f : 0.0f;
     int fx;
@@ -2774,14 +2776,14 @@ static void loop_swap(void);
 static uint8_t dr_style, dr_pending, dr_step, dr_fired;
 static uint32_t dr_bar;
 static float dr_t, dr_len, dr_inv, dr_jit;
-static void dr_len_set(int steps)                       /* a step's length in samples, at the tempo (and its inverse) */
+SY_FAST static void dr_len_set(int steps)                       /* a step's length in samples, at the tempo (and its inverse) */
 {
     dr_len = beat_n * 4.0f / (float)steps;
     dr_inv = 1.0f / dr_len;
 }
 
-static float hit_vel(uint8_t c) { return c == 'x' ? 1.0f : c == 'o' ? 0.7f : c == '-' ? 0.35f : 0.0f; }
-static float hv(uint8_t c) { return hit_vel(c) * (1.0f - pf(P_HUMAN) * 0.35f * rndf()); }   /* Human: uneven hands */
+SY_FAST static float hit_vel(uint8_t c) { return c == 'x' ? 1.0f : c == 'o' ? 0.7f : c == '-' ? 0.35f : 0.0f; }
+SY_FAST static float hv(uint8_t c) { return hit_vel(c) * (1.0f - pf(P_HUMAN) * 0.35f * rndf()); }   /* Human: uneven hands */
 
 /* The bass is always sad: natural minor. What it is the minor of: held notes that sound minor (a minor
  * third over the lowest, no major third) are their own minor; anything else (a major chord, one note) is
@@ -2817,10 +2819,10 @@ SY_FAST static int bass_root(void)
 }
 /* a pattern's step, snapped onto natural minor (0 2 3 5 7 8 10): no bright note gets in */
 static const uint8_t MINOR_SNAP[12] = {0, 0, 2, 3, 3, 5, 5, 7, 8, 8, 10, 10};
-static int minor_of(int semi) { return semi / 12 * 12 + MINOR_SNAP[semi % 12]; }
+SY_FAST static int minor_of(int semi) { return semi / 12 * 12 + MINOR_SNAP[semi % 12]; }
 
 /* the lowest note held (the arpeggiator's chord when it is on), -1 none */
-static int held_low(void)
+SY_FAST static int held_low(void)
 {
     int i, lo = 128;
     if (arp_on) {
@@ -2867,7 +2869,7 @@ SY_FAST static void bass_hit(int bn, int slide, int hold)
         mo_bass = (int8_t)bn;
     }
 }
-static void mo_drum_hit(int d, float v)              /* a drum out, on 10 (the one before it ends first) */
+SY_FAST static void mo_drum_hit(int d, float v)              /* a drum out, on 10 (the one before it ends first) */
 {
     if (par[P_MIDIOUT] != MO_ALL)
         return;
@@ -2876,7 +2878,7 @@ static void mo_drum_hit(int d, float v)              /* a drum out, on 10 (the o
     mo_note(9, 1, MO_DRUM_NOTE[d], clampi((int)(v * 127.0f + 0.5f), 1, 127));
     mo_drum[d] = MO_DRUM_NOTE[d];
 }
-static void drum_step(void)
+SY_FAST static void drum_step(void)
 {
     const int fill = (dr_bar & 3u) == 3u;
     uint8_t c;
@@ -2974,7 +2976,7 @@ static void drum_step(void)
 }
 
 /* one sample of the drums (and the auto-bass): their mix, mono, and the bass apart */
-static inline float drums_sample(float *bass_out)
+SY_FAST static inline float drums_sample(float *bass_out)
 {
     const kit_t *k = &KITS[STYLES[dr_style].kit];
     const kit_d_t *kd = &KITD[STYLES[dr_style].kit];
@@ -3078,7 +3080,7 @@ static inline float drums_sample(float *bass_out)
 
 /* CK_LEAD: 24 clocks a beat, always (Start and Stop with the band) */
 static float ck_out_t;
-static inline void clock_tick(void)
+SY_FAST static inline void clock_tick(void)
 {
     if (par[P_CLOCK] != CK_LEAD)
         return;
@@ -3096,7 +3098,7 @@ static inline void clock_tick(void)
 static float ck_beat;
 static uint32_t ck_age;
 static uint8_t ck_have;
-static void drums_to(float beat)                       /* the band, at once at this beat */
+SY_FAST static void drums_to(float beat)                       /* the band, at once at this beat */
 {
     const int steps = STYLES[dr_style].steps;
     float b = beat - 1024.0f * (float)(int)(beat * (1.0f / 1024.0f)), st;
@@ -3111,7 +3113,7 @@ static void drums_to(float beat)                       /* the band, at once at t
     dr_t = mm_clampf(st - (float)dr_step, 0.0f, 0.999f) * dr_len;
     dr_fired = dr_t > 0.0f;                             /* (inside a step: that one has gone by) */
 }
-static void tempo_block(void)                           /* the tempo, for this block's per-sample clocks */
+SY_FAST static void tempo_block(void)                           /* the tempo, for this block's per-sample clocks */
 {
     const float b = bpm();
     beat_n = SY_SR * 60.0f / b;
@@ -3121,7 +3123,7 @@ static void tempo_block(void)                           /* the tempo, for this b
     if (dr_on && !dr_start)
         dr_len_set(STYLES[dr_style].steps);
 }
-static void clock_follow(uint32_t n)                   /* once a block */
+SY_FAST static void clock_follow(uint32_t n)                   /* once a block */
 {
     float own, err;
     ck_rate = 1.0f;
@@ -3139,7 +3141,7 @@ static void clock_follow(uint32_t n)                   /* once a block */
         ck_rate = 1.0f + mm_clampf(err, -0.05f, 0.05f);   /* (a beat's error: gone in about a beat) */
     ck_age += n;
 }
-static void drums_tick(void)                           /* one sample of the sequencer */
+SY_FAST static void drums_tick(void)                           /* one sample of the sequencer */
 {
     if (!dr_on)
         return;
@@ -3198,13 +3200,13 @@ static sy_ev_t loop_ev[SY_LOOP_MAX], loop_undo_ev[SY_LOOP_MAX];
 static int loop_n, loop_undo_n, loop_last = -1, loop_sel = -1;
 static uint8_t rec_state, cnt_on;
 static float cnt_t, click_env, click_ph;
-static int loop_ticks(void) { static const int B[3] = {1, 2, 4}; return B[par[P_LOOPBARS]] * SY_TPB; }
-static void loop_changed(void)
+SY_FAST static int loop_ticks(void) { static const int B[3] = {1, 2, 4}; return B[par[P_LOOPBARS]] * SY_TPB; }
+SY_FAST static void loop_changed(void)
 {
     sy_tel.loop_n = (uint16_t)loop_n;
     sy_tel.loop_ver++;
 }
-static float loop_now(void)                             /* the playhead, ticks (fractional) */
+SY_FAST static float loop_now(void)                             /* the playhead, ticks (fractional) */
 {
     const float tps = (float)SY_TPB / (float)STYLES[dr_style].steps;
     if (dr_len <= 0.0f)                                 /* (before the drums' first sample) */
@@ -3214,14 +3216,14 @@ static float loop_now(void)                             /* the playhead, ticks (
     return (float)((int)((dr_bar - loop_b0) % (uint32_t)(loop_ticks() / SY_TPB)) * SY_TPB) + inbar;
     }
 }
-static void loop_snapshot(void)
+SY_FAST static void loop_snapshot(void)
 {
     int i;
     for (i = 0; i < loop_n; i++)
         loop_undo_ev[i] = loop_ev[i];
     loop_undo_n = loop_n;
 }
-static void loop_all_off(void)                          /* everything the loop is sounding, off */
+SY_FAST static void loop_all_off(void)                          /* everything the loop is sounding, off */
 {
     int i;
     for (i = 0; i < loop_n; i++)
@@ -3230,7 +3232,7 @@ static void loop_all_off(void)                          /* everything the loop i
             loop_ev[i].flags &= (uint8_t)~EV_PLAYING;
         }
 }
-static void loop_remove(int i)
+SY_FAST static void loop_remove(int i)
 {
     if (loop_ev[i].flags & EV_PLAYING)
         band_off(loop_ev[i].note);
@@ -3268,7 +3270,7 @@ SY_FAST static void rec_off(int note)                           /* its key up: h
             return;
         }
 }
-static void rec_end(void)                               /* recording stops: notes still held end here */
+SY_FAST static void rec_end(void)                               /* recording stops: notes still held end here */
 {
     int i;
     for (i = 0; i < loop_n; i++)
@@ -3306,7 +3308,7 @@ SY_FAST static void loop_tick(int p)                            /* one tick of t
     }
     sy_tel.loop_pos = (uint16_t)p;
 }
-static void loop_run(void)                              /* one sample, after the drums' clock */
+SY_FAST static void loop_run(void)                              /* one sample, after the drums' clock */
 {
     const int p = (int)loop_now(), lt = loop_ticks();
     int d;
@@ -3326,7 +3328,7 @@ static void loop_run(void)                              /* one sample, after the
     }
 }
 /* the count-in: a bar of clicks, then the band starts and it records */
-static void count_run(void)
+SY_FAST static void count_run(void)
 {
     int b;
     if (!cnt_on)
@@ -3349,7 +3351,7 @@ static void count_run(void)
         sy_tel.drums_on = 1;
     }
 }
-static inline float click_sample(void)
+SY_FAST static inline float click_sample(void)
 {
     float x;
     if (click_env < 1e-4f)
@@ -3393,7 +3395,7 @@ SY_FAST static void loop_swap(void)                             /* the pattern w
     sy_tel.pattern_next = -1;
     loop_changed();
 }
-static void loop_cmd(const cmd_t *c)
+SY_FAST static void loop_cmd(const cmd_t *c)
 {
     int i;
     switch (c->c) {
@@ -3577,7 +3579,7 @@ SY_FAST static void panic(void)                                 /* everything qu
         sus_note[i] = 0;
     mo_all_off();
 }
-static void key_off(int n)                              /* a key let go (or the pedal up after it) */
+SY_FAST static void key_off(int n)                              /* a key let go (or the pedal up after it) */
 {
     if (arp_on)
         arp_remove(n);
@@ -3586,7 +3588,7 @@ static void key_off(int n)                              /* a key let go (or the 
         rec_off(n);
     }
 }
-static void drain(void)
+SY_FAST static void drain(void)
 {
     if (panic_pend) {                                   /* (left over from a full queue) */
         panic_pend = 0;
@@ -3750,7 +3752,7 @@ void sy_fade_in(uint32_t ms)
     wake = 0.0f;
     wake_step = ms ? 1.0f / ((float)ms * 0.001f * SY_SR) : 1.0f;
 }
-static float wake_gain(uint32_t n)
+SY_FAST static float wake_gain(uint32_t n)
 {
     if (wake >= 1.0f)
         return 1.0f;
