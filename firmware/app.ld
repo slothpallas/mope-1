@@ -2,19 +2,19 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Felucca memory map.
  * Code + constants execute in place from XIP (app.bin offset 0 = 0x02000120).
- * 0x01C00000..0x01C10000 holds .ram_text (code that must run while the flash
+ * 0x01C00000..0x01C15000 holds .ram_text (code that must run while the flash
  * is busy: the flash driver), then .fast_text (the audio engine: from flash through
  * the small cache it missed over and over, and blocks ran late; here it may call
  * into XIP, unlike .ram_text). Both are copied from XIP at boot.
- * RAM  : .data/.bss (64 KiB)
+ * RAM  : .data/.bss (44 KiB; the biggest DSP arrays live in POOL)
  * POOL : big zero-initialised buffers (FX lines, canvases), section .pool
  * STACKS with 256-byte guard bands; NOINIT survives resets and UBOOT entry.
  * 0x01C7FD50.. is reserved: boot_info, boot-state mailbox, vector table. */
 MEMORY
 {
     XIP    (rx)  : ORIGIN = 0x02000120, LENGTH = 0x8DFBC
-    RAMTEXT (rwx): ORIGIN = 0x01C00000, LENGTH = 0x10000
-    RAM    (rwx) : ORIGIN = 0x01C10000, LENGTH = 64K
+    RAMTEXT (rwx): ORIGIN = 0x01C00000, LENGTH = 0x15000
+    RAM    (rwx) : ORIGIN = 0x01C15000, LENGTH = 44K
     POOL   (rw)  : ORIGIN = 0x01C20000, LENGTH = 0x54000
     NOINIT (rw)  : ORIGIN = 0x01C7C000, LENGTH = 0x3D50
 }
