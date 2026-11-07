@@ -395,6 +395,18 @@ int main(int argc, char **argv)
             sy_punch(fx, 0);
             run(100);
         }
+        /* near the FM-1's limit (its load says so) the buffer is read the cheaper way: HALF still an octave down */
+        sy_load(90);
+        sy_punch(PU_HALF, 1);
+        run(400);
+        capture();
+        lo = goertzel(220.0f);
+        mid = goertzel(440.0f);
+        CHECK(lo > mid * 10.0f, "HALF, the FM-1 busy (the cheaper read): still an octave down (%.0f dB over 440)",
+              (double)(10.0f * mm_log2f(lo / mid) * 0.30103f));
+        sy_punch(PU_HALF, 0);
+        sy_load(40);
+        run(100);
         /* the white keys beside: HALF with MORE two octaves down, with TWIST a fifth down; DOUBLE with MORE two up */
         sy_punch(PU_HALF, 1 + PM_MORE);
         run(400);
@@ -515,6 +527,48 @@ int main(int argc, char **argv)
         run(100);
         sy_note_off(69);
         quiet();
+        {   /* STOP's end: a saw read ever slower is a falling sample rate; nothing above what the tape can still
+             * hold (12 kHz x its speed) may come out, or it grinds like a bit crusher as it stops */
+            float worst = -200.0f;
+            int w, bin;
+            sy_set(P_POS, 100);
+            sy_note_on(57, 100);
+            run(1000);
+            sy_punch(PU_STOP, 1);
+            for (w = 0; w < 34; w++) {
+                float v = 0.0f, keep = 0.0f, stray = 0.0f;
+                uint32_t b;
+                for (b = 0; b < 4; b++) {
+                    sy_render(blk, 256, 4096);
+                    v += sy_tel.punch_k * 0.25f;
+                    for (k = 0; k < 256; k++)
+                        cap[b * 256 + k] = (float)blk[2 * k] / 8388608.0f;
+                }
+                for (bin = 1; bin < 512; bin++) {
+                    float re = 0.0f, im = 0.0f, e;
+                    int i;
+                    for (i = 0; i < 1024; i++) {
+                        const float h = (0.5f - 0.5f * mm_cosf(MM_TWO_PI * (float)i / 1024.0f)) * cap[i];
+                        const float ph = (float)((bin * i) & 1023) / 1024.0f;
+                        re += h * mm_cosf(MM_TWO_PI * ph);
+                        im += h * mm_sinf(MM_TWO_PI * ph);
+                    }
+                    e = re * re + im * im;
+                    if ((float)bin * 44100.0f / 1024.0f < 12000.0f * v + 200.0f)
+                        keep += e;
+                    else
+                        stray += e;
+                }
+                if (keep > 1e-6f && v > 0.001f) {
+                    const float db = 10.0f * mm_log2f((stray + 1e-20f) / keep) * 0.30103f;
+                    worst = db > worst ? db : worst;
+                }
+            }
+            sy_punch(PU_STOP, 0);
+            sy_note_off(57);
+            quiet();
+            CHECK(worst < -45.0f, "STOP: no grinding as it stops (the most above the tape's top: %.0f dB)", (double)worst);
+        }
         /* SWEEP: a bright saw goes dark */
         sy_set(P_POS, 100);                             /* (PLAIN's end: a saw) */
         sy_note_on(57, 100);
