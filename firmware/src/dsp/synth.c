@@ -1096,7 +1096,7 @@ static inline float lfo_beat(float ph, float c)
     const float d = ph - c;
     return d < -0.04f || d > 0.12f ? 0.0f : d < 0.0f ? 1.0f + d * 25.0f : 1.0f - d * (1.0f / 0.12f);
 }
-SY_FAST float sy_lfo_shape(int shape, float ph, float from, float to)
+static inline __attribute__((always_inline)) float lfo_shape_in(int shape, float ph, float from, float to)
 {
     switch (shape) {
     case LFO_TRI: return tri(ph + 0.25f);
@@ -1113,6 +1113,7 @@ SY_FAST float sy_lfo_shape(int shape, float ph, float from, float to)
     default: return mm_sin_turns(ph);
     }
 }
+float sy_lfo_shape(int shape, float ph, float from, float to) { return lfo_shape_in(shape, ph, from, to); }   /* (the panel's: in XIP) */
 SY_FAST static float lfo_tick(lfo_t *l, int rate, int shape, uint32_t n)
 {
     const float hz = 0.05f * mm_exp2f(pf(rate) * 9.0f);
@@ -1131,7 +1132,7 @@ SY_FAST static float lfo_tick(lfo_t *l, int rate, int shape, uint32_t n)
         l->rnd += 0.3f * (l->rnd_to - l->rnd);
         v = l->rnd;
     } else
-        v = sy_lfo_shape(par[shape], l->ph, l->from, l->rnd_to);
+        v = lfo_shape_in(par[shape], l->ph, l->from, l->rnd_to);
     l->val += 0.5f * (v - l->val);                     /* a square's edges, not quite a click */
     return l->val;
 }
