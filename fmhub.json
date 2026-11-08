@@ -1,0 +1,10 @@
+{
+  "what": "A sad wavetable synth played by a pixel blob in a rainy room: its eyes are the filter, its mouth the envelope, its tears the delay. Gloomy beats with auto-bass, an arpeggiator, a pattern sequencer, twelve punch effects on the black keys, and presets of your own.",
+  "author": "slothpallas",
+  "kinds": [
+    "synth"
+  ],
+  "play": "https://slothpallas.github.io/mope-1/play/",
+  "image": "docs/card.png",
+  "color": "#6fa3b8"
+}
