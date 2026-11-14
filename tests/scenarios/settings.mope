@@ -8,6 +8,17 @@ tap GLO
 expect page 7
 expect latch 1
 shot 00_settings.png
+# the list goes a row at a time: two quick steps (a click read twice, a fast turn) stop on GLIDE, not past it
+turn K1 2 10
+wait 100
+spin K2 5
+expect par28 5
+spin K2 -5
+# ...and it stops at the ends: back up, and once more, is still VOICES
+turn K1 -1
+wait 100
+turn K1 -1
+wait 100
 # VOICES: MONO, then two notes: one voice
 spin K2 1
 expect par63 1

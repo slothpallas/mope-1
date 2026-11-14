@@ -55,6 +55,7 @@ static const char *const PAGE_LABEL[NPAGES][4] = {
     {"CHOR", "RATE", "DPTH", "WIDE"}, {"TAPE", "CRKL", "DUST", "FRY"}, {"", "", "", ""}, {"MOVE", "ABC", "NEW", "SLOT"}};
 #define STAY_MS 3000u                  /* a drawer stays this long after the last touch (a press, a turn) */
 #define DOUBLE_MS 350u                 /* a part's button pressed twice this fast: its page stays until HOME */
+#define LIST_MS 70u                    /* SETTINGS: a row (a word) a step, no quicker than this */
 #define TAP_MS 300u                    /* ARP let go sooner: a tap (on / off), not a look at its page */
 #define K_NONE 255
 static const uint8_t PAGE_KNOB[NPAGES][4] = {
@@ -1433,14 +1434,27 @@ static void input(void)
                 continue;
             }
             if (ui.panel && ui.page == PG_SETUP) {       /* SETTINGS: knob 1 the row, knob 2 its value */
-                if (i == 0)
-                    ui.set_row = (uint8_t)(((ui.set_row + (int)e) % NSET + NSET) % NSET);
-                else if (i == 1) {
+                /* a list is stepped through one at a time: a click that came as two steps, or a quick turn,
+                 * jumped a row (GLIDE, right under VOICES, was hard to stop on), so one step a turn and no
+                 * sooner than LIST_MS after the last; the rows stop at the ends (round, one click back from
+                 * VOICES was TUNE). The host's spin stays exact. */
+                static uint32_t list_t[2];
+                const uint32_t now = plat_ms();
+                int32_t one = e;
+                if (i < 2 && !accel_off) {
+                    one = now - list_t[i] >= LIST_MS ? (e > 0 ? 1 : -1) : 0;
+                    if (one)
+                        list_t[i] = now;
+                }
+                if (i == 0) {
+                    const int r = (int)ui.set_row + (int)one;
+                    ui.set_row = (uint8_t)(r < 0 ? 0 : r >= NSET ? NSET - 1 : r);
+                } else if (i == 1) {
                     const set_row_t *w = &SET_ROWS[ui.set_row];
                     const sy_param_t *p = sy_param_info(w->par);
                     const int n = p->hi - p->lo + 1;
-                    if (w->words)                        /* (words go round) */
-                        knob_set(w->par, p->lo + ((proj.par[w->par] - p->lo + (int)e) % n + n) % n);
+                    if (w->words)                        /* (words go round, one at a time) */
+                        knob_set(w->par, p->lo + ((proj.par[w->par] - p->lo + (int)one) % n + n) % n);
                     else
                         knob_set(w->par, proj.par[w->par] + accel(EN_K2, e, p->hi - p->lo));
                 }
