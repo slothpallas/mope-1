@@ -242,3 +242,5 @@ The package identity is `FM-1_6673` ("MOPE" on a phone keypad) followed by the v
 
 GPL-3.0-only, like the platform it runs on: see [LICENSING.md](LICENSING.md) for what is MOPE-1's and
 what comes from where. Not affiliated with M-VAVE.
+
+You can also try MOPE-1 in the browser, no flashing needed, in the free community [FM-1 Emulator](https://fm1-emulator.atst.tools/).
