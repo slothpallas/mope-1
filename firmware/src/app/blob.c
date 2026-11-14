@@ -1661,6 +1661,39 @@ static void draw_preset_card(int32_t y0)
     }
 }
 
+/* a button's pages as tabs on the drawer's top edge, in the order the button goes round them: the one open
+ * lit and joined to the drawer, the others dark. All their names if they fit across; else the others' first
+ * two letters (FX's many). */
+static void draw_tabs(int32_t y0)
+{
+    int8_t pgs[8];
+    int n = 0, pg = ui.page, k, full = 0;
+    int32_t x = 1;
+    if (PAGE_AGAIN[pg] < 0 || y0 < 9)
+        return;
+    while (PAGE_NTH[pg] && n++ < 8)                      /* (round to its button's first) */
+        pg = PAGE_AGAIN[pg];
+    n = 0;
+    do {
+        pgs[n++] = (int8_t)pg;
+        pg = PAGE_AGAIN[pg];
+    } while (pg >= 0 && pg != pgs[0] && n < 8);
+    for (k = 0; k < n; k++)
+        full += px_text_w(PAGE_NAME[pgs[k]]) + 5;
+    for (k = 0; k < n; k++) {
+        const int on = pgs[k] == ui.page;
+        char two[3] = {PAGE_NAME[pgs[k]][0], PAGE_NAME[pgs[k]][1], 0};
+        const char *nm = on || full <= PX_W - 1 ? PAGE_NAME[pgs[k]] : two;
+        const int32_t w = px_text_w(nm) + 4;
+        px_rect(x, y0 - 8, w, 8, on ? PC_PANEL : PC_BG0);
+        px_rect(x, y0 - 9, w, 1, on ? PC_BLOB2 : PC_GRID);
+        if (on)
+            px_rect(x, y0, w, 1, PC_PANEL);              /* (open: no edge between it and the drawer) */
+        px_text(x + 2, y0 - 6, nm, on ? PC_BLOB2 : PC_DIM);
+        x += w + 1;
+    }
+}
+
 static void draw_panel(const geo_t *g)
 {
     drawer_t p;
@@ -1682,23 +1715,12 @@ static void draw_panel(const geo_t *g)
         draw_preset_card(p.y0);
         return;
     }
-    /* the tab: the page's name, its place among its button's pages (a dot each: SEL's four, say), and what it is
-     * set to */
-    px_text(3, p.y0 + 3, PAGE_NAME[ui.page], PC_BLOB2);
-    int32_t dots_w = 0;
-    {
-        int n = 1, pg = PAGE_AGAIN[ui.page], k;
-        while (pg >= 0 && pg != ui.page && n < 8) {
-            n++;
-            pg = PAGE_AGAIN[pg];
-        }
-        if (n > 1) {
-            const int32_t dx = 3 + px_text_w(PAGE_NAME[ui.page]) + 4;
-            for (k = 0; k < n; k++)
-                px_rect(dx + k * 5, p.y0 + 5, 3, 3, k == PAGE_NTH[ui.page] ? PC_TEAR : PC_WALL2);
-            dots_w = n * 5 + 2;
-        }
-    }
+    /* the page's name and what it is set to; a button with more pages: their tabs, standing on the drawer */
+    const int tabbed = PAGE_AGAIN[ui.page] >= 0 && p.y0 >= 9;   /* (its name is on its tab) */
+    const int32_t dots_w = tabbed ? -(px_text_w(PAGE_NAME[ui.page]) + 6) : 0;
+    if (!tabbed)
+        px_text(3, p.y0 + 3, PAGE_NAME[ui.page], PC_BLOB2);
+    draw_tabs(p.y0);
     {
         const char *what = 0;
         switch (ui.page) {
