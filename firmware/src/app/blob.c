@@ -1736,21 +1736,25 @@ static void schem_macro(const drawer_t *p)               /* the macros: four dia
     static const uint8_t KC[4] = {PC_TEAR, PC_RED, PC_XP, PC_BLOB2};
     static const int8_t KP[4] = {P_MEYES, P_MBITE, P_MNERVE, P_MROOM};
     const uint32_t since = plat_ms() - ui.focus_t;
-    const int32_t cy = (p->gy0 + p->gy1) / 2 + 1;
+    const int32_t cy = (p->gy0 + p->gy1) / 2 + 2;
     int k, j;
     for (k = 0; k < 4; k++) {
         const int32_t cx = 14 + k * 30;
         const float v = mac(KP[k]), a = 0.375f * v;      /* (-1 .. 1: three quarters of a turn, the middle up) */
         const int hot = ui.touched == k && since < 1500u;
-        for (j = 0; j <= 28; j++) {                      /* the ring, lit from the middle to where it is */
-            const float u = -1.0f + (float)j / 14.0f, t = 0.375f * u;
-            const int lit = v >= 0.0f ? (u >= 0.0f && u <= v) : (u <= 0.0f && u >= v);
-            const float sx = mm_sin_turns(t) * 7.0f, sy = mm_sin_turns(t + 0.25f) * 7.0f;
-            px_pset(cx + (int32_t)(sx + (sx < 0.0f ? -0.5f : 0.5f)), cy - (int32_t)(sy + (sy < 0.0f ? -0.5f : 0.5f)), lit ? KC[k] : PC_WALL2);
+        for (j = 0; j <= 40; j++) {                      /* the ring, two thick, lit from the middle to where it is */
+            const float u = -1.0f + (float)j / 20.0f, t = 0.375f * u;
+            const int lit = v >= 0.0f ? (u >= 0.0f && u <= v + 0.02f) : (u <= 0.0f && u >= v - 0.02f);
+            int rr;
+            for (rr = 0; rr < 2; rr++) {
+                const float sx = mm_sin_turns(t) * (8.5f - (float)rr), sy = mm_sin_turns(t + 0.25f) * (8.5f - (float)rr);
+                px_pset(cx + (int32_t)(sx + (sx < 0.0f ? -0.5f : 0.5f)), cy - (int32_t)(sy + (sy < 0.0f ? -0.5f : 0.5f)), lit ? KC[k] : PC_WALL2);
+            }
         }
-        px_pset(cx, cy - 9, PC_DIM);                     /* (the middle's mark) */
-        px_line(cx, cy, cx + (int32_t)(mm_sin_turns(a) * 4.6f + (mm_sin_turns(a) < 0.0f ? -0.5f : 0.5f)),
-                cy - (int32_t)(mm_sin_turns(a + 0.25f) * 4.6f + (mm_sin_turns(a + 0.25f) < 0.0f ? -0.5f : 0.5f)), hot ? PC_WHITE : KC[k]);
+        px_rect(cx, cy - 11, 1, 2, PC_DIM);              /* (the middle's mark: the sound as it was made) */
+        px_line(cx, cy, cx + (int32_t)(mm_sin_turns(a) * 5.6f + (mm_sin_turns(a) < 0.0f ? -0.5f : 0.5f)),
+                cy - (int32_t)(mm_sin_turns(a + 0.25f) * 5.6f + (mm_sin_turns(a + 0.25f) < 0.0f ? -0.5f : 0.5f)), hot ? PC_WHITE : KC[k]);
+        px_rect(cx - 1, cy - 1, 2, 2, hot ? PC_WHITE : KC[k]);
     }
 }
 
@@ -1828,35 +1832,59 @@ static void draw_preset_card(int32_t y0)
 }
 
 /* a button's pages as tabs on the drawer's top edge, in the order the button goes round them: the one open
- * lit and joined to the drawer, the others dark. All their names if they fit across; else the others' first
- * two letters (FX's many). */
+ * lit and joined to the drawer, the others dark. All of them if they fit across; else as many as fit around
+ * the open one, whole, with a small arrow where more are hidden (FX's seven). */
 static void draw_tabs(int32_t y0)
 {
     int8_t pgs[8];
-    int n = 0, pg = ui.page, k, full = 0;
-    int32_t x = 1;
+    int32_t w[8], x = 1;
+    int n = 0, pg = ui.page, k, cur = 0, lo, hi;
     if (PAGE_AGAIN[pg] < 0 || y0 < 9 || y0 > PX_H - 16)     /* (none, no room over it, or the drawer nearly away) */
         return;
     while (PAGE_NTH[pg] && n++ < 8)                      /* (round to its button's first) */
         pg = PAGE_AGAIN[pg];
     n = 0;
     do {
-        pgs[n++] = (int8_t)pg;
+        if (pg == ui.page)
+            cur = n;
+        pgs[n] = (int8_t)pg;
+        w[n] = px_text_w(PAGE_NAME[pg]) + 4;
+        n++;
         pg = PAGE_AGAIN[pg];
     } while (pg >= 0 && pg != pgs[0] && n < 8);
-    for (k = 0; k < n; k++)
-        full += px_text_w(PAGE_NAME[pgs[k]]) + 5;
-    for (k = 0; k < n; k++) {
+    {   /* the window: from the open one out, a tab each side in turn, while they fit (with room for the arrows) */
+        int32_t used = w[cur];
+        int grew = 1;
+        lo = hi = cur;
+        while (grew) {
+            grew = 0;
+            if (hi + 1 < n && used + w[hi + 1] + 1 + (hi + 2 < n ? 5 : 0) + (lo > 0 ? 5 : 0) <= PX_W - 2) {
+                used += w[++hi] + 1;
+                grew = 1;
+            }
+            if (lo > 0 && used + w[lo - 1] + 1 + (lo - 1 > 0 ? 5 : 0) + (hi + 1 < n ? 5 : 0) <= PX_W - 2) {
+                used += w[--lo] + 1;
+                grew = 1;
+            }
+        }
+    }
+    if (lo > 0) {                                        /* (more to the left) */
+        px_line(x + 3, y0 - 7, x, y0 - 4, PC_DIM);
+        px_line(x, y0 - 4, x + 3, y0 - 1, PC_DIM);
+        x += 5;
+    }
+    for (k = lo; k <= hi; k++) {
         const int on = pgs[k] == ui.page;
-        char two[3] = {PAGE_NAME[pgs[k]][0], PAGE_NAME[pgs[k]][1], 0};
-        const char *nm = on || full <= PX_W - 1 ? PAGE_NAME[pgs[k]] : two;
-        const int32_t w = px_text_w(nm) + 4;
-        px_rect(x, y0 - 8, w, 8, on ? PC_PANEL : PC_BG0);
-        px_rect(x, y0 - 9, w, 1, on ? PC_BLOB2 : PC_GRID);
+        px_rect(x, y0 - 8, w[k], 8, on ? PC_PANEL : PC_BG0);
+        px_rect(x, y0 - 9, w[k], 1, on ? PC_BLOB2 : PC_GRID);
         if (on)
-            px_rect(x, y0, w, 1, PC_PANEL);              /* (open: no edge between it and the drawer) */
-        px_text(x + 2, y0 - 6, nm, on ? PC_BLOB2 : PC_DIM);
-        x += w + 1;
+            px_rect(x, y0, w[k], 1, PC_PANEL);           /* (open: no edge between it and the drawer) */
+        px_text(x + 2, y0 - 6, PAGE_NAME[pgs[k]], on ? PC_WHITE : PC_BLOBM);
+        x += w[k] + 1;
+    }
+    if (hi + 1 < n) {                                    /* (more to the right) */
+        px_line(x + 1, y0 - 7, x + 4, y0 - 4, PC_DIM);
+        px_line(x + 4, y0 - 4, x + 1, y0 - 1, PC_DIM);
     }
 }
 
@@ -2864,7 +2892,7 @@ static void blob_draw(void)
         boby *= bs.zoom;
         bobx *= bs.zoom;
     }
-    g.cx = g.rcx + bobx + (mac(P_MNERVE) > 0.0f ? mac(P_MNERVE) * 1.4f * mm_sin_turns(bs.t * 11.0f) : 0.0f);   /* (NERVES: it shivers) */
+    g.cx = g.rcx + bobx + (mac(P_MNERVE) > 0.0f ? mac(P_MNERVE) * 2.4f * mm_sin_turns(bs.t * 11.0f) : 0.0f);   /* (NERVES: it shivers) */
     g.cy = g.rcy + boby - bs.shrug * 2.0f + 1.2f * mm_sin_turns(bs.t * 0.23f) + bs.pancake * g.r * 0.6f;   /* it hovers */
     g.cy -= bs.focus * g.r;                              /* the part in focus, to the middle */
     g.floor = mm_minf(g.cy + g.r * 0.8f + 6.0f + 3.0f * size, g.ab - 3.0f);   /* (from above: right under it) */
