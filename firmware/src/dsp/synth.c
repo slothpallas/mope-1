@@ -1523,7 +1523,7 @@ SY_FAST static void render_voices(float *ol, float *or_, uint32_t n, const mods_
 /* Drive into a tanh; past 55 the bits and the sample rate go too: deep-fried */
 /* Level-matched: the drive's gain is taken back out as much as a typical level (0.3) would gain, so
  * more Fry is more grit, not more loud. It glides (a preset change doesn't slam it in). */
-static float fry_hold_l, fry_hold_r, fry_cnt, fry_now, fry_g = 1.0f, fry_comp = 1.0f;
+static float fry_hold_l, fry_hold_r, fry_cnt, fry_now, fry_g = 1.0f, fry_comp = 1.0f, fry_dc;
 SY_FAST static void fry_chunk(void)                            /* every 16 frames */
 {
     fry_now += (mm_clampf(pf(P_FRY) * mac_fryk + mac_fry, 0.0f, 1.0f) - fry_now) * 0.012f;
@@ -1531,6 +1531,8 @@ SY_FAST static void fry_chunk(void)                            /* every 16 frame
         fry_now = 0.0f;
     fry_g = 1.0f + fry_now * fry_now * 24.0f;
     fry_comp = 0.3f / mm_tanhf(0.3f * fry_g) / (1.0f + 1.86f * fry_now * fry_now);   /* (squashed is louder: fitted) */
+    fry_dc = mm_tanhf(0.08f * fry_now);                  /* (its lopsidedness left silence standing off zero, -33 dB of
+                                                            nothing: taken back out) */
 }
 SY_FAST static inline void fry(float *l, float *r)
 {
@@ -1550,8 +1552,8 @@ SY_FAST static inline void fry(float *l, float *r)
         yl = fry_hold_l;
         yr = fry_hold_r;
     }
-    *l = yl * comp;
-    *r = yr * comp;
+    *l = (yl - fry_dc) * comp;
+    *r = (yr - fry_dc) * comp;
 }
 
 /* ------------------------------------------------------------- chorus --- */
