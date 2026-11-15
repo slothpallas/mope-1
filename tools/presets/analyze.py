@@ -17,7 +17,7 @@ def bands(m):
 src=open('firmware/src/app/ui.c').read()
 body=src[src.index('static const mood_t MOODS[] = {'):]
 body=body[:body.index('\n};')]
-moods=re.findall(r'\{"([^"]+)", (CAT_\w+), (-?\d+), (-?\d+), \{([^}]*)\},\s*\{([^}]*)\}, (\d), \{([^}]*)\}',body)
+moods=re.findall(r'\{"([^"]+)", (CAT_\w+), (-?\d+), (-?\d+), \{([^}]*)\},\s*\{([^}]*)\}, (\d), \{([^}]*)\}, (\d), \{([^}]*)\}',body)
 VN="table pos detune sub cutoff reso envamt moddec attack decay sustain release lforate lfodepth lfoshape lfodest chorus delay time feedback reverb size fry tape".split()
 XN="btable btune bmeet blevel ftype drive mattack mwave lfo2rate lfo2depth lfo2shape lfo2dest level".split()
 TAB="PLAIN MOAN PULSE CRUSH WARBLE FOLD CHURCH SYNC GLASS BREATH CRY HOLLOW BEND TOY ICE SAG".split()
@@ -33,8 +33,11 @@ def num(t):
     t=t.strip(); return ENUM[t] if t in ENUM else int(t)
 band=rd('build/review/wav/band.wav'); band_rms=np.sqrt((band**2).mean())
 rows=[]
-for i,(name,cat,octv,glide,v,x,hn,n) in enumerate(moods):
+for i,(name,cat,octv,glide,v,x,hn,n,hf,fx) in enumerate(moods):
     v=[num(t) for t in v.split(',')]; x=[num(t) for t in x.split(',')]
+    ff=[num(t) for t in fx.split(',')] if int(hf) else [0]*12
+    nn=[num(t) for t in n.split(',')]+[0]*8 if int(hn) else [50,50,30,50,100,0,0,0]
+    fxs=' '.join(t for t in ((f'SWIRL{ff[0]}' if ff[0] else ''),(f'BURN{ff[4]}' if ff[4] else ''),(f'CRUSH{ff[6]}' if ff[6] else ''),(f"MUMBLE{ff[8]}/{'BEAT LFO PLAY'.split()[ff[9]]}" if ff[8] else '')) if t) or '-'
     a=rd(f'build/review/wav/a{i:02d}.wav'); m=a.mean(1); s=(a[:,0]-a[:,1])/2
     T=lambda t:int(t*SR)
     ch=m[T(0):T(3)]; e=env(ch); pk=e.max()
@@ -55,7 +58,7 @@ for i,(name,cat,octv,glide,v,x,hn,n) in enumerate(moods):
     bass=m[T(8.5):T(10.5)]; bb=bands(bass)
     b=rd(f'build/review/wav/b{i:02d}.wav'); L=min(len(b),len(band))
     synth_only=b[:L]-band[:L]                                 # (the band renders the same each time: what the preset adds)
-    rows.append(dict(i=i,name=name,cat=cat[4:],oct=int(octv),glide=int(glide),
+    rows.append(dict(newfx=fxs,voices='POLY MONO LEGATO UNISON'.split()[nn[7]],i=i,name=name,cat=cat[4:],oct=int(octv),glide=int(glide),
         table=TAB[v[0]],pos=v[1],detune=v[2],sub=v[3],cutoff=v[4],reso=v[5],envamt=v[6],
         A=v[8],D=v[9],S=v[10],R=v[11],lfo=f"{LS[v[14]]}>{LD[v[15]]} r{v[12]} d{v[13]}",
         lfo2=f"{LS[x[10]]}>{LD[x[11]]} r{x[8]} d{x[9]}",chorus=v[16],delay=v[17],fb=v[19],reverb=v[20],size=v[21],fry=v[22],tape=v[23],
@@ -68,7 +71,7 @@ for i,(name,cat,octv,glide,v,x,hn,n) in enumerate(moods):
         loud_db=round(db(env(m,400).max()),1),top_db=round(10*np.log10(sum(bands(riff)[3:])+1e-9),1),
         with_band_synth_db=round(db(np.sqrt((synth_only**2).mean())),1),band_db=round(db(band_rms),1),mix_peak_db=round(db(np.abs(b).max()),1)))
 json.dump(rows,open('build/review/presets.json','w'),indent=1)
-H=["i","name","cat","table","pos","detune","sub","filter","cutoff","reso","envamt","drive","A","D","S","R","lfo","lfo2","sigh","shadow","chorus","delay","fb","reverb","size","fry","tape","oct","glide"]
+H=["i","name","cat","table","pos","detune","sub","filter","cutoff","reso","envamt","drive","A","D","S","R","lfo","lfo2","sigh","shadow","chorus","delay","fb","reverb","size","fry","tape","newfx","voices","oct","glide"]
 M=["i","name","cat","loud_db","top_db","chord_rms_db","chord_peak_db","attack_ms","release_ms","centroid_hz","centroid_move_pct","level_move_pct","width","noisiness","bands_chord","riff_attack_ms","riff_dip","riff_centroid_hz","bass_rms_db","bass_sub_share","bass_low_share","with_band_synth_db","mix_peak_db"]
 def tab(cols):
     o="| "+" | ".join(cols)+" |\n|"+"---|"*len(cols)+"\n"
