@@ -1002,41 +1002,90 @@ static float lfo_shape_at(int shape, float ph)
     return sy_lfo_shape(shape, ph, lfo_hash(k), lfo_hash(k + 1));
 }
 
-static void schem_body(const drawer_t *p)                /* the wavetable: its frames, stacked */
+/* A wavetable as a landscape (as Serum draws one, or the OP-1 its strings): its eight frames and what lies
+ * between them, NZ slices deep, the first frame nearest, each slice a ridge that hides what is behind and
+ * under it; the far ones fade into the room. The slice being played is lit, and travels through it as the
+ * position moves (the knob, the LFOs, the Sigh: live). A new table: the land morphs into it. It turns a
+ * little, slowly. Drawn back to front into x0..x1, y0..y1. */
+static struct {
+    int8_t tab[2];                                       /* the table shown, and the one it is morphing from */
+    float mix;                                           /* how far along (1: there) */
+} w3[2];                                                 /* (0: the body's, 1: the shadow's) */
+static void wave3d(int which, int32_t x0, int32_t x1, int32_t y0, int32_t y1, int table, float pos, float ghost)
 {
-    const int t = proj.par[P_TABLE];
-    const float pos = pn(P_POS), det = pn(P_DETUNE);
-    float v[56];
-    int f, i;
-    for (f = 4; f >= 1; f--) {                           /* the frames behind, up and right */
-        const float fp = mm_clampf(pos + (float)f * 0.18f, 0.0f, 1.0f);
-        const int32_t dx = f * 3, dy = -f * 2;
+    const int32_t w = x1 - x0, h = y1 - y0;
+    const int big = h > 40, NZ = big ? 26 : 9, NX = big ? 60 : 44;
+    const float turn = mm_sin_turns(bs.t * 0.07f);
+    const float depx = (float)w * (0.2f + 0.04f * turn), depy = (float)h * (big ? 0.5f : 0.4f);
+    const float amp = (float)h * (big ? 0.17f : 0.22f), fw = (float)w - depx - 2.0f;
+    const int zplay = (int)(mm_clampf(pos, 0.0f, 1.0f) * (float)(NZ - 1) + 0.5f);
+    int z, i;
+    if (w3[which].tab[0] != table) {                     /* (another table: from the one shown, in a third of a second) */
+        if (w3[which].mix >= 1.0f)                       /* (mid-morph: it goes on from where it came) */
+            w3[which].tab[1] = w3[which].tab[0];
+        w3[which].tab[0] = (int8_t)table;
+        w3[which].mix = 0.0f;
+    }
+    w3[which].mix = mm_minf(w3[which].mix + bs.dt * 3.0f, 1.0f);
+    for (z = NZ - 1; z >= 0; z--) {
+        const float zf = (float)z / (float)(NZ - 1), fp = zf, k = 1.0f - 0.22f * zf;   /* (the far ones a little smaller) */
+        const float bx = (float)x0 + 1.0f + depx * zf, by = (float)y1 - 1.0f - amp - depy * zf, m = w3[which].mix;
+        const int play = z == zplay;
+        const uint8_t c = play ? PC_SPEC : zf > 0.75f ? PC_WALL : zf > 0.45f ? PC_WALL2 : zf > 0.2f ? PC_BLOBM : PC_BLOB2;
         int32_t lx = 0, ly = 0;
-        for (i = 0; i < 40; i++) {
-            const int32_t x = p->gx0 + dx + i * 2, y = (p->gy0 + p->gy1) / 2 + dy - (int32_t)(sy_shape(t, fp, (float)i / 40.0f) * 7.0f);
-            if (i)
-                px_line(lx, ly, x, y, f == 1 ? PC_WALL2 : PC_WALL);
+        for (i = 0; i <= NX; i++) {
+            const float t = (float)i / (float)NX;
+            float v = sy_shape(table, fp, t);
+            int32_t x, y, yy;
+            if (m < 1.0f)
+                v = v * m + sy_shape(w3[which].tab[1], fp, t) * (1.0f - m);
+            x = (int32_t)(bx + t * fw * k);
+            y = (int32_t)(by - v * amp * k);
+            if (i) {                                     /* the ridge, and under it dark: what is behind is hidden */
+                const int32_t n = x - lx > 0 ? x - lx : 1;
+                int32_t q;
+                for (q = 0; q <= n; q++) {
+                    const int32_t cx = lx + q, cy = ly + (y - ly) * q / n, floor_y = (int32_t)(by + amp * k) + 1;
+                    for (yy = cy + 1; yy <= floor_y && yy <= y1; yy++)
+                        px_pset(cx, yy, PC_BG0);
+                }
+                px_line(lx, ly, x, y, c);
+                if (play && big)
+                    px_line(lx, ly - 1, x, y - 1, PC_BLOB2);   /* (the one playing: bold) */
+            }
             lx = x;
             ly = y;
         }
-    }
-    for (i = 0; i < 56; i++)                             /* the frame playing, in front */
-        v[i] = 0.5f + 0.45f * sy_shape(t, pos, (float)i / 55.0f);
-    {
-        drawer_t q = *p;
-        q.gx1 = p->gx0 + 78;
-        curve(&q, v, 56, PC_BLOB2, PC_BLOBD, 1);
-        if (det > 0.05f) {                               /* the detuned one, sliding */
-            for (i = 0; i < 56; i++)
-                v[i] = 0.5f + 0.45f * sy_shape(t, pos, (float)i / 55.0f + det * 0.1f * mm_sin_turns(bs.t * 0.5f));
-            curve(&q, v, 56, PC_GHOST, 0, 0);
+        if (play && ghost > 0.05f) {                     /* its detuned twin, sliding */
+            for (i = 0; i <= NX; i++) {
+                const float t = (float)i / (float)NX;
+                const int32_t x = (int32_t)(bx + t * fw * k);
+                const int32_t y = (int32_t)(by - sy_shape(table, fp, t + ghost * 0.1f * mm_sin_turns(bs.t * 0.5f)) * amp * k);
+                if (i & 1)
+                    px_pset(x, y, PC_GHOST);
+            }
         }
     }
-    /* the position, a slider of frames on the right */
-    for (f = 0; f < SY_NFRAME; f++) {
-        const int32_t y = p->gy1 - f * (p->gy1 - p->gy0) / (SY_NFRAME - 1);
-        const int on = (int)(pos * (float)(SY_NFRAME - 1) + 0.5f) == f;
-        px_rect(p->gx1 - 12, y, on ? 10 : 6, 1, on ? PC_SPEC : PC_WALL2);
+}
+/* the table big, over the room, while its knobs are being turned (BODY: WAVE or POS; SHADOW: its WAVE) */
+static int wave_big(void)
+{
+    return ui.panel && plat_ms() - ui.focus_t < 1500u &&
+           ((ui.page == PG_BODY && (ui.touched == 0 || ui.touched == 1)) || (ui.page == PG_SHADOW && ui.touched == 0));
+}
+
+static void schem_body(const drawer_t *p)                /* the wavetable: a landscape, the slice playing lit */
+{
+    if (!wave_big())                                     /* (big: it is over the room, not in here too) */
+        wave3d(0, p->gx0, p->gx1 - 14, p->gy0 - 1, p->gy1 + 1, proj.par[P_TABLE], sy_tel.wave_pos, pn(P_DETUNE));
+    {   /* the position, a slider of frames on the right */
+        const float pos = pn(P_POS);
+        int f;
+        for (f = 0; f < SY_NFRAME; f++) {
+            const int32_t y = p->gy1 - f * (p->gy1 - p->gy0) / (SY_NFRAME - 1);
+            const int on = (int)(pos * (float)(SY_NFRAME - 1) + 0.5f) == f;
+            px_rect(p->gx1 - 12, y, on ? 10 : 6, 1, on ? PC_SPEC : PC_WALL2);
+        }
     }
 }
 
@@ -1777,6 +1826,18 @@ static void draw_panel(const geo_t *g)
     if (!tabbed)
         px_text(3, p.y0 + 3, PAGE_NAME[ui.page], PC_BLOB2);
     draw_tabs(p.y0);
+    if (wave_big() && p.y0 > 60) {                      /* the table, big: the room behind dark glass */
+        int32_t x, y;
+        for (y = 9; y < p.y0 - 10; y++)
+            for (x = 0; x < PX_W; x++) {
+                uint8_t *q = &px_fb[y * PX_W + x];
+                *q = ((x ^ y) & 1) ? PC_BG0 : GLASS[*q < PC_N ? *q : 0];
+            }
+        if (ui.page == PG_SHADOW)
+            wave3d(1, 3, PX_W - 4, 12, p.y0 - 13, proj.par[P_BTABLE], sy_tel.wave_pos, 0.0f);
+        else
+            wave3d(0, 3, PX_W - 4, 12, p.y0 - 13, proj.par[P_TABLE], sy_tel.wave_pos, pn(P_DETUNE));
+    }
     {
         const char *what = 0;
         switch (ui.page) {
