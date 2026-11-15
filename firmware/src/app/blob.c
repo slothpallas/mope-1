@@ -1192,7 +1192,7 @@ static void schem_mouth(const drawer_t *p)               /* the envelope: attack
 static void schem_lfo(const drawer_t *p, int shape_p, int rate_p, int depth_p, int dest_p, float phase)
 {
     static const char *const DEST[] = {"POS", "EYES", "PITCH", "VOL", "SHADOW", "TABLE", "DTUN", "WALLS",
-                                       "TEARS", "COPY", "DUST"};
+                                       "TEARS", "COPY", "DUST", "SWIRL", "BURN", "MUMBL"};
     _Static_assert(sizeof DEST / sizeof DEST[0] == LD_N, "a name for every LFO destination");
     const int shape = proj.par[shape_p];
     const float cycles = 1.0f + 3.0f * pn(rate_p), depth = 0.15f + 0.85f * pn(depth_p);
@@ -1670,6 +1670,67 @@ static void schem_loop(const drawer_t *p)
     }
 }
 
+static void schem_swirl(const drawer_t *p)               /* the phaser: its notches, sweeping; a flanger: a comb's many */
+{
+    const float amt = pn(P_SWIRL), dep = pn(P_SWDEPTH), fb = pn(P_SWFB);
+    const float fl = fb > 0.6f ? (fb - 0.6f) * 2.5f : 0.0f;
+    const float u = 0.5f + (0.5f * mm_sin_turns(bs.t * 0.05f * mm_exp2f(pn(P_SWRATE) * 7.0f))) * dep;
+    float v[56];
+    int i;
+    for (i = 0; i < 56; i++) {
+        const float x = (float)i / 55.0f;
+        const float ph = fl > 0.5f ? (x * (3.0f + 5.0f * (1.0f - u))) : (x - u * 0.6f) * 2.2f;   /* (a comb: many teeth, moving apart) */
+        const float notch = 0.5f + 0.5f * mm_sin_turns(ph + 0.25f);
+        v[i] = 0.75f - amt * 0.6f * (1.0f - notch) * (1.0f - notch) * (0.6f + 0.4f * fb);
+    }
+    curve(p, v, 56, PC_BLOB2, PC_BLOBD, 1);
+}
+
+static void schem_burn(const drawer_t *p)                /* a wave through it: clipped, lopsided; then in steps */
+{
+    const float b = pn(P_BURN), tone = pn(P_BNTONE), cr = pn(P_BNCRUSH), rt = pn(P_BNRATE);
+    const float g = 1.0f + 30.0f * b * b, lim = 1.5f - 0.7f * b, q = mm_exp2f(1.0f + 4.0f * (1.0f - cr));
+    const int hold = 1 + (int)(rt * rt * 12.0f);
+    float v[56], y = 0.0f, lp = 0.0f;
+    int i;
+    for (i = 0; i < 56; i++) {
+        if (i % hold == 0) {
+            y = mm_sin_turns((float)i / 28.0f) * 0.8f;
+            if (b > 0.0f) {
+                y = mm_clampf(y * g + 0.2f * b, -lim, lim);
+                y = (y - y * y * y * (4.0f / 27.0f)) * 0.9f;
+            }
+            if (cr > 0.0f)
+                y = mm_floorf(y * q + 0.5f) / q;
+        }
+        lp += (b > 0.0f ? 0.25f + 0.75f * tone : 1.0f) * (y - lp);
+        v[i] = 0.5f + 0.45f * mm_clampf(lp, -1.0f, 1.0f);
+    }
+    curve(p, v, 56, b > 0.5f ? PC_RED : PC_BLOB2, PC_BLOBD, 0);
+}
+
+static void schem_mumble(const drawer_t *p)              /* its peak, where it is now; under it what moves it */
+{
+    static const float PAT[8] = {0.15f, 0.9f, 0.45f, 1.0f, 0.3f, 0.75f, 0.05f, 0.6f};
+    const float amt = pn(P_MUMBLE), range = pn(P_MBRANGE), k = 2.0f - 1.9f * pn(P_MBRESO);
+    const int way = proj.par[P_MBWAY];
+    const float beats = bs.t * (float)proj.par[P_TEMPO] / 60.0f;
+    const float u = way == MB_BEAT ? PAT[(sy_tel.drums_on ? sy_tel.step : (int)(beats * 4.0f)) & 7]
+                  : way == MB_LFO ? 0.5f - 0.5f * mm_sin_turns(beats * 0.25f + 0.25f) : mm_minf(sy_tel.amp_env * 1.5f, 1.0f);
+    float v[56];
+    int i;
+    for (i = 0; i < 56; i++) {
+        const float w = mm_exp2f(((float)i / 55.0f - 0.08f - u * range * 0.8f) * 9.0f), w2 = w * w;
+        const float db = 10.0f * mm_log2f(1.0f / ((1.0f - w2) * (1.0f - w2) + w2 * k * k)) * 0.30103f;
+        v[i] = 0.6f + amt * mm_clampf(db, -36.0f, 18.0f) / 54.0f;
+    }
+    curve(p, v, 56, PC_BLOB2, PC_BLOBD, 1);
+    if (way == MB_BEAT)                                  /* (the beat's pattern, the step it is on lit) */
+        for (i = 0; i < 8; i++)
+            px_rect(p->gx0 + 2 + i * 6, p->gy1 - (int32_t)(PAT[i] * 5.0f), 4, 1,
+                    (((sy_tel.drums_on ? sy_tel.step : (int)(beats * 4.0f)) & 7) == i) ? PC_SPEC : PC_WALL2);
+}
+
 static void schem_macro(const drawer_t *p)               /* the macros: four dials, the middle the sound as it is made */
 {
     static const uint8_t KC[4] = {PC_TEAR, PC_RED, PC_XP, PC_BLOB2};
@@ -1898,6 +1959,9 @@ static void draw_panel(const geo_t *g)
     grid(&p);
     switch (ui.page) {
     case PG_MACRO: schem_macro(&p); break;
+    case PG_SWIRL: schem_swirl(&p); break;
+    case PG_BURN: schem_burn(&p); break;
+    case PG_MUMBLE: schem_mumble(&p); break;
     case PG_BODY: schem_body(&p); break;
     case PG_EYES: schem_eyes(&p); break;
     case PG_MOUTH: schem_mouth(&p); break;

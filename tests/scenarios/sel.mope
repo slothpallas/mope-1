@@ -1,4 +1,4 @@
-# FX goes round the effects: the walls, the tears, the copies, the dust, and back (pressed again, slowly:
+# FX goes round the effects: the walls, the tears, the copies, the dust, the swirl, the burn, the mumble, and back (pressed again, slowly:
 # twice fast keeps a drawer open). Each page's knobs turn its own effect.
 wait 300
 tap FX
@@ -26,6 +26,30 @@ tapkey 12
 wait 400
 expect par62 >40
 shot 03_dust.png
+wait 1000
+# ...the swirl, the burn, the mumble: each one's first knob turns it up
+tap FX
+expect page 19
+spin K1 60
+wait 300
+expect par74 60
+shot 04_swirl.png
+wait 1000
+tap FX
+expect page 20
+spin K1 55
+wait 300
+expect par78 55
+shot 05_burn.png
+wait 1000
+tap FX
+expect page 21
+spin K1 70
+spin K2 1
+wait 300
+expect par82 70
+expect par83 1
+shot 06_mumble.png
 wait 1000
 tap FX
 expect page 5

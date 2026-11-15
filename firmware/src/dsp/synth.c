@@ -1156,10 +1156,11 @@ typedef struct {
     float pos, cut, pitch, vol, shadow;
     float table, detune, verb, echo, copies, dust;   /* (tables: +-4 at full depth; the rest: added to 0..1) */
     int scanning;                                    /* an LFO is on the tables: a second read, crossfading */
+    float swirl, burn, mumble;                       /* (the newer effects' amounts: added to 0..1) */
     float reso, envk, drv, drvk, attk, swk, swadd;   /* the macros': more resonance, the filter's envelope x, a push
                                                         added and x, the attack's speed x, the Sigh's sweep x and + */
 } mods_t;
-#define MODS_NONE {0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f}
+#define MODS_NONE {0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f}
 SY_FAST static void lfo_into(mods_t *m, float lfo, float depth, int dest_p)
 {
     switch (par[dest_p]) {
@@ -1176,6 +1177,9 @@ SY_FAST static void lfo_into(mods_t *m, float lfo, float depth, int dest_p)
     case LD_WALLS: m->verb += lfo * depth; break;
     case LD_TEARS: m->echo += lfo * depth; break;
     case LD_COPIES: m->copies += lfo * depth; break;
+    case LD_SWIRL: m->swirl += lfo * depth; break;
+    case LD_BURN: m->burn += lfo * depth; break;
+    case LD_MUMBLE: m->mumble += lfo * depth; break;
     default: m->dust += lfo * depth; break;
     }
 }
@@ -1244,6 +1248,7 @@ SY_FAST static inline float amp_step(voice_t *v, float att, float dec, float sus
 
 static float tpos_was;                               /* last block's table (the scan glides between blocks) */
 static float fx_cost(void);
+static float sw_amt, bn_amt, bn_crush, bn_rate, mb_amt;   /* SWIRL, BURN, MUMBLE: how much of each now (see fxn_chunk) */
 SY_FAST static void render_voices(float *ol, float *or_, uint32_t n, const mods_t *mods)
 {
     mods_t md = *mods;
@@ -2522,7 +2527,8 @@ SY_FAST static void punch_chunk(void)
 static const float PU_COST[PU_N] = {10.0f, 10.5f, 8.5f, 7.0f, 5.0f, 5.0f, 0.2f, 12.5f, 1.2f, 2.5f, 1.0f, 0.3f};
 SY_FAST static float fx_cost(void)
 {
-    float c = par[P_DUST] || par[P_CRACKLE] ? 1.0f : 0.0f;
+    float c = (par[P_DUST] || par[P_CRACKLE] ? 1.0f : 0.0f) + (sw_amt > 0.0f ? 3.0f : 0.0f) +
+              (bn_amt > 0.0f || bn_crush > 0.0f || bn_rate > 0.0f ? 2.0f : 0.0f) + (mb_amt > 0.0f ? 2.0f : 0.0f);   /* (the newer three: estimates) */
     int fx;
     if (pu_cur >= 0)                                    /* (the buffer one: still costing while it fades out) */
         c += PU_COST[pu_cur];
@@ -3756,6 +3762,131 @@ SY_FAST static void drain(void)
 static float bl[BLK] SY_POOL, br[BLK] SY_POOL;
 static float lim_g = 1.0f;
 
+/* ------------------------------------------------- swirl, burn, mumble --- */
+/* Three more effects on the voices (after the copies, before the mixer: the band stays clean), each nothing
+ * and costing nothing at 0. Their rates are worked out once a 16-frame chunk.
+ *   SWIRL   a phaser: four all-pass stages a side, swept by its own slow LFO (the two sides apart), fed back;
+ *           Feedback past 60 it turns into a flanger: a short line (0.4 .. 6 ms) swept the same way
+ *   BURN    a fuzz AFTER the filter (Drive is before it, Fry is the whole voice squashed): a hard asymmetric
+ *           clip with its own tone; then fewer bits (Crush) and a lower sample rate (Rate), which stay on
+ *   MUMBLE  a resonant low-pass over it all that moves: with the beat (a pattern of sixteenths), with a
+ *           slow LFO (a bar long), or with the playing (each note opens it: a wah) */
+#define SWL_N 512u
+static float swl_buf[SWL_N] SY_POOL;
+static uint32_t swl_w;
+static float sw_ph, sw_a[2], sw_z[2][4], sw_fbz[2], sw_fb, sw_fl, sw_back[2];
+static float bn_g = 1.0f, bn_comp = 1.0f, bn_hard, bn_lp = 1.0f, bn_z[2], bn_dc[2], bn_q = 4096.0f, bn_iq, bn_hold = 1.0f, bn_cnt, bn_s[2];
+static float mb_a1, mb_a2, mb_a3, mb_k = 1.0f, mb_s1[2], mb_s2[2], mb_u, mb_env, mb_ph;
+SY_FAST static void fxn_chunk(const mods_t *md, float bite)
+{
+    sw_amt = mm_clampf(pf(P_SWIRL) + md->swirl, 0.0f, 1.0f);
+    bn_amt = mm_clampf(pf(P_BURN) + md->burn + bite * 0.5f, 0.0f, 1.0f);
+    bn_crush = pf(P_BNCRUSH);
+    bn_rate = pf(P_BNRATE);
+    mb_amt = mm_clampf(pf(P_MUMBLE) + md->mumble, 0.0f, 1.0f);
+    if (sw_amt > 0.0f) {
+        const float dep = pf(P_SWDEPTH), fb = pf(P_SWFB);
+        int c;
+        sw_ph += 0.05f * mm_exp2f(pf(P_SWRATE) * 7.0f) * 16.0f / SY_SR;   /* 0.05 .. 6 Hz */
+        sw_ph -= (float)(int)sw_ph;
+        sw_fl = fb > 0.6f ? (fb - 0.6f) * 2.5f : 0.0f;                    /* (how much of it is the flanger) */
+        sw_fb = mm_minf(fb * 1.45f, 0.87f);
+        for (c = 0; c < 2; c++) {
+            const float u = 0.5f + 0.5f * mm_sin_turns(sw_ph + (float)c * 0.25f);   /* (0 .. 1, the sides a quarter apart) */
+            const float hz = 220.0f * mm_exp2f((0.5f + (u - 0.5f) * dep) * 4.5f), t = mm_tanf(MM_PI * hz / SY_SR);
+            sw_a[c] = (1.0f - t) / (1.0f + t);
+            sw_back[c] = 18.0f + (0.5f + (u - 0.5f) * dep) * 250.0f;
+        }
+    }
+    if (bn_amt > 0.0f || bn_crush > 0.0f || bn_rate > 0.0f) {
+        const float b = bn_amt, tone = pf(P_BNTONE);
+        bn_g = 1.0f + 30.0f * b * b;
+        bn_hard = b;
+        bn_comp = (1.0f + 0.6f * b) / (1.0f + 5.0f * b);                  /* (squashed is louder: taken back) */
+        bn_lp = b > 0.0f ? 0.05f + 0.95f * tone * mm_sqrtf(tone) : 1.0f;
+        bn_q = mm_exp2f(11.0f - 9.0f * bn_crush);                         /* 11 bits .. 2 */
+        bn_iq = 1.0f / bn_q;
+        bn_hold = 1.0f + bn_rate * bn_rate * 44.0f;                       /* 44.1 kHz .. 1 kHz */
+    }
+    if (mb_amt > 0.0f) {
+        static const float PAT[8] = {0.15f, 0.9f, 0.45f, 1.0f, 0.3f, 0.75f, 0.05f, 0.6f};
+        float u, g;
+        mb_ph += 16.0f * 4.0f * beat_inv;                                 /* sixteenths (the band's tempo) */
+        if (mb_ph >= 16.0f)
+            mb_ph -= 16.0f;
+        switch (par[P_MBWAY]) {
+        case MB_BEAT: u = PAT[(dr_on ? (uint32_t)dr_step : (uint32_t)mb_ph) & 7u]; break;
+        case MB_LFO: u = 0.5f - 0.5f * mm_sin_turns(mb_ph * (1.0f / 16.0f) + 0.25f); break;
+        default: u = mm_minf(mb_env * 3.0f, 1.0f); break;                 /* (the playing: its level, a moment ago) */
+        }
+        mb_u += (u - mb_u) * (par[P_MBWAY] == MB_BEAT ? 0.25f : 0.12f);   /* (a step: there in a few ms, no click) */
+        g = mm_tanf(MM_PI * mm_minf(160.0f * mm_exp2f(mb_u * pf(P_MBRANGE) * 6.5f), 16000.0f) / SY_SR);
+        mb_k = 2.0f - 1.9f * pf(P_MBRESO);
+        mb_a1 = 1.0f / (1.0f + g * (g + mb_k));
+        mb_a2 = g * mb_a1;
+        mb_a3 = g * mb_a2;
+    }
+}
+SY_FAST static inline void fxn(float *l, float *r)
+{
+    float x[2] = {*l, *r};
+    int c, i;
+    if (bn_amt > 0.0f || bn_crush > 0.0f || bn_rate > 0.0f) {
+        if (bn_amt > 0.0f)
+            for (c = 0; c < 2; c++) {
+                float y = x[c] * bn_g + 0.2f * bn_hard;                   /* (lopsided: even harmonics too) */
+                const float lim = 1.5f - 0.7f * bn_hard;                  /* (harder: it clips sooner, squarer) */
+                y = y > lim ? lim : y < -lim ? -lim : y;
+                y -= y * y * y * (4.0f / 27.0f);                          /* (a cubic knee: no divide) */
+                bn_dc[c] += 0.002f * (y - bn_dc[c]);                      /* (the lopsidedness's DC: out) */
+                y = (y - bn_dc[c]) * bn_comp;
+                bn_z[c] += bn_lp * (y - bn_z[c]);
+                x[c] += (bn_z[c] - x[c]) * mm_minf(bn_amt * 4.0f, 1.0f);  /* (the first quarter: it comes in) */
+            }
+        if (bn_crush > 0.0f || bn_rate > 0.0f) {
+            if ((bn_cnt += 1.0f) >= bn_hold) {
+                bn_cnt -= bn_hold;
+                bn_s[0] = mm_floorf(x[0] * bn_q + 0.5f) * bn_iq;
+                bn_s[1] = mm_floorf(x[1] * bn_q + 0.5f) * bn_iq;
+            }
+            x[0] = bn_s[0];
+            x[1] = bn_s[1];
+        }
+    }
+    if (mb_amt > 0.0f) {
+        const float a = mm_fabsf(x[0]) + mm_fabsf(x[1]);
+        mb_env += (a > mb_env ? 0.02f : 0.0004f) * (a - mb_env);
+        for (c = 0; c < 2; c++) {
+            const float v3 = x[c] - mb_s2[c], v1 = mb_a1 * mb_s1[c] + mb_a2 * v3, v2 = mb_s2[c] + mb_a2 * mb_s1[c] + mb_a3 * v3;
+            mb_s1[c] = 2.0f * v1 - mb_s1[c];
+            mb_s2[c] = 2.0f * v2 - mb_s2[c];
+            x[c] += (v2 - x[c]) * mb_amt;
+        }
+    }
+    if (sw_amt > 0.0f) {
+        swl_buf[swl_w] = (x[0] + x[1]) * 0.5f + sw_fl * sw_fb * 0.6f * (sw_fbz[0] + sw_fbz[1]) * 0.5f;
+        for (c = 0; c < 2; c++) {
+            float y = x[c] * (1.0f - 0.5f * sw_fb) + sw_fbz[c] * sw_fb * (1.0f - sw_fl), wet;   /* (fed back: the way in turned down as much) */
+            for (i = 0; i < 4; i++) {
+                const float o = sw_a[c] * y + sw_z[c][i];
+                sw_z[c][i] = y - sw_a[c] * o;
+                y = o;
+            }
+            wet = y;
+            if (sw_fl > 0.0f) {                                           /* the flanger: the line, swept */
+                const uint32_t ib = (uint32_t)sw_back[c], i1 = (swl_w - ib) & (SWL_N - 1u), i2 = (i1 - 1u) & (SWL_N - 1u);
+                const float f = sw_back[c] - (float)ib, d = swl_buf[i1] + (swl_buf[i2] - swl_buf[i1]) * f;
+                wet += (d - wet) * sw_fl;
+            }
+            sw_fbz[c] = wet;
+            x[c] += (wet - x[c]) * 0.5f * sw_amt;
+        }
+        swl_w = (swl_w + 1u) & (SWL_N - 1u);
+    }
+    *l = x[0];
+    *r = x[1];
+}
+
 /* power-on: up from silence, slowly (a curve: the first second barely there) */
 static float wake = 1.0f, wake_step;
 void sy_fade_in(uint32_t ms)
@@ -3894,6 +4025,7 @@ SY_FAST void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
         wow_ph -= (float)(int)wow_ph;
         flut_ph += 6.5f * 16.0f / SY_SR;
         fry_chunk();
+        fxn_chunk(&md, mbu);
         gunk_chunk();
         punch_chunk();
         flut_ph -= (float)(int)flut_ph;
@@ -3913,6 +4045,8 @@ SY_FAST void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
             float l = bl[j], r = br[j], el, er, rl, rr, dm, bass;
             fry(&l, &r);
             chorus(&l, &r, chorus_amt, d, ch_narrow);
+            if (sw_amt > 0.0f || bn_amt > 0.0f || bn_crush > 0.0f || bn_rate > 0.0f || mb_amt > 0.0f)
+                fxn(&l, &r);
             l *= synth_g;                               /* the mixer: the voices' fader */
             r *= synth_g;
             count_run();

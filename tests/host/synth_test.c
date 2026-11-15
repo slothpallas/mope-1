@@ -135,17 +135,6 @@ static float goertzel(float hz)
     return s1 * s1 + s2 * s2 - c * s1 * s2;
 }
 
-/* how bright the capture is: the energy of its sample-to-sample steps against its own (a dull sound: small) */
-static float bright(void)
-{
-    float d = 0.0f, e = 1e-12f;
-    int i;
-    for (i = 1; i < 8192; i++) {
-        d += (cap[i] - cap[i - 1]) * (cap[i] - cap[i - 1]);
-        e += cap[i] * cap[i];
-    }
-    return d / e;
-}
 static void quiet(void)
 {
     sy_panic();
@@ -580,8 +569,78 @@ int main(int argc, char **argv)
             quiet();
             CHECK(worst < -45.0f, "STOP: no grinding as it stops (the most above the tape's top: %.0f dB)", (double)worst);
         }
+        {   /* SWIRL, BURN, MUMBLE: nothing at 0; each does its thing; none much louder or quieter */
+            float dry, wet, h1, h3, mn = 1e30f, mx = 0.0f;
+            int q, eqn;
+            sy_set(P_POS, 0);                            /* (a sine) */
+            sy_set(P_CUTOFF, 100);
+            sy_set(P_GUNK, 0);
+            sy_note_on(69, 100);
+            run(500);
+            dry = level(2000);                           /* (two seconds: its two waves beat, a second a time) */
+            capture();
+            h1 = goertzel(440.0f);
+            h3 = goertzel(1320.0f);
+            CHECK(h3 < h1 * 1e-3f, "a sine, before BURN: no third harmonic (%.0f dB under)", (double)(10.0f * mm_log2f(h1 / (h3 + 1e-20f)) * 0.30103f));
+            sy_set(P_BURN, 100);
+            run(300);
+            wet = level(2000);
+            capture();
+            h1 = goertzel(440.0f);
+            h3 = goertzel(1320.0f);
+            CHECK(h3 > h1 * 0.02f, "BURN: a fuzz (the third harmonic %.0f dB under the first)", (double)(10.0f * mm_log2f(h1 / (h3 + 1e-20f)) * 0.30103f));
+            CHECK(wet > dry * 0.5f && wet < dry * 2.0f, "...about as loud (%.1f dB)", (double)(20.0f * mm_log2f(wet / dry) * 0.30103f));
+            sy_set(P_BURN, 0);
+            sy_set(P_BNRATE, 100);
+            run(200);
+            sy_render(blk, 256, 4096);
+            for (eqn = 0, k = 1; k < 256; k++)
+                eqn += blk[2 * k] == blk[2 * k - 2];
+            CHECK(eqn > 200, "BURN's Rate: samples held (%d of 255 the same as the last)", eqn);
+            sy_set(P_BNRATE, 0);
+            run(200);
+            CHECK(mm_fabsf(level(2000) - dry) < dry * 0.1f, "...and off again: the sound as it was");
+            sy_note_off(69);
+            quiet();
+            sy_set(P_POS, 100);                          /* (a saw) */
+            sy_note_on(69, 100);
+            run(500);
+            dry = level(2000);
+            sy_set(P_MUMBLE, 100);
+            sy_set(P_MBWAY, MB_LFO);
+            run(300);
+            for (q = 0; q < 18; q++) {                   /* (a bar and a bit: its sweep, down and up) */
+                capture();
+                h3 = goertzel(2200.0f);                      /* (its fifth harmonic) */
+                mn = h3 < mn ? h3 : mn;
+                mx = h3 > mx ? h3 : mx;
+            }
+            CHECK(mx > mn * 300.0f, "MUMBLE, slowly: the top comes and goes (%.0f dB)", (double)(10.0f * mm_log2f(mx / (mn + 1e-20f)) * 0.30103f));
+            sy_set(P_MUMBLE, 0);
+            sy_set(P_SWIRL, 100);
+            sy_set(P_SWRATE, 70);
+            run(300);
+            for (mn = 1e30f, mx = 0.0f, q = 0; q < 12; q++) {
+                capture();
+                h3 = goertzel(1320.0f);
+                mn = h3 < mn ? h3 : mn;
+                mx = h3 > mx ? h3 : mx;
+            }
+            wet = level(2000);
+            CHECK(mx > mn * 5.0f, "SWIRL: its notches pass through (a harmonic moves %.0f dB)", (double)(10.0f * mm_log2f(mx / (mn + 1e-20f)) * 0.30103f));
+            CHECK(wet > dry * 0.5f && wet < dry * 1.6f, "...about as loud (%.1f dB)", (double)(20.0f * mm_log2f(wet / dry) * 0.30103f));
+            sy_set(P_SWFB, 100);                         /* (the flanger, all of its feedback: it must not run away) */
+            run(1500);
+            wet = level(2000);
+            CHECK(wet < dry * 2.5f, "SWIRL as a flanger, Feedback 100: it holds (%.1f dB)", (double)(20.0f * mm_log2f(wet / dry) * 0.30103f));
+            sy_set(P_SWFB, 30);
+            sy_set(P_SWRATE, 30);
+            sy_set(P_SWIRL, 0);
+            sy_note_off(69);
+            quiet();
+        }
         {   /* the macros: each takes the sound from one end to the other, not a little way */
-            float lo, hi, v[12], mean, dev[2];
+            float lo, hi, dev[2];
             int end, q;
             sy_set(P_POS, 60);
             sy_set(P_CUTOFF, 55);
@@ -599,33 +658,36 @@ int main(int argc, char **argv)
             hi = goertzel(1980.0f);
             sy_set(P_MEYES, 50);
             CHECK(hi > lo * 1000.0f, "EYES: shut to wide open (its top %.0f dB up)", (double)(10.0f * mm_log2f(hi / (lo + 1e-20f)) * 0.30103f));
+            sy_set(P_POS, 0);                            /* (BITE on a sine, the filter open: what it adds is all its own) */
+            sy_set(P_CUTOFF, 100);
             sy_set(P_MBITE, 0);
-            run(300);
+            run(400);
             capture();
-            lo = bright();
+            lo = goertzel(660.0f) / goertzel(220.0f);    /* (the third harmonic against the first) */
             sy_set(P_MBITE, 100);
             run(600);
             capture();
-            hi = bright();
+            hi = goertzel(660.0f) / goertzel(220.0f);
             sy_set(P_MBITE, 50);
-            CHECK(hi > lo * 4.0f, "BITE: clean to wrecked (%.0f times the edge)", (double)(hi / lo));
+            sy_set(P_POS, 60);
+            sy_set(P_CUTOFF, 55);
+            CHECK(lo < 1e-3f && hi > 0.03f, "BITE: clean to wrecked (a sine's third harmonic: %.0f dB under it, then %.0f)",
+                  (double)(-10.0f * mm_log2f(lo + 1e-20f) * 0.30103f), (double)(-10.0f * mm_log2f(hi + 1e-20f) * 0.30103f));
             run(600);
-            sy_set(P_TABLE, 5);                          /* (FOLD: where in the table is heard) */
-            for (end = 0; end < 2; end++) {             /* NERVES: how far the brightness jumps from one 186 ms to the next */
+            for (end = 0; end < 2; end++) {             /* NERVES: how far the wave's position travels in 1.5 s */
+                float pmin = 1.0f, pmax = 0.0f;
                 sy_set(P_MNERVE, end ? 100 : 0);
-                run(400);
-                for (mean = 0.0f, q = 0; q < 12; q++) {
-                    capture();
-                    v[q] = bright();
-                    mean += v[q] / 12.0f;
+                run(300);
+                for (q = 0; q < 256; q++) {
+                    sy_render(blk, 256, 4096);
+                    pmin = sy_tel.wave_pos < pmin ? sy_tel.wave_pos : pmin;
+                    pmax = sy_tel.wave_pos > pmax ? sy_tel.wave_pos : pmax;
                 }
-                for (dev[end] = 0.0f, q = 1; q < 12; q++)
-                    dev[end] += mm_fabsf(v[q] - v[q - 1]) / (11.0f * mean);
+                dev[end] = pmax - pmin;
             }
             sy_set(P_MNERVE, 50);
-            sy_set(P_TABLE, 0);
-            CHECK(dev[1] > dev[0] * 3.0f && dev[1] > 0.4f, "NERVES: frozen to wild (it jumps %.0f%%, then %.0f%%)",
-                  (double)(dev[0] * 100.0f), (double)(dev[1] * 100.0f));
+            CHECK(dev[0] < 0.01f && dev[1] > 0.5f, "NERVES: frozen to wild (the wave's position stays put, then roams %.0f%% of the table)",
+                  (double)(dev[1] * 100.0f));
             sy_note_off(57);
             quiet();
             for (end = 0; end < 2; end++) {             /* ROOM: what is left 300 ms after a short note */
