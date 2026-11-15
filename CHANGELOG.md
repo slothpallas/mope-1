@@ -4,6 +4,33 @@ A release is a push to `main` that changes `VERSION` to a version with no tag ye
 release build, tags the commit `vX.Y.Z` and publishes the GitHub Release with that version's notes,
 taken from its section below. Add the section in the same pull request as the `VERSION` change.
 
+## 0.5.0
+
+Four macros, three new effects and a bank that shows what the engine can do.
+
+- **Macros on HOME.** HOME now opens four knobs that each take the whole sound from one end to the
+  other, the same four on every preset: **Eyes** (the filter, from muffled to wide open), **Bite**
+  (clean to wrecked, dirtier but not louder), **Nerves** (frozen to wild: the LFOs, the wave, the
+  filter all restless) and **Room** (bone dry to drowned). The middle is the sound as it was made.
+  The blob acts them out: Bite makes it glare, Nerves makes it shiver. HOME again: the Body, then
+  the Shadow. Out of the box the knobs turn the macros.
+- **Three new effects** on FX, after the dust: **Swirl** (a phaser; with Feedback up, a flanger),
+  **Burn** (a fuzz after the filter, plus fewer bits and a lower sample rate) and **Mumble** (a
+  filter over it all that moves with the beat, over a bar, or with your playing). The LFOs can go to
+  each of them, and to the shadow oscillator's pitch, so a sync sound sweeps.
+- **Tabs.** A button with more pages shows them as tabs on top of the drawer, the open one lit.
+- **The wavetable in 3D.** The Body draws the table as a landscape with the slice you hear lit and
+  moving through it. While you turn Table or Position it fills the screen.
+- **Bolder presets, 65 in all.** Twenty new: brass, an organ, bells and chimes, wave sequences, a
+  reese, an 808 sub with glide, a fuzz bass, sync, phaser and FM leads, an auto-wah clav and more.
+  Fourteen re-voiced (brighter, faster, narrower basses), nine slow ones gone (Hold music, Weighted
+  blanket, Tinnitus, Ghosted, Heavy breathing, Sunday scaries, The void stares, Elevator, Slow heart;
+  a saved project that used one gets the sound now in its place). Every preset at one loudness.
+- **Settings scroll one row a click** and stop at the ends: Glide is easy to land on.
+- Fry no longer leaves the silence standing off zero, and the voices' lows are in the middle, so a
+  wide bass stays whole on one speaker.
+- Your projects and presets from 0.4 load as they were, the macros in the middle.
+
 ## 0.4.1
 
 Punches stay clean with the whole band playing.

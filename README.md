@@ -48,6 +48,7 @@ through X0X, FoMni and FiMba-1, the firmware MOPE-1 started from.
 | ![](docs/img/04b_preset_card.png) a preset's card | ![](docs/img/08_deep_fried.png) fry | ![](docs/img/09_drums.png) drums | ![](docs/img/12b_blob_alone.png) the blob alone |
 | ![](docs/img/10b_mixer.png) mixer | ![](docs/img/10c_arp.png) arpeggiator | ![](docs/img/07_void.png) the void | ![](docs/img/13_asleep.png) asleep |
 | ![](docs/img/14_punch.png) a punch (SEL) | ![](docs/img/15_punch_knobs.png) its knobs | ![](docs/img/16_save_as.png) save as | ![](docs/img/17_seq.png) the sequencer |
+| ![](docs/img/18_macros.png) the macros (Bite up) | ![](docs/img/19_wavetable_3d.png) the wavetable in 3D | ![](docs/img/20_swirl.png) the swirl | ![](docs/img/01_chord.png) a chord |
 
 ## The look
 
@@ -93,7 +94,7 @@ Press or hold a part's button: its schematic opens in a dark glass drawer over t
 | EDIT | Eyes | Cutoff | Resonance | Kind (low, band, high, notch, comb, vowel) | Drive |
 | ENV | Mouth | Attack | Decay | Sustain | Release |
 | ENV again | Sigh | Its attack (0: the mouth's) | Its decay | Wave (how far it sweeps the table, either way) | Eyes (how far it opens the filter) |
-| LFO | Vibe | Rate | Depth | Shape (sway, bob, bounce, nod, twitch, heave, wander, stagger, throb) | Destination (position, eyes, voice, volume, shadow, across the tables, detune, walls, tears, copies, dust, swirl, burn, mumble) |
+| LFO | Vibe | Rate | Depth | Shape (sway, bob, bounce, nod, twitch, heave, wander, stagger, throb) | Destination (position, eyes, voice, volume, shadow, across the tables, detune, walls, tears, copies, dust, swirl, burn, mumble, the shadow's pitch) |
 | LFO again | Tremble | Rate | Depth | Shape | Destination |
 | FX | Walls | Reverb | Size | Tone | Rain |
 | FX again | Tears | Delay | Time (in the tempo: sixteenths, triplets, eighths, slow triplets, dotted eighths, the beat, dotted quarters) | Feedback (each echo more worn, like tape) | Dark (past halfway: each echo smeared into a cloud) |
@@ -134,7 +135,7 @@ As on X0X, Melodee and JIANT FM: **PLAY**, **REC** and **SEQ** do what they say.
 - **SAVE** (tapped): SAVE AS, to keep the sound as a preset of yours (below). Everything else saves by itself when quiet. Hold SAVE for 1.5 s, then press it again, to reset everything; the blob keeps its level.
 - The lowest and highest keys together: it gives up.
 
-**The macros** (HOME, and what the knobs turn out of the box): four knobs that each take the whole sound from one end to the other, the middle the sound as it was made. They add to what the other knobs and the LFOs do, so nothing else moves under you. **Eyes**: the filter from nearly shut to wide open. **Bite**: the push into the filter, the fry and the burn, a harder attack: dirtier, not louder; the blob glares. **Nerves**: the LFOs deeper and faster, the wave, the filter and the tables wandering on their own; it shivers. **Room**: reverb, echoes and copies, down to none at all. A preset starts with all four in the middle; your own presets keep where you left them.
+**The macros** (HOME, and what the knobs turn out of the box): four knobs that each take the whole sound from one end to the other, the middle the sound as it was made. They add to what the other knobs and the LFOs do, so nothing else moves under you. **Eyes**: the filter from nearly shut (muffled, not gone) to wide open, always brighter the higher it goes, whatever the filter's kind. **Bite**: the push into the filter, the fry and the burn, a harder attack: dirtier, not louder; the blob glares. **Nerves**: the LFOs deeper and faster, the wave, the filter and the tables wandering on their own; it shivers. **Room**: reverb, echoes and copies, down to none at all. A preset starts with all four in the middle; your own presets keep where you left them.
 
 **Presets** (65, in seven kinds; the card shows the kind):
 - **Pad:** Monday, 3AM, Rain again, Church of nothing, Mood swing, Seen 2:14, Tide goes out
