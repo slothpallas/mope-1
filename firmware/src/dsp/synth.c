@@ -1248,7 +1248,8 @@ SY_FAST static inline float amp_step(voice_t *v, float att, float dec, float sus
 
 static float tpos_was;                               /* last block's table (the scan glides between blocks) */
 static float fx_cost(void);
-static float sw_amt, bn_amt, bn_crush, bn_rate, mb_amt;   /* SWIRL, BURN, MUMBLE: how much of each now (see fxn_chunk) */
+static float sw_amt, bn_amt, bn_crush, bn_rate, mb_amt;
+static float eyes_tilt, et_z[2];                        /* EYES on the other filter kinds: brighter (+) or darker (-) */   /* SWIRL, BURN, MUMBLE: how much of each now (see fxn_chunk) */
 SY_FAST static void render_voices(float *ol, float *or_, uint32_t n, const mods_t *mods)
 {
     mods_t md = *mods;
@@ -1524,6 +1525,7 @@ SY_FAST static void render_voices(float *ol, float *or_, uint32_t n, const mods_
 /* Level-matched: the drive's gain is taken back out as much as a typical level (0.3) would gain, so
  * more Fry is more grit, not more loud. It glides (a preset change doesn't slam it in). */
 static float fry_hold_l, fry_hold_r, fry_cnt, fry_now, fry_g = 1.0f, fry_comp = 1.0f, fry_dc;
+static float fry_ein, fry_eout, fry_mg = 1.0f;          /* (what went in and came out, this chunk; the gain that evens them) */
 SY_FAST static void fry_chunk(void)                            /* every 16 frames */
 {
     fry_now += (mm_clampf(pf(P_FRY) * mac_fryk + mac_fry, 0.0f, 1.0f) - fry_now) * 0.012f;
@@ -1533,6 +1535,11 @@ SY_FAST static void fry_chunk(void)                            /* every 16 frame
     fry_comp = 0.3f / mm_tanhf(0.3f * fry_g) / (1.0f + 1.86f * fry_now * fry_now);   /* (squashed is louder: fitted) */
     fry_dc = mm_tanhf(0.08f * fry_now);                  /* (its lopsidedness left silence standing off zero, -33 dB of
                                                             nothing: taken back out) */
+    /* and then, as heard: out as loud as in (the fit above is for a typical level; a quiet sound or a loud one
+     * came out up to 10 dB off). Slow (~40 ms) and only over sound, so it doesn't pump or lift the silence. */
+    if (fry_now > 0.0f && fry_ein > 1e-7f && fry_eout > 1e-9f)
+        fry_mg += (mm_clampf(mm_sqrtf(fry_ein / fry_eout), 0.25f, 4.0f) - fry_mg) * 0.01f;
+    fry_ein = fry_eout = 0.0f;
 }
 SY_FAST static inline void fry(float *l, float *r)
 {
@@ -1552,8 +1559,12 @@ SY_FAST static inline void fry(float *l, float *r)
         yl = fry_hold_l;
         yr = fry_hold_r;
     }
-    *l = (yl - fry_dc) * comp;
-    *r = (yr - fry_dc) * comp;
+    fry_ein += *l * *l + *r * *r;
+    yl = (yl - fry_dc) * comp;
+    yr = (yr - fry_dc) * comp;
+    fry_eout += yl * yl + yr * yr;
+    *l = yl * fry_mg;
+    *r = yr * fry_mg;
 }
 
 /* ------------------------------------------------------------- chorus --- */
@@ -3777,6 +3788,7 @@ static float lim_g = 1.0f;
 static float swl_buf[SWL_N] SY_POOL;
 static uint32_t swl_w;
 static float sw_ph, sw_a[2], sw_z[2][4], sw_fbz[2], sw_fb, sw_fl, sw_back[2];
+static float bn_ein, bn_eout, bn_mg = 1.0f;             /* (BURN, as the fry: in and out evened) */
 static float bn_g = 1.0f, bn_comp = 1.0f, bn_hard, bn_lp = 1.0f, bn_z[2], bn_dc[2], bn_q = 4096.0f, bn_iq, bn_hold = 1.0f, bn_cnt, bn_s[2];
 static float mb_a1, mb_a2, mb_a3, mb_k = 1.0f, mb_s1[2], mb_s2[2], mb_u, mb_env, mb_ph;
 SY_FAST static void fxn_chunk(const mods_t *md, float bite)
@@ -3815,7 +3827,10 @@ SY_FAST static void fxn_chunk(const mods_t *md, float bite)
         bn_q = mm_exp2f(11.0f - 9.0f * bn_crush);                         /* 11 bits .. 2 */
         bn_iq = 1.0f / bn_q;
         bn_hold = 1.0f + bn_rate * bn_rate * 44.0f;                       /* 44.1 kHz .. 1 kHz */
+        if (bn_amt > 0.0f && bn_ein > 1e-7f && bn_eout > 1e-9f)
+            bn_mg += (mm_clampf(mm_sqrtf(bn_ein / bn_eout), 0.25f, 4.0f) - bn_mg) * 0.01f;
     }
+    bn_ein = bn_eout = 0.0f;
     if (mb_amt > 0.0f) {
         static const float PAT[8] = {0.15f, 0.9f, 0.45f, 1.0f, 0.3f, 0.75f, 0.05f, 0.6f};
         float u, g;
@@ -3840,7 +3855,8 @@ SY_FAST static inline void fxn(float *l, float *r)
     float x[2] = {*l, *r};
     int c, i;
     if (bn_amt > 0.0f || bn_crush > 0.0f || bn_rate > 0.0f) {
-        if (bn_amt > 0.0f)
+        if (bn_amt > 0.0f) {
+            bn_ein += x[0] * x[0] + x[1] * x[1];
             for (c = 0; c < 2; c++) {
                 float y = x[c] * bn_g + 0.2f * bn_hard;                   /* (lopsided: even harmonics too) */
                 const float lim = 1.5f - 0.7f * bn_hard;                  /* (harder: it clips sooner, squarer) */
@@ -3850,7 +3866,10 @@ SY_FAST static inline void fxn(float *l, float *r)
                 y = (y - bn_dc[c]) * bn_comp;
                 bn_z[c] += bn_lp * (y - bn_z[c]);
                 x[c] += (bn_z[c] - x[c]) * mm_minf(bn_amt * 4.0f, 1.0f);  /* (the first quarter: it comes in) */
+                bn_eout += x[c] * x[c];
+                x[c] *= bn_mg;
             }
+        }
         if (bn_crush > 0.0f || bn_rate > 0.0f) {
             if ((bn_cnt += 1.0f) >= bn_hold) {
                 bn_cnt -= bn_hold;
@@ -3961,10 +3980,15 @@ SY_FAST void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
     {
         const float c = pf(P_CUTOFF) * 9.3f;            /* (the cutoff's octaves over 30 Hz) */
         const int ft = par[P_FTYPE];
-        md.cut += ft == FT_LOW ? (me < 0.0f ? me * mm_maxf(c - 1.6f, 0.0f) : me * (9.3f - c))
-                : ft == FT_HIGH ? -me * 3.0f : me * 2.0f;
-        md.cut += mbu * 0.8f;
-        md.vol *= 1.0f / (1.0f + 0.9f * mbu);           /* (BITE: what the push adds in level, back out) */
+        /* EYES on a low-pass: the cutoff from ~250 Hz (no lower: shut is muffled, not gone) to all the way open;
+         * on the other kinds their cutoff +-2 octaves, the same way (up: brighter, a high-pass thinner), and a
+         * tilt on the voices after them (below), as their cutoff alone may darken (a band moving past the
+         * sound) or say a vowel. What closing takes in level is given back, most of it. */
+        const float eo = ft == FT_LOW ? (me < 0.0f ? me * mm_maxf(c - 3.0f, 0.0f) : me * (9.3f - c)) : me * (ft == FT_HIGH ? 2.0f : 1.0f);
+        md.cut += eo + mbu * 1.5f;                      /* (BITE: a brighter edge too) */
+        md.vol *= mm_exp2f(mm_clampf(-eo * (eo < 0.0f ? 0.32f : 0.08f), -1.0f, 1.6f));
+        eyes_tilt = (ft == FT_LOW ? 0.0f : me) + mbu * 0.5f;
+        md.vol *= 1.0f / (1.0f + 0.15f * mbu);          /* (BITE: what the push adds in level, back out; the fry and the burn even themselves) */
     }
     md.reso = (me > 0.0f ? me : 0.0f) * 0.25f;
     md.envk = mm_maxf(1.0f + me * 0.6f + mbu * 0.5f, 0.0f);
@@ -4022,6 +4046,16 @@ SY_FAST void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
     for (j = 0; j < n; j++)
         bl[j] = br[j] = 0.0f;
     render_voices(bl, br, n, &md);
+    if (eyes_tilt != 0.0f) {                            /* (a shelf over ~900 Hz up to +12 dB; or a low-pass down to ~500 Hz) */
+        const float up = eyes_tilt > 0.0f ? eyes_tilt * 3.0f : 0.0f, k = eyes_tilt > 0.0f ? 0.12f : 0.07f + 0.25f * (1.0f + eyes_tilt);
+        const float dn = eyes_tilt < 0.0f ? -eyes_tilt : 0.0f, back = 1.0f / (1.0f + up * 0.35f);
+        for (j = 0; j < n; j++) {
+            et_z[0] += k * (bl[j] - et_z[0]);
+            et_z[1] += k * (br[j] - et_z[1]);
+            bl[j] = (bl[j] + up * (bl[j] - et_z[0]) - dn * (bl[j] - et_z[0])) * back;
+            br[j] = (br[j] + up * (br[j] - et_z[1]) - dn * (br[j] - et_z[1])) * back;
+        }
+    }
     for (j = 0; j < SY_SCOPE; j++) {                    /* the voices alone: the blob's outline */
         uint32_t s = j * n / SY_SCOPE;
         sy_tel.scope[j] = (bl[s] + br[s]) * 1.5f;

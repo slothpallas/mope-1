@@ -78,7 +78,7 @@ static float pn(int p)
     const float me = mac(P_MEYES), mb = mac(P_MBITE), mn = mac(P_MNERVE), mr = mac(P_MROOM);
     const float mbu = mb > 0.0f ? mb : 0.0f, mnu = mn > 0.0f ? mn : 0.0f, mru = mr > 0.0f ? mr : 0.0f;
     switch (p) {
-    case P_CUTOFF: v += (me < 0.0f ? me * mm_maxf(v - 0.17f, 0.0f) : me * (1.0f - v)) + mbu * 0.09f; break;   /* (a low-pass's; near enough for the rest) */
+    case P_CUTOFF: v += (me < 0.0f ? me * mm_maxf(v - 0.32f, 0.0f) : me * (1.0f - v)) + mbu * 0.09f; break;   /* (a low-pass's; near enough for the rest) */
     case P_RESO: v += (me > 0.0f ? me : 0.0f) * 0.25f; break;
     case P_DRIVE: v = v * (mb < 0.0f ? 1.0f + mb : 1.0f) + mbu * 0.9f; break;
     case P_FRY: v = v * (mb < 0.0f ? 1.0f + mb : 1.0f) + mbu * 0.6f; break;
