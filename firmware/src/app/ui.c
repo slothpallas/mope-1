@@ -55,7 +55,7 @@ static const char *const PAGE_LABEL[NPAGES][4] = {
     {"MODE", "RATE", "OCT", "GATE"}, {"STEP", "NOTE", "LEN", "BARS"},
     {"WAVE", "TUNE", "MEET", "LVL"}, {"ATK", "DEC", "WAVE", "EYES"}, {"RATE", "DPTH", "SHPE", "DEST"},
     {"CHOR", "RATE", "DPTH", "WIDE"}, {"TAPE", "CRKL", "DUST", "FRY"}, {"", "", "", ""}, {"MOVE", "ABC", "NEW", "SLOT"},
-    {"EYES", "BITE", "NERV", "ROOM"}, {"SWRL", "RATE", "DPTH", "FDBK"}, {"BURN", "TONE", "CRSH", "RATE"},
+    {"EYES", "BITE", "NERVE", "ROOM"}, {"SWRL", "RATE", "DPTH", "FDBK"}, {"BURN", "TONE", "CRSH", "RATE"},
     {"MMBL", "WAY", "RNGE", "RESO"}};
 #define STAY_MS 3000u                  /* a drawer stays this long after the last touch (a press, a turn) */
 #define DOUBLE_MS 350u                 /* a part's button pressed twice this fast: its page stays until HOME */
