@@ -30,21 +30,23 @@
  *   The 27 keys play F3..G5. The lowest and the highest together: it gives up. */
 
 enum { PG_BODY, PG_EYES, PG_MOUTH, PG_VIBE, PG_TEARS, PG_WALLS, PG_DECK, PG_SETUP, PG_MIX, PG_ARP, PG_LOOP,
-       PG_SHADOW, PG_SIGH, PG_TREMBLE, PG_COPIES, PG_DUST, PG_PUNCH, PG_SAVE, PG_MACRO, NPAGES };
+       PG_SHADOW, PG_SIGH, PG_TREMBLE, PG_COPIES, PG_DUST, PG_PUNCH, PG_SAVE, PG_MACRO, PG_SWIRL, PG_BURN, PG_MUMBLE, NPAGES };
 static const char *const PAGE_NAME[NPAGES] = {"BODY", "EYES", "MOUTH", "VIBE", "TEARS", "WALLS", "TAPE DECK", "SETTINGS",
                                               "MIXER", "ARP", "LOOP", "SHADOW", "SIGH", "TREMBLE", "COPIES", "DUST",
-                                              "PUNCH", "SAVE AS", "MACROS"};
+                                              "PUNCH", "SAVE AS", "MACROS", "SWIRL", "BURN", "MUMBLE"};
 /* the button that opens it (PG_SAVE: none, SAVE's own flow opens it) */
 #define B_NONE 255
 static const uint8_t PAGE_BTN[NPAGES] = {B_HOME, B_EDIT, B_ENV, B_LFO, B_FX, B_FX, B_SEQ, B_GLO, B_GLO, B_ARP, B_SEQ,
-                                         B_HOME, B_ENV, B_LFO, B_FX, B_FX, B_SEL, B_NONE, B_HOME};
-/* the next of its button's pages (pressed again, this one open), round: -1 none. FX goes round four:
- * the walls, the tears, the copies, the dust. HOME: the macros, the body, the shadow. */
+                                         B_HOME, B_ENV, B_LFO, B_FX, B_FX, B_SEL, B_NONE, B_HOME, B_FX, B_FX, B_FX};
+/* the next of its button's pages (pressed again, this one open), round: -1 none. FX goes round seven:
+ * the walls, the tears, the copies, the dust, the swirl, the burn, the mumble. HOME: the macros, the body,
+ * the shadow. */
 static const int8_t PAGE_AGAIN[NPAGES] = {PG_SHADOW, -1, PG_SIGH, PG_TREMBLE, PG_COPIES, PG_TEARS, PG_LOOP, PG_MIX, PG_SETUP,
-                                          -1, PG_DECK, PG_MACRO, PG_MOUTH, PG_VIBE, PG_DUST, PG_WALLS, -1, -1, PG_BODY};
+                                          -1, PG_DECK, PG_MACRO, PG_MOUTH, PG_VIBE, PG_DUST, PG_SWIRL, -1, -1, PG_BODY,
+                                          PG_BURN, PG_MUMBLE, PG_WALLS};
 /* which of its button's pages it is (0 its first), and its bit in proj.seen (found: no more nudges) */
-static const uint8_t PAGE_NTH[NPAGES] = {1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 2, 1, 1, 2, 3, 0, 0, 0};
-static const uint8_t PAGE_SEEN_BIT[NPAGES] = {0, 0, 0, 0, 32, 0, 16, 8, 0, 0, 0, 1, 2, 4, 64, 128, 0, 0, 0};
+static const uint8_t PAGE_NTH[NPAGES] = {1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 2, 1, 1, 2, 3, 0, 0, 0, 4, 5, 6};
+static const uint8_t PAGE_SEEN_BIT[NPAGES] = {0, 0, 0, 0, 32, 0, 16, 8, 0, 0, 0, 1, 2, 4, 64, 128, 0, 0, 0, 0, 0, 0};
 /* the knobs' names, under their meters in the schematic */
 static const char *const PAGE_LABEL[NPAGES][4] = {
     {"WAVE", "POS", "DTUN", "SUB"}, {"CUT", "RES", "TYPE", "DRIV"}, {"ATK", "DEC", "SUS", "REL"},
@@ -53,7 +55,8 @@ static const char *const PAGE_LABEL[NPAGES][4] = {
     {"MODE", "RATE", "OCT", "GATE"}, {"STEP", "NOTE", "LEN", "BARS"},
     {"WAVE", "TUNE", "MEET", "LVL"}, {"ATK", "DEC", "WAVE", "EYES"}, {"RATE", "DPTH", "SHPE", "DEST"},
     {"CHOR", "RATE", "DPTH", "WIDE"}, {"TAPE", "CRKL", "DUST", "FRY"}, {"", "", "", ""}, {"MOVE", "ABC", "NEW", "SLOT"},
-    {"EYES", "BITE", "NERV", "ROOM"}};
+    {"EYES", "BITE", "NERV", "ROOM"}, {"SWRL", "RATE", "DPTH", "FDBK"}, {"BURN", "TONE", "CRSH", "RATE"},
+    {"MMBL", "WAY", "RNGE", "RESO"}};
 #define STAY_MS 3000u                  /* a drawer stays this long after the last touch (a press, a turn) */
 #define DOUBLE_MS 350u                 /* a part's button pressed twice this fast: its page stays until HOME */
 #define LIST_MS 70u                    /* SETTINGS: a row (a word) a step, no quicker than this */
@@ -79,6 +82,9 @@ static const uint8_t PAGE_KNOB[NPAGES][4] = {
     {K_NONE, K_NONE, K_NONE, K_NONE},                /* the punch: the keys, not the knobs */
     {K_NONE, K_NONE, K_NONE, K_NONE},                /* save as: its own knobs (the name, the slot) */
     {P_MEYES, P_MBITE, P_MNERVE, P_MROOM},           /* the macros: the whole sound, four ways */
+    {P_SWIRL, P_SWRATE, P_SWDEPTH, P_SWFB},          /* the swirl: a phaser, a flanger */
+    {P_BURN, P_BNTONE, P_BNCRUSH, P_BNRATE},         /* the burn: a fuzz after the filter; fewer bits, a lower rate */
+    {P_MUMBLE, P_MBWAY, P_MBRANGE, P_MBRESO},        /* the mumble: a filter over it all that moves */
 };
 _Static_assert(sizeof PAGE_KNOB / sizeof PAGE_KNOB[0] == NPAGES && sizeof PAGE_LABEL / sizeof PAGE_LABEL[0] == NPAGES &&
                    sizeof PAGE_NAME / sizeof PAGE_NAME[0] == NPAGES && sizeof PAGE_BTN == NPAGES && sizeof PAGE_AGAIN == NPAGES &&
@@ -226,7 +232,8 @@ static const char *const LEVEL_UP[] = {"OK.", "COOL. I GUESS.", "LEVEL UP. NOTHI
                                        "ACHIEVEMENT: STILL HERE", "GG", "IT LISTENED.", "NEW SKILL: NONE"};
 static const char *const LFO_DEST_NAME[] = {"TO: WAVE POS", "TO: EYES", "TO: VOICE", "TO: VOLUME", "TO: SHADOW",
                                             "TO: WAVETABLE", "TO: DETUNE", "TO: THE WALLS", "TO: THE TEARS",
-                                            "TO: THE COPIES", "TO: THE DUST"};
+                                            "TO: THE COPIES", "TO: THE DUST", "TO: THE SWIRL", "TO: THE BURN",
+                                            "TO: THE MUMBLE"};
 _Static_assert(sizeof LFO_DEST_NAME / sizeof LFO_DEST_NAME[0] == LD_N, "a name for each");
 static const char *const MEET_NAME[] = {"MIX: BESIDE IT", "FM: INSIDE IT", "RING: AROUND IT", "SYNC: TIED TO IT"};
 _Static_assert(sizeof MEET_NAME / sizeof MEET_NAME[0] == MEET_N, "a name for each");
@@ -461,6 +468,11 @@ static void say_choice(int k)
     case P_LFOSHAPE: case P_LFO2SHAPE: ui_caption(LFO_SHAPE_NAME[proj.par[k]], 1200u); break;
     case P_LFO2DEST: ui_caption(LFO_DEST_NAME[proj.par[k]], 1200u); break;
     case P_BMEET: ui_caption(MEET_NAME[proj.par[k]], 1200u); break;
+    case P_MBWAY: {
+        static const char *const WAY[MB_N] = {"WITH THE BEAT.", "SLOWLY, A BAR.", "WHEN YOU PLAY."};
+        ui_caption(WAY[proj.par[k]], 1200u);
+        break;
+    }
     case P_FTYPE: ui_caption(FTYPE_NAME[proj.par[k]], 1200u); break;
     case P_MATTACK: if (!proj.par[k]) ui_caption("WITH THE MOUTH", 1000u); break;
     case P_BTUNE: say_interval(proj.par[k]); break;
