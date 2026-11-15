@@ -4,6 +4,19 @@
 project_t proj;
 presets_t presets;
 
+/* bytes moved to a place that may overlap where they are (the device's library has no memmove) */
+static void move_bytes(void *to, const void *from, size_t n)
+{
+    uint8_t *d = (uint8_t *)to;
+    const uint8_t *q = (const uint8_t *)from;
+    if (d < q)
+        while (n--)
+            *d++ = *q++;
+    else
+        while (n--)
+            d[n] = q[n];
+}
+
 void project_defaults(void)
 {
     int i;
@@ -26,7 +39,7 @@ static int project_valid(int bytes)
         if (len > (int)sizeof proj - now)
             len = (int)sizeof proj - now;
         if (len > 0)
-            memmove((uint8_t *)&proj + now, (const uint8_t *)&proj + was, (size_t)len);
+            move_bytes((uint8_t *)&proj + now, (const uint8_t *)&proj + was, (size_t)len);
         if (len < (int)sizeof proj - now)
             memset((uint8_t *)&proj + now + (len > 0 ? len : 0), 0, sizeof proj - (size_t)now - (size_t)(len > 0 ? len : 0));
     } else if (proj.magic == PROJ_MAGIC && proj.format >= 1u && proj.format < PROJ_FORMAT) {
@@ -147,7 +160,7 @@ int presets_load(void)
         const size_t was = PRESET_NAME + 2u * PRESET_NPAR_1;
         uint8_t *base = (uint8_t *)presets.slot;
         for (k = PRESET_SLOTS - 1; k >= 0; k--) {
-            memmove(&presets.slot[k], base + (size_t)k * was, was);
+            move_bytes(&presets.slot[k], base + (size_t)k * was, was);
             memset(&presets.slot[k].par[PRESET_NPAR_1], 0, 2u * (PRESET_NPAR - PRESET_NPAR_1));
         }
         presets.format = 2;
