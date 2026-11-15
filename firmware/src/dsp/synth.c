@@ -3782,7 +3782,7 @@ static float mb_a1, mb_a2, mb_a3, mb_k = 1.0f, mb_s1[2], mb_s2[2], mb_u, mb_env,
 SY_FAST static void fxn_chunk(const mods_t *md, float bite)
 {
     sw_amt = mm_clampf(pf(P_SWIRL) + md->swirl, 0.0f, 1.0f);
-    bn_amt = mm_clampf(pf(P_BURN) + md->burn + bite * 0.5f, 0.0f, 1.0f);
+    bn_amt = mm_clampf(pf(P_BURN) + md->burn + bite * 0.85f, 0.0f, 1.0f);
     bn_crush = pf(P_BNCRUSH);
     bn_rate = pf(P_BNRATE);
     mb_amt = mm_clampf(pf(P_MUMBLE) + md->mumble, 0.0f, 1.0f);
@@ -3801,10 +3801,16 @@ SY_FAST static void fxn_chunk(const mods_t *md, float bite)
         }
     }
     if (bn_amt > 0.0f || bn_crush > 0.0f || bn_rate > 0.0f) {
-        const float b = bn_amt, tone = pf(P_BNTONE);
+        const float b = bn_amt, tone = pf(P_BNTONE) + (1.0f - pf(P_BNTONE)) * bite * 0.6f;   /* (BITE's burn: bright) */
         bn_g = 1.0f + 30.0f * b * b;
         bn_hard = b;
-        bn_comp = (1.0f + 0.6f * b) / (1.0f + 5.0f * b);                  /* (squashed is louder: taken back) */
+        {   /* (level matched, as the fry: what a typical level, 0.12, comes out at is what it goes back to) */
+            const float lim = 1.5f - 0.7f * b;
+            float y0 = mm_clampf(0.2f * b, -lim, lim), y1 = mm_clampf(0.12f * bn_g + 0.2f * b, -lim, lim);
+            y0 -= y0 * y0 * y0 * (4.0f / 27.0f);
+            y1 -= y1 * y1 * y1 * (4.0f / 27.0f);
+            bn_comp = 0.12f / mm_maxf(y1 - y0, 0.02f);
+        }
         bn_lp = b > 0.0f ? 0.05f + 0.95f * tone * mm_sqrtf(tone) : 1.0f;
         bn_q = mm_exp2f(11.0f - 9.0f * bn_crush);                         /* 11 bits .. 2 */
         bn_iq = 1.0f / bn_q;
@@ -3933,10 +3939,13 @@ SY_FAST void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
     sy_tel.lfo2_phase = lfo2.ph;
     /* The macros (HOME): each takes the whole sound from one end to the other, 50 the sound as it is made.
      * They add to what the knobs and the LFOs do; the knobs' own settings stay where they are.
-     *   EYES    shut and muffled .. wide open: the cutoff +-4 octaves, the filter's envelope, some resonance
-     *   BITE    clean and soft .. wrecked: the push into the filter, the fry, a harder attack, a brighter edge
+     *   EYES    shut and muffled .. wide open: a low-pass from nearly closed, through where the sound has it, to
+     *           all the way open (the other kinds: two octaves each way; a high-pass the other way round, so
+     *           open is still more of it), the filter's envelope, some resonance
+     *   BITE    clean and soft .. wrecked: the push into the filter, the fry, the burn after it, a harder attack,
+     *           a brighter edge; taken back in level, so it is dirtier, not louder
      *   NERVES  frozen .. wild: the LFOs' depth and speed, the Sigh's sweep, and a restlessness of its own
-     *           (the wave's position, the tables, the pitch) for sounds whose LFOs do nothing
+     *           (the wave's position, the filter, the tables, the pitch) for sounds whose LFOs do nothing
      *   ROOM    bone dry .. drowned: the room, the echoes and their feedback, the copies */
     const float me = (float)(par[P_MEYES] - 50) * 0.02f, mb = (float)(par[P_MBITE] - 50) * 0.02f;
     const float mn = (float)(par[P_MNERVE] - 50) * 0.02f, mr = (float)(par[P_MROOM] - 50) * 0.02f;
@@ -3949,7 +3958,14 @@ SY_FAST void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
     mac_fb = mru * 0.25f;
     lfo_into(&md, lfo, d1 * nk + mnu * 0.7f * (1.0f - d1), P_LFODEST);   /* both LFOs, wherever they go: the voices and the effects */
     lfo_into(&md, lfo_b, d2 * nk + mnu * 0.7f * (1.0f - d2), P_LFO2DEST);
-    md.cut += me * 4.0f + mbu * 0.8f;
+    {
+        const float c = pf(P_CUTOFF) * 9.3f;            /* (the cutoff's octaves over 30 Hz) */
+        const int ft = par[P_FTYPE];
+        md.cut += ft == FT_LOW ? (me < 0.0f ? me * mm_maxf(c - 1.6f, 0.0f) : me * (9.3f - c))
+                : ft == FT_HIGH ? -me * 3.0f : me * 2.0f;
+        md.cut += mbu * 0.8f;
+        md.vol *= 1.0f / (1.0f + 0.9f * mbu);           /* (BITE: what the push adds in level, back out) */
+    }
     md.reso = (me > 0.0f ? me : 0.0f) * 0.25f;
     md.envk = mm_maxf(1.0f + me * 0.6f + mbu * 0.5f, 0.0f);
     md.drv = mbu * 0.9f;
@@ -3966,6 +3982,7 @@ SY_FAST void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
         nb -= (float)(int)nb;
         nc -= (float)(int)nc;
         md.pos += mnu * 0.3f * mm_sin_turns(na);
+        md.cut += mnu * 1.3f * mm_sin_turns(nb * 0.5f + na);   /* (the filter wanders, another way) */
         md.pitch += mnu * mnu * 14.0f * mm_sin_turns(nc);
         if (mnu > 0.5f) {                               /* (the top half: across the tables too) */
             md.table += (mnu - 0.5f) * 3.0f * mm_sin_turns(nb);
