@@ -71,7 +71,7 @@ static void run(uint32_t ms)
 
 /* the energy of a sine at hz in a mono capture (Goertzel), relative to the capture's */
 static float cap[8192];
-/* a click in ms of output: the left side's biggest step from one sample to the next, as a multiple of the steps
+/* a click in ms of output: the middle's biggest step from one sample to the next, as a multiple of the steps
  * around it (smooth sound: a few; a jump: many) */
 static float spikiness(uint32_t ms)
 {
@@ -85,7 +85,8 @@ static float spikiness(uint32_t ms)
             x[1] = x[2];
             x[2] = x[3];
             x[3] = x[4];
-            x[4] = (float)blk[2 * k] / 8388608.0f;
+            x[4] = ((float)blk[2 * k] + (float)blk[2 * k + 1]) / 16777216.0f;   /* (the middle: both sides; the lows' width
+                                                                                    * taken out of the sides is not a click) */
             d0 = mm_fabsf(x[1] - x[0]);
             d1 = mm_fabsf(x[2] - x[1]);                 /* (the step in the middle, against the ones beside it) */
             d2 = mm_fabsf(x[3] - x[2]);
