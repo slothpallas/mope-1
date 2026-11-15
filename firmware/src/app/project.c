@@ -19,7 +19,17 @@ void project_defaults(void)
 static int project_valid(int bytes)
 {
     int i, have = (bytes - 8) / 2;               /* the values the saved project holds */
-    if (proj.magic == PROJ_MAGIC && proj.format >= 1u && proj.format < PROJ_FORMAT) {
+    if (proj.magic == PROJ_MAGIC && proj.format == 8u) {
+        /* format 8: as this one, with fewer values: all that came after them moves up to where it is now */
+        const int was = (8 + 2 * PROJ_NPAR_OF(8u) + 3) & ~3, now = (int)offsetof(project_t, xp);
+        int len = bytes - was;
+        if (len > (int)sizeof proj - now)
+            len = (int)sizeof proj - now;
+        if (len > 0)
+            memmove((uint8_t *)&proj + now, (const uint8_t *)&proj + was, (size_t)len);
+        if (len < (int)sizeof proj - now)
+            memset((uint8_t *)&proj + now + (len > 0 ? len : 0), 0, sizeof proj - (size_t)now - (size_t)(len > 0 ? len : 0));
+    } else if (proj.magic == PROJ_MAGIC && proj.format >= 1u && proj.format < PROJ_FORMAT) {
         /* an older format: its XP sat right after its fewer values (4-aligned), then 28 bytes (format 4 on:
          * the pages seen; 6 on: the punches' knobs), then (format 3 on) the one loop: pattern 1 now (its
          * first SY_LOOP_MAX notes). Everything after the values moves up to where it is now. */
@@ -125,12 +135,22 @@ int presets_load(void)
     int n, i, k;
     memset(&presets, 0, sizeof presets);
     n = plat_store_load(OBJ_PRESETS, &presets, sizeof presets);
-    if (n < 12 || presets.magic != PRESETS_MAGIC || presets.npar > PRESET_NPAR) {
+    if (n < 12 || presets.magic != PRESETS_MAGIC || presets.npar > PRESET_NPAR ||
+        (presets.format == 1u && presets.npar > PRESET_NPAR_1)) {
         memset(&presets, 0, sizeof presets);
         presets.magic = PRESETS_MAGIC;
-        presets.format = 1;
+        presets.format = 2;
         presets.npar = P_NPARAMS;
         return -1;
+    }
+    if (presets.format == 1u) {                          /* (0.4.1's: each slot held 80 values; the last slot first) */
+        const size_t was = PRESET_NAME + 2u * PRESET_NPAR_1;
+        uint8_t *base = (uint8_t *)presets.slot;
+        for (k = PRESET_SLOTS - 1; k >= 0; k--) {
+            memmove(&presets.slot[k], base + (size_t)k * was, was);
+            memset(&presets.slot[k].par[PRESET_NPAR_1], 0, 2u * (PRESET_NPAR - PRESET_NPAR_1));
+        }
+        presets.format = 2;
     }
     for (k = 0; k < PRESET_SLOTS; k++)
         for (i = 0; i < P_NPARAMS; i++) {
@@ -145,7 +165,7 @@ int presets_load(void)
 int presets_save(void)
 {
     presets.magic = PRESETS_MAGIC;
-    presets.format = 1;
+    presets.format = 2;
     presets.npar = P_NPARAMS;
     return plat_store_save(OBJ_PRESETS, &presets, sizeof presets);
 }

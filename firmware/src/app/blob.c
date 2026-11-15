@@ -67,8 +67,30 @@ static inline uint32_t b_rnd(void)
 }
 static inline float b_rf(void) { return (float)(b_rnd() >> 8) * (1.0f / 16777216.0f); }
 static inline float b_rs(void) { return b_rf() * 2.0f - 1.0f; }
-static inline float pn(int p) { return (float)(proj.par[p] - sy_param_info(p)->lo) /
-                                       (float)(sy_param_info(p)->hi - sy_param_info(p)->lo); }
+static inline float pn_knob(int p) { return (float)(proj.par[p] - sy_param_info(p)->lo) /
+                                            (float)(sy_param_info(p)->hi - sy_param_info(p)->lo); }
+static inline float mac(int p) { return (float)(proj.par[p] - 50) * 0.02f; }   /* a macro: -1 .. 1, 0 the sound as made */
+/* a setting 0..1 as it sounds: the knob, and what the macros add to it (as the engine does: sy_render), so
+ * the blob and its room show EYES, BITE, NERVES and ROOM as they show the knobs themselves */
+static float pn(int p)
+{
+    float v = pn_knob(p);
+    const float me = mac(P_MEYES), mb = mac(P_MBITE), mn = mac(P_MNERVE), mr = mac(P_MROOM);
+    const float mbu = mb > 0.0f ? mb : 0.0f, mnu = mn > 0.0f ? mn : 0.0f, mru = mr > 0.0f ? mr : 0.0f;
+    switch (p) {
+    case P_CUTOFF: v += me * 0.43f + mbu * 0.09f; break;
+    case P_RESO: v += (me > 0.0f ? me : 0.0f) * 0.25f; break;
+    case P_DRIVE: v = v * (mb < 0.0f ? 1.0f + mb : 1.0f) + mbu * 0.9f; break;
+    case P_FRY: v = v * (mb < 0.0f ? 1.0f + mb : 1.0f) + mbu * 0.6f; break;
+    case P_LFODEPTH: case P_LFO2DEPTH: v = v * (mn < 0.0f ? 1.0f + mn : 1.0f) + mnu * 0.7f * (1.0f - v); break;
+    case P_REVERB: v = v * (mr < 0.0f ? 1.0f + mr : 1.0f) + mru * 0.65f; break;
+    case P_DELAY: v = v * (mr < 0.0f ? 1.0f + mr : 1.0f) + mru * 0.45f; break;
+    case P_CHORUS: v = v * (mr < 0.0f ? 1.0f + mr : 1.0f) + mru * 0.3f; break;
+    case P_FEEDBACK: v += mru * 0.25f; break;
+    default: return v;
+    }
+    return v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v;
+}
 static inline float approach(float v, float to, float k) { return v + (to - v) * (k > 1.0f ? 1.0f : k); }
 static inline float lerpf(float a, float b, float t) { return a + (b - a) * t; }
 
@@ -623,7 +645,11 @@ static void draw_body(const geo_t *g, float sqx, float sqy)
 static void draw_face(const geo_t *g)
 {
     const float s = g->r / 26.0f, cut = pn(P_CUTOFF), reso = pn(P_RESO);
-    const float cx = g->cx, ey = g->cy - 6.0f * s + g->face_dy;   /* (from above: the face sits a little lower) */
+    /* BITE past the middle: anger, all of it in the eyes (the brows down hard at the inner ends, the lids a
+     * glare, the pupils small and, near the top, red). NERVES past the middle: the face can't keep still. */
+    const float mad = mac(P_MBITE) > 0.0f ? mac(P_MBITE) : 0.0f, nrv = mac(P_MNERVE) > 0.0f ? mac(P_MNERVE) : 0.0f;
+    const float cx = g->cx + nrv * 1.2f * s * mm_sin_turns(bs.t * 7.3f);
+    const float ey = g->cy - 6.0f * s + g->face_dy + nrv * 0.8f * s * mm_sin_turns(bs.t * 9.1f);   /* (from above: the face sits a little lower) */
     const int fine = bs.fire > 0.3f;
     /* the filter opens and shuts them all the way (and a little more than linearly, so the middle reads) */
     float open = cut < 0.04f ? 0.0f : 0.08f + 0.92f * mm_sqrtf(cut), brow = sy_tel.mod_env * pn(P_ENVAMT) * 7.0f * s + bs.shrug * 4.0f;
@@ -634,6 +660,12 @@ static void draw_face(const geo_t *g)
     if (bs.stare > 0.5f) {                               /* it looks at you */
         lookx = 0.0f;
         looky = 0.0f;
+    }
+    if (nrv > 0.0f)                                      /* (its eyes dart) */
+        lookx = mm_clampf(lookx + nrv * 0.9f * mm_sin_turns(bs.t * 1.7f) * (mm_sin_turns(bs.t * 0.37f) > 0.0f ? 1.0f : -1.0f), -1.0f, 1.0f);
+    if (mad > 0.0f) {                                    /* (it glares at you, the eyes narrowed) */
+        looky *= 1.0f - mad;
+        open *= 1.0f - 0.3f * mad;
     }
     open *= 1.0f - bs.blink;
     open *= 1.0f - bs.sleep;
@@ -648,8 +680,8 @@ static void draw_face(const geo_t *g)
             px_line((int32_t)(ex - rw), (int32_t)ey, (int32_t)(ex + rw), (int32_t)(ey + (float)e * 1.5f * s), PC_PUPIL);
             px_line((int32_t)(ex - rw), (int32_t)ey + 1, (int32_t)(ex + rw), (int32_t)(ey + (float)e * 1.5f * s) + 1, PC_BLOBD);
         } else {
-            float pr = (3.4f - 2.8f * reso) * s;          /* resonance: the pupils shrink to pinpoints */
-            uint8_t pc = reso > 0.6f ? PC_RED : PC_PUPIL;
+            float pr = (3.4f - 2.8f * reso) * s * (1.0f - 0.35f * mad);   /* resonance: the pupils shrink to pinpoints */
+            uint8_t pc = reso > 0.6f || mad > 0.7f ? PC_RED : PC_PUPIL;
             px_ellipse(ex, ey, rw + 0.8f, rh + 0.8f, PC_BLOBD);   /* the socket */
             px_ellipse(ex, ey, rw, rh, PC_EYE);
             px_ellipse(ex, ey - rh * 0.55f, rw * 0.9f, rh * 0.45f, PC_EYE2);   /* the lid's shadow on it */
@@ -664,7 +696,7 @@ static void draw_face(const geo_t *g)
                 const float lid = ey - rh + (1.0f - open) * rh * 0.9f;
                 int32_t x;
                 for (x = (int32_t)(ex - rw - 1.0f); x <= (int32_t)(ex + rw + 1.0f); x++) {
-                    float slope = ((float)x - ex) * (float)e * 0.35f, ly = lid + slope;
+                    float slope = ((float)x - ex) * (float)e * (0.35f - 1.0f * mad), ly = lid + slope + mad * rh * 0.25f;
                     int32_t y;
                     for (y = (int32_t)(ey - rh - 1.0f); y < (int32_t)ly; y++) {
                         const uint8_t c = px_get(x, y);
@@ -677,12 +709,13 @@ static void draw_face(const geo_t *g)
             }
         }
         {   /* the brows: inner ends up (sad); the mod envelope lifts them */
-            const float by = ey - 8.0f * s - brow;
-            const uint8_t bc = fine ? PC_BLOB0 : PC_PUPIL;
-            px_line((int32_t)(ex - (float)e * 5.5f * s), (int32_t)(by - 3.0f * s), (int32_t)(ex + (float)e * 4.5f * s),
-                    (int32_t)(by + 0.5f * s), bc);
-            px_line((int32_t)(ex - (float)e * 5.5f * s), (int32_t)(by - 3.0f * s) + 1, (int32_t)(ex + (float)e * 4.5f * s),
-                    (int32_t)(by + 0.5f * s) + 1, bc);   /* (thick: it reads from across the room) */
+            const float by = ey - 8.0f * s - brow * (1.0f - mad) + mad * 2.5f * s;
+            const float yin = by - 3.0f * s + mad * 7.5f * s, yout = by + 0.5f * s - mad * 4.0f * s;   /* (angry: the inner ends down) */
+            const uint8_t bc = fine ? PC_BLOB0 : mad > 0.85f ? PC_RED : PC_PUPIL;
+            px_line((int32_t)(ex - (float)e * 5.5f * s), (int32_t)yin, (int32_t)(ex + (float)e * 4.5f * s), (int32_t)yout, bc);
+            px_line((int32_t)(ex - (float)e * 5.5f * s), (int32_t)yin + 1, (int32_t)(ex + (float)e * 4.5f * s), (int32_t)yout + 1, bc);   /* (thick: it reads from across the room) */
+            if (mad > 0.4f)                              /* (and thicker still) */
+                px_line((int32_t)(ex - (float)e * 5.5f * s), (int32_t)yin + 2, (int32_t)(ex + (float)e * 4.5f * s), (int32_t)yout + 2, bc);
         }
         if (reso > 0.85f && open > 0.2f && !fine) {     /* lasers */
             const int32_t x0 = (int32_t)(ex + lookx * 1.5f * s), y0 = (int32_t)ey;
@@ -1588,6 +1621,29 @@ static void schem_loop(const drawer_t *p)
     }
 }
 
+static void schem_macro(const drawer_t *p)               /* the macros: four dials, the middle the sound as it is made */
+{
+    static const uint8_t KC[4] = {PC_TEAR, PC_RED, PC_XP, PC_BLOB2};
+    static const int8_t KP[4] = {P_MEYES, P_MBITE, P_MNERVE, P_MROOM};
+    const uint32_t since = plat_ms() - ui.focus_t;
+    const int32_t cy = (p->gy0 + p->gy1) / 2 + 1;
+    int k, j;
+    for (k = 0; k < 4; k++) {
+        const int32_t cx = 14 + k * 30;
+        const float v = mac(KP[k]), a = 0.375f * v;      /* (-1 .. 1: three quarters of a turn, the middle up) */
+        const int hot = ui.touched == k && since < 1500u;
+        for (j = 0; j <= 28; j++) {                      /* the ring, lit from the middle to where it is */
+            const float u = -1.0f + (float)j / 14.0f, t = 0.375f * u;
+            const int lit = v >= 0.0f ? (u >= 0.0f && u <= v) : (u <= 0.0f && u >= v);
+            const float sx = mm_sin_turns(t) * 7.0f, sy = mm_sin_turns(t + 0.25f) * 7.0f;
+            px_pset(cx + (int32_t)(sx + (sx < 0.0f ? -0.5f : 0.5f)), cy - (int32_t)(sy + (sy < 0.0f ? -0.5f : 0.5f)), lit ? KC[k] : PC_WALL2);
+        }
+        px_pset(cx, cy - 9, PC_DIM);                     /* (the middle's mark) */
+        px_line(cx, cy, cx + (int32_t)(mm_sin_turns(a) * 4.6f + (mm_sin_turns(a) < 0.0f ? -0.5f : 0.5f)),
+                cy - (int32_t)(mm_sin_turns(a + 0.25f) * 4.6f + (mm_sin_turns(a + 0.25f) < 0.0f ? -0.5f : 0.5f)), hot ? PC_WHITE : KC[k]);
+    }
+}
+
 static void schem_setup(const drawer_t *p)               /* the glide: a note sliding to the next */
 {
     const float gl = pn(P_GLIDE);
@@ -1669,7 +1725,7 @@ static void draw_tabs(int32_t y0)
     int8_t pgs[8];
     int n = 0, pg = ui.page, k, full = 0;
     int32_t x = 1;
-    if (PAGE_AGAIN[pg] < 0 || y0 < 9)
+    if (PAGE_AGAIN[pg] < 0 || y0 < 9 || y0 > PX_H - 16)     /* (none, no room over it, or the drawer nearly away) */
         return;
     while (PAGE_NTH[pg] && n++ < 8)                      /* (round to its button's first) */
         pg = PAGE_AGAIN[pg];
@@ -1716,7 +1772,7 @@ static void draw_panel(const geo_t *g)
         return;
     }
     /* the page's name and what it is set to; a button with more pages: their tabs, standing on the drawer */
-    const int tabbed = PAGE_AGAIN[ui.page] >= 0 && p.y0 >= 9;   /* (its name is on its tab) */
+    const int tabbed = PAGE_AGAIN[ui.page] >= 0 && p.y0 >= 9 && p.y0 <= PX_H - 16;   /* (its name is on its tab) */
     const int32_t dots_w = tabbed ? -(px_text_w(PAGE_NAME[ui.page]) + 6) : 0;
     if (!tabbed)
         px_text(3, p.y0 + 3, PAGE_NAME[ui.page], PC_BLOB2);
@@ -1780,6 +1836,7 @@ static void draw_panel(const geo_t *g)
     p.gy1 = ui.page == PG_PUNCH ? p.y0 + 41 : p.y0 + 30;   /* (no knob row: the whole drawer) */
     grid(&p);
     switch (ui.page) {
+    case PG_MACRO: schem_macro(&p); break;
     case PG_BODY: schem_body(&p); break;
     case PG_EYES: schem_eyes(&p); break;
     case PG_MOUTH: schem_mouth(&p); break;
@@ -2682,7 +2739,7 @@ static void blob_draw(void)
         boby *= bs.zoom;
         bobx *= bs.zoom;
     }
-    g.cx = g.rcx + bobx;
+    g.cx = g.rcx + bobx + (mac(P_MNERVE) > 0.0f ? mac(P_MNERVE) * 1.4f * mm_sin_turns(bs.t * 11.0f) : 0.0f);   /* (NERVES: it shivers) */
     g.cy = g.rcy + boby - bs.shrug * 2.0f + 1.2f * mm_sin_turns(bs.t * 0.23f) + bs.pancake * g.r * 0.6f;   /* it hovers */
     g.cy -= bs.focus * g.r;                              /* the part in focus, to the middle */
     g.floor = mm_minf(g.cy + g.r * 0.8f + 6.0f + 3.0f * size, g.ab - 3.0f);   /* (from above: right under it) */

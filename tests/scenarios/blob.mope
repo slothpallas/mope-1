@@ -1,7 +1,7 @@
 # The blob through its parts: a screenshot of each, and what the engine says.
 wait 300
 shot 00_idle.png
-expect page 0
+expect page 18
 # a chord: the mouth opens, buddies appear
 key 12 down
 key 15 down
@@ -173,7 +173,7 @@ key 26 up
 # nothing held: 3 s after the last touch the drawer slides away, the blob alone; then sleep
 tap HOME
 wait 3500
-expect page 0
+expect page 18
 shot 12b_blob_alone.png
 wait 30000
 shot 13_asleep.png
@@ -209,7 +209,7 @@ expect panel 1
 expect page 2
 tap HOME
 wait 200
-expect page 0
+expect page 18
 # pressed twice: it stays, until HOME
 tap EDIT
 tap EDIT
@@ -222,7 +222,7 @@ expect page 5
 tap HOME
 wait 200
 expect latch 0
-expect page 0
+expect page 18
 # ARP held: its page, no toggle; a tap: on, then off
 press ARP
 wait 500

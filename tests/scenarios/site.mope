@@ -98,6 +98,11 @@ wait 300
 midi 90 30 64
 tap HOME
 wait 1500
+expect page 18
+shot page_macro.png
+tap HOME
+wait 1500
+expect page 0
 shot page_body.png
 tap EDIT
 wait 1500
@@ -127,6 +132,8 @@ tap ARP
 wait 400
 tap ARP
 wait 400
+tap HOME
+wait 1000
 tap HOME
 wait 1000
 tap HOME

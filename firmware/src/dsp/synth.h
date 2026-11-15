@@ -51,6 +51,10 @@ enum {
     P_VMODE,                                         /* SETTINGS: how notes take voices (VM_*), part of the sound */
     P_TEMPOMODE, P_AMBI, P_BASSON, P_BSTYLE,         /* SETTINGS: one tempo or each beat's; the room's sound; the auto-bass, its way */
     P_CLOCK, P_PRESS,                                /* SETTINGS: whose tempo (CK_*); what pressing harder does (AT_*) */
+    P_MEYES, P_MBITE, P_MNERVE, P_MROOM,             /* MACROS (HOME): the whole sound from one end to the other, 50 as it is made */
+    P_SWIRL, P_SWRATE, P_SWDEPTH, P_SWFB,            /* SWIRL: a phaser, a flanger with more feedback */
+    P_BURN, P_BNTONE, P_BNCRUSH, P_BNRATE,           /* BURN: a fuzz after the filter, its tone; fewer bits, a lower rate */
+    P_MUMBLE, P_MBWAY, P_MBRANGE, P_MBRESO,          /* MUMBLE: a filter on it all that moves (MB_*: with the beat, an LFO, the playing) */
     P_NPARAMS
 };
 typedef struct {
@@ -72,6 +76,7 @@ enum { ARP_UP, ARP_DOWN, ARP_UPDOWN, ARP_WANDER, ARP_STAB, ARP_NMODE };
 /* where an LFO goes: the table's position, the eyes, the pitch, the volume, the shadow; then across the
  * tables, the detune, and the four effects' amounts */
 enum { LD_POS, LD_CUTOFF, LD_PITCH, LD_VOLUME, LD_SHADOW, LD_TABLE, LD_DETUNE, LD_WALLS, LD_TEARS, LD_COPIES, LD_DUST, LD_N };
+enum { MB_BEAT, MB_LFO, MB_PLAY, MB_N };                             /* what moves MUMBLE's filter */
 enum { MEET_MIX, MEET_FM, MEET_RING, MEET_SYNC, MEET_N };             /* how oscillator B meets A */
 enum { VM_POLY, VM_MONO, VM_LEGATO, VM_UNISON, VM_N };                /* POLY: a voice a note; MONO: one, each note
                                                                          again; LEGATO: one, held notes slide; UNISON: four on one note */

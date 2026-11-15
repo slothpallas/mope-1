@@ -30,21 +30,21 @@
  *   The 27 keys play F3..G5. The lowest and the highest together: it gives up. */
 
 enum { PG_BODY, PG_EYES, PG_MOUTH, PG_VIBE, PG_TEARS, PG_WALLS, PG_DECK, PG_SETUP, PG_MIX, PG_ARP, PG_LOOP,
-       PG_SHADOW, PG_SIGH, PG_TREMBLE, PG_COPIES, PG_DUST, PG_PUNCH, PG_SAVE, NPAGES };
+       PG_SHADOW, PG_SIGH, PG_TREMBLE, PG_COPIES, PG_DUST, PG_PUNCH, PG_SAVE, PG_MACRO, NPAGES };
 static const char *const PAGE_NAME[NPAGES] = {"BODY", "EYES", "MOUTH", "VIBE", "TEARS", "WALLS", "TAPE DECK", "SETTINGS",
                                               "MIXER", "ARP", "LOOP", "SHADOW", "SIGH", "TREMBLE", "COPIES", "DUST",
-                                              "PUNCH", "SAVE AS"};
+                                              "PUNCH", "SAVE AS", "MACROS"};
 /* the button that opens it (PG_SAVE: none, SAVE's own flow opens it) */
 #define B_NONE 255
 static const uint8_t PAGE_BTN[NPAGES] = {B_HOME, B_EDIT, B_ENV, B_LFO, B_FX, B_FX, B_SEQ, B_GLO, B_GLO, B_ARP, B_SEQ,
-                                         B_HOME, B_ENV, B_LFO, B_FX, B_FX, B_SEL, B_NONE};
+                                         B_HOME, B_ENV, B_LFO, B_FX, B_FX, B_SEL, B_NONE, B_HOME};
 /* the next of its button's pages (pressed again, this one open), round: -1 none. FX goes round four:
- * the walls, the tears, the copies, the dust. */
+ * the walls, the tears, the copies, the dust. HOME: the macros, the body, the shadow. */
 static const int8_t PAGE_AGAIN[NPAGES] = {PG_SHADOW, -1, PG_SIGH, PG_TREMBLE, PG_COPIES, PG_TEARS, PG_LOOP, PG_MIX, PG_SETUP,
-                                          -1, PG_DECK, PG_BODY, PG_MOUTH, PG_VIBE, PG_DUST, PG_WALLS, -1, -1};
+                                          -1, PG_DECK, PG_MACRO, PG_MOUTH, PG_VIBE, PG_DUST, PG_WALLS, -1, -1, PG_BODY};
 /* which of its button's pages it is (0 its first), and its bit in proj.seen (found: no more nudges) */
-static const uint8_t PAGE_NTH[NPAGES] = {0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 1, 1, 1, 2, 3, 0, 0};
-static const uint8_t PAGE_SEEN_BIT[NPAGES] = {0, 0, 0, 0, 32, 0, 16, 8, 0, 0, 0, 1, 2, 4, 64, 128, 0, 0};
+static const uint8_t PAGE_NTH[NPAGES] = {1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 2, 1, 1, 2, 3, 0, 0, 0};
+static const uint8_t PAGE_SEEN_BIT[NPAGES] = {0, 0, 0, 0, 32, 0, 16, 8, 0, 0, 0, 1, 2, 4, 64, 128, 0, 0, 0};
 /* the knobs' names, under their meters in the schematic */
 static const char *const PAGE_LABEL[NPAGES][4] = {
     {"WAVE", "POS", "DTUN", "SUB"}, {"CUT", "RES", "TYPE", "DRIV"}, {"ATK", "DEC", "SUS", "REL"},
@@ -52,7 +52,8 @@ static const char *const PAGE_LABEL[NPAGES][4] = {
     {"STYL", "BPM", "SWNG", "HUMN"}, {"MOVE", "SET", "", ""}, {"BPM", "VOX", "DRUM", "BASS"},
     {"MODE", "RATE", "OCT", "GATE"}, {"STEP", "NOTE", "LEN", "BARS"},
     {"WAVE", "TUNE", "MEET", "LVL"}, {"ATK", "DEC", "WAVE", "EYES"}, {"RATE", "DPTH", "SHPE", "DEST"},
-    {"CHOR", "RATE", "DPTH", "WIDE"}, {"TAPE", "CRKL", "DUST", "FRY"}, {"", "", "", ""}, {"MOVE", "ABC", "NEW", "SLOT"}};
+    {"CHOR", "RATE", "DPTH", "WIDE"}, {"TAPE", "CRKL", "DUST", "FRY"}, {"", "", "", ""}, {"MOVE", "ABC", "NEW", "SLOT"},
+    {"EYES", "BITE", "NERV", "ROOM"}};
 #define STAY_MS 3000u                  /* a drawer stays this long after the last touch (a press, a turn) */
 #define DOUBLE_MS 350u                 /* a part's button pressed twice this fast: its page stays until HOME */
 #define LIST_MS 70u                    /* SETTINGS: a row (a word) a step, no quicker than this */
@@ -77,6 +78,7 @@ static const uint8_t PAGE_KNOB[NPAGES][4] = {
     {P_TAPE, P_CRACKLE, P_DUST, P_FRY},              /* the dust: an old record */
     {K_NONE, K_NONE, K_NONE, K_NONE},                /* the punch: the keys, not the knobs */
     {K_NONE, K_NONE, K_NONE, K_NONE},                /* save as: its own knobs (the name, the slot) */
+    {P_MEYES, P_MBITE, P_MNERVE, P_MROOM},           /* the macros: the whole sound, four ways */
 };
 _Static_assert(sizeof PAGE_KNOB / sizeof PAGE_KNOB[0] == NPAGES && sizeof PAGE_LABEL / sizeof PAGE_LABEL[0] == NPAGES &&
                    sizeof PAGE_NAME / sizeof PAGE_NAME[0] == NPAGES && sizeof PAGE_BTN == NPAGES && sizeof PAGE_AGAIN == NPAGES &&
@@ -589,7 +591,8 @@ static void set_page(int pg)
  * level, the effects' newer knobs), not the mixer, the tempo, the band or the MIDI */
 static int is_sound(int i)
 {
-    return i <= P_TAPE || i == P_GLIDE || i == P_OCTAVE || (i >= P_BTABLE && i <= P_LEVEL) || (i >= P_RTONE && i <= P_VMODE);
+    return i <= P_TAPE || i == P_GLIDE || i == P_OCTAVE || (i >= P_BTABLE && i <= P_LEVEL) || (i >= P_RTONE && i <= P_VMODE) ||
+           (i >= P_MEYES && i <= P_MBRESO);
 }
 /* the next preset that way (factory, then yours; empty slots skipped) */
 static int mood_step(int from, int dir)
@@ -776,6 +779,8 @@ static void load_mood(int m)
         knob_set(P_BTABLE + i, MOODS[m].x[i]);
     for (i = P_RTONE; i <= P_VMODE; i++)                 /* (the effects' newer knobs and the voices: as they come, unless it says) */
         knob_set(i, MOODS[m].hn ? MOODS[m].n[i - P_RTONE] : sy_param_info(i)->def);
+    for (i = P_MEYES; i <= P_MBRESO; i++)                /* (the macros in the middle: the sound as it is made) */
+        knob_set(i, sy_param_info(i)->def);
     knob_set(P_OCTAVE, MOODS[m].oct);                    /* (basses sit an octave down, some leads glide) */
     knob_set(P_GLIDE, MOODS[m].glide);
     ui.preset_t = plat_ms() | 1u;                        /* its card: the name, its kind, and what it brought */
@@ -1074,7 +1079,7 @@ static void button(int b)
         ui.latch = 0;                                    /* the punches staying: SEL again lets them go */
         ui.held_btn = -1;
         ui.panel = 0;
-        ui.page = PG_BODY;
+        ui.page = PG_MACRO;
         ui_caption("PUNCHES: AWAY.", 900u);
         return;
     }
@@ -1082,7 +1087,7 @@ static void button(int b)
         ui.latch = 0;
         ui.held_btn = -1;
         ui.panel = 0;
-        ui.page = PG_BODY;
+        ui.page = PG_MACRO;
         ui_caption("HOME.", 800u);
         return;
     }
@@ -1108,23 +1113,8 @@ static void button(int b)
             ui.loop_bar = (uint8_t)(ui.cur_step / 16);
         }
         if (pg >= 0) {                                   /* a part's button: its page while held, and 3 s on */
-            const int again = PAGE_AGAIN[pg];
             set_page(pg);
-            if (PAGE_NTH[pg] && !(proj.seen & PAGE_SEEN_BIT[pg])) {
-                proj.seen |= PAGE_SEEN_BIT[pg];          /* found: no more nudging */
-                mark_dirty();
-            } else if (!dbl && again >= 0 && PAGE_NTH[again] && !(proj.seen & PAGE_SEEN_BIT[again])) {
-                static char nudge[32];                  /* not found yet: a nudge, in its voice */
-                const char *p = PAGE_NAME[again];
-                int n = 0;
-                for (const char *q = "AGAIN: "; *q; q++)
-                    nudge[n++] = *q;
-                for (; *p && n < 30; p++)
-                    nudge[n++] = *p;
-                nudge[n++] = '.';
-                nudge[n] = 0;
-                ui_caption(nudge, 1600u);
-            }
+            /* (no more nudges to a button's other pages: their tabs stand on the drawer) */
             ui.held_btn = (int8_t)b;
             ui.held_t = now;
             if (pg == PG_SETUP || pg == PG_LOOP)
@@ -1552,7 +1542,7 @@ void ui_init(void)
     sy_midi_out = plat_midi_out;                         /* (the band's notes and the clock, from the engine) */
     ui.touched = -1;
     ui.pk_fx = -1;
-    ui.page = PG_BODY;
+    ui.page = PG_MACRO;                                  /* (the knobs, out of the box: the macros) */
     ui.act_t = ui.focus_t = plat_ms();
     ui.panel = 0;
     ui.held_btn = -1;
