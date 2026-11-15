@@ -1192,7 +1192,7 @@ static void schem_mouth(const drawer_t *p)               /* the envelope: attack
 static void schem_lfo(const drawer_t *p, int shape_p, int rate_p, int depth_p, int dest_p, float phase)
 {
     static const char *const DEST[] = {"POS", "EYES", "PITCH", "VOL", "SHADOW", "TABLE", "DTUN", "WALLS",
-                                       "TEARS", "COPY", "DUST", "SWIRL", "BURN", "MUMBL"};
+                                       "TEARS", "COPY", "DUST", "SWIRL", "BURN", "MUMBL", "BTUNE"};
     _Static_assert(sizeof DEST / sizeof DEST[0] == LD_N, "a name for every LFO destination");
     const int shape = proj.par[shape_p];
     const float cycles = 1.0f + 3.0f * pn(rate_p), depth = 0.15f + 0.85f * pn(depth_p);

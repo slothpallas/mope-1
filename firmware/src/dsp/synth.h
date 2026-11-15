@@ -76,7 +76,7 @@ enum { ARP_UP, ARP_DOWN, ARP_UPDOWN, ARP_WANDER, ARP_STAB, ARP_NMODE };
 /* where an LFO goes: the table's position, the eyes, the pitch, the volume, the shadow; then across the
  * tables, the detune, and the four effects' amounts */
 enum { LD_POS, LD_CUTOFF, LD_PITCH, LD_VOLUME, LD_SHADOW, LD_TABLE, LD_DETUNE, LD_WALLS, LD_TEARS, LD_COPIES, LD_DUST,
-       LD_SWIRL, LD_BURN, LD_MUMBLE, LD_N };   /* (the three newer effects: after DUST, so saved sounds keep theirs) */
+       LD_SWIRL, LD_BURN, LD_MUMBLE, LD_BPITCH, LD_N };   /* (BPITCH: the shadow's pitch, +-an octave: a sync that sweeps) */   /* (the three newer effects: after DUST, so saved sounds keep theirs) */
 enum { MB_BEAT, MB_LFO, MB_PLAY, MB_N };                             /* what moves MUMBLE's filter */
 enum { MEET_MIX, MEET_FM, MEET_RING, MEET_SYNC, MEET_N };             /* how oscillator B meets A */
 enum { VM_POLY, VM_MONO, VM_LEGATO, VM_UNISON, VM_N };                /* POLY: a voice a note; MONO: one, each note

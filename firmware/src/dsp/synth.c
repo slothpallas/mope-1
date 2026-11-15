@@ -1157,10 +1157,11 @@ typedef struct {
     float table, detune, verb, echo, copies, dust;   /* (tables: +-4 at full depth; the rest: added to 0..1) */
     int scanning;                                    /* an LFO is on the tables: a second read, crossfading */
     float swirl, burn, mumble;                       /* (the newer effects' amounts: added to 0..1) */
+    float btune;                                     /* the shadow's pitch, semitones */
     float reso, envk, drv, drvk, attk, swk, swadd;   /* the macros': more resonance, the filter's envelope x, a push
                                                         added and x, the attack's speed x, the Sigh's sweep x and + */
 } mods_t;
-#define MODS_NONE {0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f}
+#define MODS_NONE {0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f}
 SY_FAST static void lfo_into(mods_t *m, float lfo, float depth, int dest_p)
 {
     switch (par[dest_p]) {
@@ -1180,6 +1181,7 @@ SY_FAST static void lfo_into(mods_t *m, float lfo, float depth, int dest_p)
     case LD_SWIRL: m->swirl += lfo * depth; break;
     case LD_BURN: m->burn += lfo * depth; break;
     case LD_MUMBLE: m->mumble += lfo * depth; break;
+    case LD_BPITCH: m->btune += lfo * depth * 12.0f; break;
     default: m->dust += lfo * depth; break;
     }
 }
@@ -1264,7 +1266,7 @@ SY_FAST static void render_voices(float *ol, float *or_, uint32_t n, const mods_
     const float glide = par[P_GLIDE] ? 1.0f - mm_expf(-(float)SUB / (0.002f * mm_exp2f(pf(P_GLIDE) * 9.0f) * SY_SR)) : 1.0f;
     const int tblb = par[P_BTABLE], meet = par[P_BMEET], ftype = par[P_FTYPE];
     const float tpos_now = mm_clampf((float)par[P_TABLE] + md.table, 0.0f, (float)(SY_NTABLE - 1)), tpos0 = tpos_was;
-    const float b_ratio = mm_exp2f((float)par[P_BTUNE] * (1.0f / 12.0f)), sweep = mm_clampf(pf(P_MWAVE) * md.swk + md.swadd, -1.0f, 1.0f);
+    const float b_ratio = mm_exp2f(((float)par[P_BTUNE] + md.btune) * (1.0f / 12.0f)), sweep = mm_clampf(pf(P_MWAVE) * md.swk + md.swadd, -1.0f, 1.0f);
     const float drive = mm_clampf(pf(P_DRIVE) * md.drvk + md.drv, 0.0f, 1.0f), drv_g = 1.0f + 7.0f * drive * drive, drv_back = 1.0f / (1.0f + 1.6f * drive);
     const float band_g = k > 0.35f ? k : 0.35f;         /* (a band-pass's peak at unity, but never silent) */
     float lvl, base_pos, amp_max = 0.0f, menv_max = 0.0f, wave_env = 0.0f, wave_pos = 0.0f;
@@ -4046,6 +4048,13 @@ SY_FAST void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
     for (j = 0; j < n; j++)
         bl[j] = br[j] = 0.0f;
     render_voices(bl, br, n, &md);
+    for (j = 0; j < n; j++) {                           /* the voices' lows (under ~150 Hz) in the middle: a bass stays whole on one speaker */
+        static float side_lo;
+        const float mid = 0.5f * (bl[j] + br[j]), side = 0.5f * (bl[j] - br[j]);
+        side_lo += 0.021f * (side - side_lo);
+        bl[j] = mid + side - side_lo;
+        br[j] = mid - side + side_lo;
+    }
     if (eyes_tilt != 0.0f) {                            /* (a shelf over ~900 Hz up to +12 dB; or a low-pass down to ~500 Hz) */
         const float up = eyes_tilt > 0.0f ? eyes_tilt * 3.0f : 0.0f, k = eyes_tilt > 0.0f ? 0.12f : 0.07f + 0.25f * (1.0f + eyes_tilt);
         const float dn = eyes_tilt < 0.0f ? -eyes_tilt : 0.0f, back = 1.0f / (1.0f + up * 0.35f);
