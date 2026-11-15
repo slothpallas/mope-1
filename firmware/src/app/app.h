@@ -3,6 +3,7 @@
  * build after gfx.c (drawing helpers in scope) and by the host simulator. (FiMba-1's app.h, reshaped.) */
 #pragma once
 #include <stdint.h>
+#include <stddef.h>
 #include "plat.h"
 #include "../dsp/synth.h"
 #include "../dsp/mopemath.h"
@@ -12,9 +13,9 @@
 #endif
 #define PROJ_MAGIC 0x45504F4Du           /* "MOPE": never a FiMba-1 or FoMni project */
 /* Add a setting at the end of P_*, bump the format, and add its count here. */
-#define PROJ_FORMAT 8u                    /* 8: four patterns; 7: the clock, aftertouch; 6: the settings page (voices, tempo, room, bass); 5: the effects' new knobs; 4: the shadow, the filter kinds, the sigh, the tremble; 3: the loop; ... */
+#define PROJ_FORMAT 9u                    /* 9: the macros, SWIRL, BURN, MUMBLE; 8: four patterns; 7: the clock, aftertouch; 6: the settings page (voices, tempo, room, bass); 5: the effects' new knobs; 4: the shadow, the filter kinds, the sigh, the tremble; 3: the loop; ... */
 #define PROJ_NPAR_OF(f) ((f) == 1u ? P_VOLUME + 1 : (f) == 2u ? P_ARPGATE + 1 : (f) == 3u ? P_LOOPBARS + 1 : \
-                         (f) == 4u ? P_LEVEL + 1 : (f) == 5u ? P_DUST + 1 : (f) == 6u ? P_BSTYLE + 1 : P_NPARAMS)
+                         (f) == 4u ? P_LEVEL + 1 : (f) == 5u ? P_DUST + 1 : (f) == 6u ? P_BSTYLE + 1 : (f) <= 8u ? P_PRESS + 1 : P_NPARAMS)
 #define PROJ_OLD_LOOP 192                 /* a loop's notes up to format 7 (one loop) */
 
 typedef struct {
@@ -41,7 +42,8 @@ _Static_assert(sizeof(project_t) <= PLAT_STORE_MAX, "a project fits its flash ob
 #define PRESETS_MAGIC 0x53504F4Du        /* "MOPS" */
 #define PRESET_SLOTS 16
 #define PRESET_NAME 16                   /* characters, no terminator needed */
-#define PRESET_NPAR 80                   /* room for settings to come (P_NPARAMS now) */
+#define PRESET_NPAR 92                   /* room for settings to come (P_NPARAMS now) */
+#define PRESET_NPAR_1 80                 /* a slot's values in format 1 (up to 0.4.1) */
 typedef struct {
     char name[PRESET_NAME];
     int16_t par[PRESET_NPAR];

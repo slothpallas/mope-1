@@ -70,6 +70,8 @@ expect dropped 0
 tap HOME
 wait 1000
 tap HOME
+wait 1000
+tap HOME
 wait 600
 expect page 11
 shot 30_shadow.png

@@ -135,6 +135,17 @@ static float goertzel(float hz)
     return s1 * s1 + s2 * s2 - c * s1 * s2;
 }
 
+/* how bright the capture is: the energy of its sample-to-sample steps against its own (a dull sound: small) */
+static float bright(void)
+{
+    float d = 0.0f, e = 1e-12f;
+    int i;
+    for (i = 1; i < 8192; i++) {
+        d += (cap[i] - cap[i - 1]) * (cap[i] - cap[i - 1]);
+        e += cap[i] * cap[i];
+    }
+    return d / e;
+}
 static void quiet(void)
 {
     sy_panic();
@@ -568,6 +579,70 @@ int main(int argc, char **argv)
             sy_note_off(57);
             quiet();
             CHECK(worst < -45.0f, "STOP: no grinding as it stops (the most above the tape's top: %.0f dB)", (double)worst);
+        }
+        {   /* the macros: each takes the sound from one end to the other, not a little way */
+            float lo, hi, v[12], mean, dev[2];
+            int end, q;
+            sy_set(P_POS, 60);
+            sy_set(P_CUTOFF, 55);
+            sy_set(P_GUNK, 0);
+            sy_set(P_LFODEPTH, 25);
+            sy_note_on(57, 100);
+            run(400);
+            sy_set(P_MEYES, 0);
+            run(300);
+            capture();
+            lo = goertzel(1980.0f);                      /* (its ninth harmonic) */
+            sy_set(P_MEYES, 100);
+            run(300);
+            capture();
+            hi = goertzel(1980.0f);
+            sy_set(P_MEYES, 50);
+            CHECK(hi > lo * 1000.0f, "EYES: shut to wide open (its top %.0f dB up)", (double)(10.0f * mm_log2f(hi / (lo + 1e-20f)) * 0.30103f));
+            sy_set(P_MBITE, 0);
+            run(300);
+            capture();
+            lo = bright();
+            sy_set(P_MBITE, 100);
+            run(600);
+            capture();
+            hi = bright();
+            sy_set(P_MBITE, 50);
+            CHECK(hi > lo * 4.0f, "BITE: clean to wrecked (%.0f times the edge)", (double)(hi / lo));
+            run(600);
+            sy_set(P_TABLE, 5);                          /* (FOLD: where in the table is heard) */
+            for (end = 0; end < 2; end++) {             /* NERVES: how far the brightness jumps from one 186 ms to the next */
+                sy_set(P_MNERVE, end ? 100 : 0);
+                run(400);
+                for (mean = 0.0f, q = 0; q < 12; q++) {
+                    capture();
+                    v[q] = bright();
+                    mean += v[q] / 12.0f;
+                }
+                for (dev[end] = 0.0f, q = 1; q < 12; q++)
+                    dev[end] += mm_fabsf(v[q] - v[q - 1]) / (11.0f * mean);
+            }
+            sy_set(P_MNERVE, 50);
+            sy_set(P_TABLE, 0);
+            CHECK(dev[1] > dev[0] * 3.0f && dev[1] > 0.4f, "NERVES: frozen to wild (it jumps %.0f%%, then %.0f%%)",
+                  (double)(dev[0] * 100.0f), (double)(dev[1] * 100.0f));
+            sy_note_off(57);
+            quiet();
+            for (end = 0; end < 2; end++) {             /* ROOM: what is left 300 ms after a short note */
+                sy_set(P_MROOM, end ? 100 : 0);
+                run(300);
+                sy_note_on(69, 100);
+                run(150);
+                sy_note_off(69);
+                run(300);
+                dev[end] = level(100);
+                quiet();
+                run(1500);
+            }
+            sy_set(P_MROOM, 50);
+            CHECK(dev[1] > dev[0] * 30.0f, "ROOM: bone dry to drowned (%.0f dB more left ringing)",
+                  (double)(20.0f * mm_log2f(dev[1] / (dev[0] + 1e-9f)) * 0.30103f));
+            run(300);
         }
         /* SWEEP: a bright saw goes dark */
         sy_set(P_POS, 100);                             /* (PLAIN's end: a saw) */

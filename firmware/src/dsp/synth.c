@@ -42,6 +42,10 @@ static const sy_param_t PARAMS[P_NPARAMS] = {
     {"Voices", 0, VM_N - 1, VM_POLY},
     {"Tempo is", 0, TM_N - 1, TM_GLOBAL}, {"Room sound", 0, AM_N - 1, AM_RAIN}, {"Auto bass", 0, 1, 1}, {"Bass way", 0, BS_N - 1, BS_BEAT},
     {"Clock", 0, CK_N - 1, CK_OWN}, {"Pressure", 0, AT_N - 1, AT_VIBRATO},
+    {"Eyes", 0, 100, 50}, {"Bite", 0, 100, 50}, {"Nerves", 0, 100, 50}, {"Room", 0, 100, 50},
+    {"Swirl", 0, 100, 0}, {"Swirl rate", 0, 100, 30}, {"Swirl depth", 0, 100, 60}, {"Swirl feedback", 0, 100, 30},
+    {"Burn", 0, 100, 0}, {"Burn tone", 0, 100, 60}, {"Burn crush", 0, 100, 0}, {"Burn rate", 0, 100, 0},
+    {"Mumble", 0, 100, 0}, {"Mumble way", 0, MB_N - 1, MB_BEAT}, {"Mumble range", 0, 100, 60}, {"Mumble reso", 0, 100, 50},
 };
 const sy_param_t *sy_param_info(int i) { return &PARAMS[i < 0 ? 0 : i >= P_NPARAMS ? P_NPARAMS - 1 : i]; }
 
@@ -1118,9 +1122,11 @@ static inline __attribute__((always_inline)) float lfo_shape_in(int shape, float
     }
 }
 float sy_lfo_shape(int shape, float ph, float from, float to) { return lfo_shape_in(shape, ph, from, to); }   /* (the panel's: in XIP) */
+static float mac_rate;                                 /* NERVES: both LFOs faster or slower, octaves */
+static float mac_fry, mac_fryk = 1.0f, mac_fb;          /* BITE: fry added and x; ROOM: more feedback */
 SY_FAST static float lfo_tick(lfo_t *l, int rate, int shape, uint32_t n)
 {
-    const float hz = 0.05f * mm_exp2f(pf(rate) * 9.0f);
+    const float hz = 0.05f * mm_exp2f(pf(rate) * 9.0f + mac_rate);
     float v;
     l->ph += hz * (float)n / SY_SR;
     if (l->ph >= 1.0f) {
@@ -1150,8 +1156,10 @@ typedef struct {
     float pos, cut, pitch, vol, shadow;
     float table, detune, verb, echo, copies, dust;   /* (tables: +-4 at full depth; the rest: added to 0..1) */
     int scanning;                                    /* an LFO is on the tables: a second read, crossfading */
+    float reso, envk, drv, drvk, attk, swk, swadd;   /* the macros': more resonance, the filter's envelope x, a push
+                                                        added and x, the attack's speed x, the Sigh's sweep x and + */
 } mods_t;
-#define MODS_NONE {0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0}
+#define MODS_NONE {0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f}
 SY_FAST static void lfo_into(mods_t *m, float lfo, float depth, int dest_p)
 {
     switch (par[dest_p]) {
@@ -1239,19 +1247,19 @@ static float fx_cost(void);
 SY_FAST static void render_voices(float *ol, float *or_, uint32_t n, const mods_t *mods)
 {
     mods_t md = *mods;
-    const float att = 1.0f / (knob_s(P_ATTACK) * SY_SR), dec = coef_s(knob_s(P_DECAY) * 0.3f);
+    const float att = md.attk / (knob_s(P_ATTACK) * SY_SR), dec = coef_s(knob_s(P_DECAY) * 0.3f);
     const float rel = coef_s(knob_s(P_RELEASE) * 0.3f), sus = pf(P_SUSTAIN);
     const float mdec = coef_s(knob_s(P_MODDEC) * 0.3f);
     const float matt = par[P_MATTACK] ? 1.0f / (knob_s(P_MATTACK) * SY_SR) : att;   /* (0: with the mouth) */
     const float dtn = mm_clampf(pf(P_DETUNE) + md.detune, 0.0f, 1.0f);
     const float det = dtn * dtn * 40.0f + 2.0f;         /* cents apart, each way */
     const float spread = 0.15f + 0.35f * dtn, sub = pf(P_SUB) * 0.8f;
-    const float k = 2.0f - 1.94f * pf(P_RESO);          /* the SVF's damping: 1/Q */
+    const float k = 2.0f - 1.94f * mm_clampf(pf(P_RESO) + md.reso, 0.0f, 1.0f);   /* the SVF's damping: 1/Q */
     const float glide = par[P_GLIDE] ? 1.0f - mm_expf(-(float)SUB / (0.002f * mm_exp2f(pf(P_GLIDE) * 9.0f) * SY_SR)) : 1.0f;
     const int tblb = par[P_BTABLE], meet = par[P_BMEET], ftype = par[P_FTYPE];
     const float tpos_now = mm_clampf((float)par[P_TABLE] + md.table, 0.0f, (float)(SY_NTABLE - 1)), tpos0 = tpos_was;
-    const float b_ratio = mm_exp2f((float)par[P_BTUNE] * (1.0f / 12.0f)), sweep = pf(P_MWAVE);
-    const float drive = pf(P_DRIVE), drv_g = 1.0f + 7.0f * drive * drive, drv_back = 1.0f / (1.0f + 1.6f * drive);
+    const float b_ratio = mm_exp2f((float)par[P_BTUNE] * (1.0f / 12.0f)), sweep = mm_clampf(pf(P_MWAVE) * md.swk + md.swadd, -1.0f, 1.0f);
+    const float drive = mm_clampf(pf(P_DRIVE) * md.drvk + md.drv, 0.0f, 1.0f), drv_g = 1.0f + 7.0f * drive * drive, drv_back = 1.0f / (1.0f + 1.6f * drive);
     const float band_g = k > 0.35f ? k : 0.35f;         /* (a band-pass's peak at unity, but never silent) */
     float lvl, base_pos, amp_max = 0.0f, menv_max = 0.0f, wave_env = 0.0f, wave_pos = 0.0f;
     int i;
@@ -1312,7 +1320,7 @@ SY_FAST static void render_voices(float *ol, float *or_, uint32_t n, const mods_
             incs = hz * 0.5f / SY_SR;
             incb = hz * b_ratio / SY_SR;
             /* the cutoff: the knob, the mod envelope, the LFOs, a little of the key */
-            cut = 30.0f * mm_exp2f(pf(P_CUTOFF) * 9.3f + pf(P_ENVAMT) * 6.0f * v->menv + md.cut +
+            cut = 30.0f * mm_exp2f(pf(P_CUTOFF) * 9.3f + pf(P_ENVAMT) * md.envk * 6.0f * v->menv + md.cut +
                                    0.5f * (v->cents - 6000.0f) / 1200.0f);
             cut = mm_clampf(cut, 20.0f, 18000.0f);
             g = mm_tanf(MM_PI * cut / SY_SR);
@@ -1513,7 +1521,7 @@ SY_FAST static void render_voices(float *ol, float *or_, uint32_t n, const mods_
 static float fry_hold_l, fry_hold_r, fry_cnt, fry_now, fry_g = 1.0f, fry_comp = 1.0f;
 SY_FAST static void fry_chunk(void)                            /* every 16 frames */
 {
-    fry_now += (pf(P_FRY) - fry_now) * 0.012f;
+    fry_now += (mm_clampf(pf(P_FRY) * mac_fryk + mac_fry, 0.0f, 1.0f) - fry_now) * 0.012f;
     if (fry_now < 1e-4f && par[P_FRY] == 0)
         fry_now = 0.0f;
     fry_g = 1.0f + fry_now * fry_now * 24.0f;
@@ -1642,7 +1650,7 @@ SY_FAST static inline float tear_fall(float x, float *dark, float *thin, float k
 SY_FAST static inline void delay(float in, float *l, float *r)
 {
     if (!tear_odd) {                                    /* the line moves every other sample */
-        const float fb = pf(P_FEEDBACK), hop = 0.95f * fb,   /* what each crossing keeps */
+        const float fb = mm_clampf(pf(P_FEEDBACK) + mac_fb, 0.0f, 0.97f), hop = 0.95f * fb,   /* what each crossing keeps */
                     dark = pf(P_DDARK), dk = 0.85f - 0.8f * dark,   /* (Dark: how much each crossing loses of its top) */
                     smear = dark > 0.5f ? (dark - 0.5f) * 2.0f : 0.0f, g = 1.1f + 2.2f * fb, ig = 1.0f / g;
         float back, from_l, from_r, al, ar;
@@ -3790,8 +3798,47 @@ SY_FAST void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
     sy_tel.lfo_phase = lfo1.ph;
     sy_tel.lfo2 = lfo_b;
     sy_tel.lfo2_phase = lfo2.ph;
-    lfo_into(&md, lfo, pf(P_LFODEPTH), P_LFODEST);       /* both LFOs, wherever they go: the voices and the effects */
-    lfo_into(&md, lfo_b, pf(P_LFO2DEPTH), P_LFO2DEST);
+    /* The macros (HOME): each takes the whole sound from one end to the other, 50 the sound as it is made.
+     * They add to what the knobs and the LFOs do; the knobs' own settings stay where they are.
+     *   EYES    shut and muffled .. wide open: the cutoff +-4 octaves, the filter's envelope, some resonance
+     *   BITE    clean and soft .. wrecked: the push into the filter, the fry, a harder attack, a brighter edge
+     *   NERVES  frozen .. wild: the LFOs' depth and speed, the Sigh's sweep, and a restlessness of its own
+     *           (the wave's position, the tables, the pitch) for sounds whose LFOs do nothing
+     *   ROOM    bone dry .. drowned: the room, the echoes and their feedback, the copies */
+    const float me = (float)(par[P_MEYES] - 50) * 0.02f, mb = (float)(par[P_MBITE] - 50) * 0.02f;
+    const float mn = (float)(par[P_MNERVE] - 50) * 0.02f, mr = (float)(par[P_MROOM] - 50) * 0.02f;
+    const float mbu = mb > 0.0f ? mb : 0.0f, mnu = mn > 0.0f ? mn : 0.0f, mru = mr > 0.0f ? mr : 0.0f;
+    const float nk = mn < 0.0f ? 1.0f + mn : 1.0f;      /* (below the middle: everything that moves, less) */
+    const float d1 = pf(P_LFODEPTH), d2 = pf(P_LFO2DEPTH);
+    mac_rate = mn * 1.5f;
+    mac_fry = mbu * 0.6f;
+    mac_fryk = mb < 0.0f ? 1.0f + mb : 1.0f;
+    mac_fb = mru * 0.25f;
+    lfo_into(&md, lfo, d1 * nk + mnu * 0.7f * (1.0f - d1), P_LFODEST);   /* both LFOs, wherever they go: the voices and the effects */
+    lfo_into(&md, lfo_b, d2 * nk + mnu * 0.7f * (1.0f - d2), P_LFO2DEST);
+    md.cut += me * 4.0f + mbu * 0.8f;
+    md.reso = (me > 0.0f ? me : 0.0f) * 0.25f;
+    md.envk = mm_maxf(1.0f + me * 0.6f + mbu * 0.5f, 0.0f);
+    md.drv = mbu * 0.9f;
+    md.drvk = mb < 0.0f ? 1.0f + mb : 1.0f;
+    md.attk = mb < 0.0f ? 1.0f / (1.0f - mb * 3.0f) : 1.0f + mb * 5.0f;
+    md.swk = nk;
+    md.swadd = mnu * (par[P_MWAVE] < 0 ? -0.45f : 0.45f);
+    if (mnu > 0.0f) {                                   /* its own restlessness: two slow wanders and a shiver */
+        static float na, nb, nc;
+        na += (0.23f + 2.2f * mnu) * (float)n / SY_SR;
+        nb += (0.61f + 1.3f * mnu) * (float)n / SY_SR;
+        nc += 5.7f * (float)n / SY_SR;
+        na -= (float)(int)na;
+        nb -= (float)(int)nb;
+        nc -= (float)(int)nc;
+        md.pos += mnu * 0.3f * mm_sin_turns(na);
+        md.pitch += mnu * mnu * 14.0f * mm_sin_turns(nc);
+        if (mnu > 0.5f) {                               /* (the top half: across the tables too) */
+            md.table += (mnu - 0.5f) * 3.0f * mm_sin_turns(nb);
+            md.scanning = 1;
+        }
+    }
     press += (press_to - press) * 0.25f;                 /* aftertouch (smoothed over a few blocks): what it moves */
     sy_tel.press = press;
     if (press > 0.002f)
@@ -3809,6 +3856,12 @@ SY_FAST void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
             break;
         default: break;
         }
+    {
+        const float rk = mr < 0.0f ? 1.0f + mr : 1.0f;  /* (ROOM down: all of it less, to none) */
+        md.copies = (pf(P_CHORUS) + md.copies) * rk + mru * 0.3f - pf(P_CHORUS);
+        md.echo = (pf(P_DELAY) + md.echo) * rk + mru * 0.45f - pf(P_DELAY);
+        md.verb = (pf(P_REVERB) + md.verb) * rk + mru * 0.65f - pf(P_REVERB);
+    }
     to_ch = mm_clampf(pf(P_CHORUS) + md.copies, 0.0f, 1.0f);
     to_dl = mm_clampf(pf(P_DELAY) + md.echo, 0.0f, 1.0f) * 0.8f;
     tear_want = echo_len();                             /* (the tempo's echo) */

@@ -53,7 +53,7 @@ tap HOME
 wait 200
 expect page 8
 wait 1400
-expect page 0
+expect page 18
 # LEAD: 24 clocks a beat, Start and Stop with the band
 midi B0 67 7F
 wait 20
