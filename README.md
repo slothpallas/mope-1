@@ -59,11 +59,12 @@ through X0X, FoMni and FiMba-1, the firmware MOPE-1 started from.
 
 ## Controls
 
-Press or hold a part's button: its schematic opens in a dark glass drawer over the bottom of the screen and the four knobs turn that part, each knob's name over its meter (the one you turn lights up). The drawer stays until 3 seconds after your last touch, then slides away, but **the page stays**: its button stays lit and the knobs still turn that part (turning one brings the drawer back). **HOME** goes back to the Body. **Some parts have a second page:** press the button again while its page shows (HOME: Shadow, ENV: Sigh, LFO: Tremble, GLO: Setup, SEQ: Tape deck; FX goes round four: Walls, Tears, Copies, Dust). Until you've found one, the caption nudges you (AGAIN: SHADOW.). **Press a part's button twice quickly and its drawer stays open** (switch pages with the other buttons) until you press **HOME**. OCT+ or OCT− is lit while the keyboard is shifted up or down. The blob stays big and shows faintly through the glass. The drawer is drawn in the room's cold colours, like the drum grid.
+Press or hold a part's button: its schematic opens in a dark glass drawer over the bottom of the screen and the four knobs turn that part, each knob's name over its meter (the one you turn lights up). The drawer stays until 3 seconds after your last touch, then slides away, but **the page stays**: its button stays lit and the knobs still turn that part (turning one brings the drawer back). **HOME** goes back to the Macros. **Some buttons have more pages**, shown as tabs standing on the drawer, the open one lit: press the button again while its page shows to go to the next (HOME: Macros, Body, Shadow; ENV: Mouth, Sigh; LFO: Vibe, Tremble; GLO: Mixer, Settings; SEQ: Loop, Tape deck; FX goes round seven: Walls, Tears, Copies, Dust, Swirl, Burn, Mumble; with that many, the others show their first two letters). **Press a part's button twice quickly and its drawer stays open** (switch pages with the other buttons) until you press **HOME**. OCT+ or OCT− is lit while the keyboard is shifted up or down. The blob stays big and shows faintly through the glass. The drawer is drawn in the room's cold colours, like the drum grid.
 
 | Page | Its schematic |
 | --- | --- |
-| Body | the wavetable's frames stacked, the one playing in front, the detuned copy sliding, the position on a frame ladder |
+| Macros | four dials, each lit from the middle to where it is; the blob shows them (Bite: it glares; Nerves: it shivers) |
+| Body | the wavetable as a 3D landscape, all its frames in depth, the slice that is playing lit and travelling through it (live, with the LFOs and the Sigh), the detuned copy sliding, the position on a frame ladder; while Table or Position turns it fills the room; a new table morphs in |
 | Eyes | the filter's curve for its kind (low, band, high, notch, or the comb's teeth) and its resonance peak, the cutoff marked, and where the note's envelope opens it now (red) |
 | Mouth | the ADSR, a red dot riding it where the loudest note is |
 | Vibe | the LFO's wave (more cycles: faster), a red dot at its phase, where it goes |
@@ -71,6 +72,9 @@ Press or hold a part's button: its schematic opens in a dark glass drawer over t
 | Tears | the delay's taps, ping (blue) and pong (coral), each smaller and spaced in the tempo |
 | Copies | the chorus as wobbling ribbons, as wide as Width |
 | Dust | an old record: tape's wobble, crackle, dust, the fry's transfer curve |
+| Swirl | the phaser's notches sweeping (a flanger: a comb's many teeth) |
+| Burn | a wave through it: clipped and lopsided, then in steps |
+| Mumble | its resonant peak where it is now; with the beat: its pattern, the step it is on lit |
 | Punch | the keyboard, each black key with its punch's symbol; the whites beside a held punch lit |
 | Save as | the name with its cursor, your sixteen places (filled lit, the chosen one outlined) |
 | Tape deck | the drum grid as round steps in the room's cold colours (kick pale blue, snare tear-blue, hats rain-grey, bass violet; soft hits dimmer, empty steps rings), the fill on the fourth bar, a pale glint for the playhead |
@@ -83,17 +87,21 @@ Press or hold a part's button: its schematic opens in a dark glass drawer over t
 
 | Button | Part | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 | --- | --- | --- | --- | --- | --- |
-| HOME | Body | Table | Position | Detune | Sub |
+| HOME | Macros | Eyes (shut and muffled .. wide open) | Bite (clean .. wrecked) | Nerves (frozen .. wild) | Room (bone dry .. drowned) |
+| HOME again | Body | Table | Position | Detune | Sub |
 | HOME again | Shadow | Its table | Tune (semitones, ±24) | Meets (mix, FM, ring, sync) | Level (0: off) |
 | EDIT | Eyes | Cutoff | Resonance | Kind (low, band, high, notch, comb, vowel) | Drive |
 | ENV | Mouth | Attack | Decay | Sustain | Release |
 | ENV again | Sigh | Its attack (0: the mouth's) | Its decay | Wave (how far it sweeps the table, either way) | Eyes (how far it opens the filter) |
-| LFO | Vibe | Rate | Depth | Shape (sway, bob, bounce, nod, twitch, heave, wander, stagger, throb) | Destination (position, eyes, voice, volume, shadow, across the tables, detune, walls, tears, copies, dust) |
+| LFO | Vibe | Rate | Depth | Shape (sway, bob, bounce, nod, twitch, heave, wander, stagger, throb) | Destination (position, eyes, voice, volume, shadow, across the tables, detune, walls, tears, copies, dust, swirl, burn, mumble) |
 | LFO again | Tremble | Rate | Depth | Shape | Destination |
 | FX | Walls | Reverb | Size | Tone | Rain |
 | FX again | Tears | Delay | Time (in the tempo: sixteenths, triplets, eighths, slow triplets, dotted eighths, the beat, dotted quarters) | Feedback (each echo more worn, like tape) | Dark (past halfway: each echo smeared into a cloud) |
 | FX again | Copies | Chorus | Rate | Depth | Width |
 | FX again | Dust | Tape | Crackle | Dust | Fry |
+| FX again | Swirl | Swirl (a phaser) | Rate | Depth | Feedback (past 60: a flanger) |
+| FX again | Burn | Burn (a fuzz after the filter) | Tone | Crush (fewer bits) | Rate (a lower sample rate) |
+| FX again | Mumble | Mumble (a filter over it all that moves) | Way (with the beat, slowly over a bar, when you play) | Range | Resonance |
 | SEL | Punch | Held (or pressed twice): the last punch's first knob | Its second knob | | |
 | SEQ | Loop | Step (the cursor, along the bars) | Note (under the cursor) | Length (of that note) | Bars (1, 2, 4) |
 | SEQ again | Tape deck | Style | Tempo | Swing | Human (looser timing and velocity) |
@@ -126,13 +134,15 @@ As on X0X, Melodee and JIANT FM: **PLAY**, **REC** and **SEQ** do what they say.
 - **SAVE** (tapped): SAVE AS, to keep the sound as a preset of yours (below). Everything else saves by itself when quiet. Hold SAVE for 1.5 s, then press it again, to reset everything; the blob keeps its level.
 - The lowest and highest keys together: it gives up.
 
-**Presets** (54, in seven kinds; the card shows the kind):
-- **Pad:** Monday, 3AM, Rain again, Church of nothing, Sunday scaries, Seen 2:14, Weighted blanket, The void stares, Slow heart, Tide goes out
-- **Keys:** Left on read, Hold music, Open plan, Music box, Glass office, Elevator, Worn tape
-- **Pluck:** NPC, Read receipt, Bubble wrap, Typing..., Icicle, Second guessing
-- **Lead:** Main character, Low battery, Deep fried, Cry on the floor, Bent out of shape, Drama, Scream into pillow, Noise complaint, All caps, Reply all
-- **Bass** (an octave down): Sub-par, Bottom text, Doomscroll, Basement, Hollow inside, Underslept, Rage quit, Passive aggressive, Overdraft, Landlord, Burnout
-- **FX:** Tinnitus, Dial tone, Ghosted, Heavy breathing, Broken record, Phantom vibrate
+**The macros** (HOME, and what the knobs turn out of the box): four knobs that each take the whole sound from one end to the other, the middle the sound as it was made. They add to what the other knobs and the LFOs do, so nothing else moves under you. **Eyes**: the filter from nearly shut to wide open. **Bite**: the push into the filter, the fry and the burn, a harder attack: dirtier, not louder; the blob glares. **Nerves**: the LFOs deeper and faster, the wave, the filter and the tables wandering on their own; it shivers. **Room**: reverb, echoes and copies, down to none at all. A preset starts with all four in the middle; your own presets keep where you left them.
+
+**Presets** (65, in seven kinds; the card shows the kind):
+- **Pad:** Monday, 3AM, Rain again, Church of nothing, Mood swing, Seen 2:14, Tide goes out
+- **Keys:** Overtime, Screensaver, Paper jam, Left on read, Organ donor, Open plan, Music box, Glass office, Doorbell, Worn tape, Cold shoulder, Autoreply, Casual Friday
+- **Pluck:** NPC, Read receipt, Bubble wrap, Typing..., Icicle, Windchime, Loading..., Second guessing
+- **Lead:** Main character, Low battery, Deep fried, Cry on the floor, Bent out of shape, Drama, Scream into pillow, Noise complaint, All caps, Reply all, Last word, Pick a fight, Side eye, Escalation
+- **Bass** (an octave down): Sub-par, Bottom text, Doomscroll, Basement, Hollow inside, Underslept, Rage quit, Passive aggressive, Overdraft, Landlord, Burnout, Out of office, Direct deposit, Fuse box, Small talk
+- **FX:** Tax season, Dial tone, Broken record, Phantom vibrate
 - **VOX** (the vowel filter): Choir of one, Humming alone, Aah well, Says nothing
 
 **Your presets:** tap **SAVE** and SAVE AS opens in the drawer, with a sad name (DAMP MONDAY) in your first empty place of sixteen (or the place of the preset of yours that is playing). **Knob 1** moves the cursor, **knob 2** changes its letter, **knob 3** gives another name, **knob 4** (or PRESETS) picks the place; the header says EMPTY or whose place it was. In the web player, type the name (the first letter replaces the offered one; Enter keeps, Esc doesn't). **SAVE** again keeps it; any other button leaves it. A preset of yours keeps the sound (not the mixer, the tempo, the band or MIDI) and comes after the factory ones on PRESETS.

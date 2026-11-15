@@ -38,9 +38,11 @@ STATES = [
 
 # the manual: each button's part, what it does to the blob, its drawer's picture (README has the knobs)
 PARTS = [
-    ("HOME", "Body", "page_body", "Its outline is the wavetable. Position reshapes it, detune gives it a ghost that drifts "
-     "apart, sub makes it heavier.", ("Shadow", "page_shadow", "a second oscillator in every voice. It can sit a few semitones "
-                                      "or two octaves away, mixed in or modulating the first.")),
+    ("HOME", "Macros", "page_macro", "Four knobs that each take the whole sound from one end to the other: Eyes shuts and "
+     "opens the filter, Bite wrecks it (the blob glares), Nerves makes everything restless (it shivers), Room goes from bone "
+     "dry to drowned. The middle is the sound as it was made.", ("Body", "page_body", "its outline is the wavetable, drawn as a "
+                                      "landscape with the slice you hear lit. Position moves through it, detune gives it a "
+                                      "ghost, sub makes it heavier. Once more: the shadow, a second oscillator in every voice.")),
     ("EDIT", "Eyes", "page_eyes", "Its eyes are the filter: wide awake when it's open, half-lidded and then shut as you close "
      "it. Resonance shrinks the pupils until they turn into lasers.", None),
     ("ENV", "Mouth", "page_mouth", "Its mouth opens with the note, stays open at the sustain and closes with the release. A "
@@ -49,8 +51,8 @@ PARTS = [
     ("LFO", "Vibe", "page_vibe", "It dances at the rate, as far as the depth: sway, bob, bounce, nod, twitch, heave, "
      "wander, stagger, throb.", ("Tremble", "page_tremble", "a second LFO, for the things the first one is busy with.")),
     ("FX", "Walls", "page_walls", "The reverb is the room: the bigger it gets, the smaller the blob looks, and past the "
-     "walls there's only the void. Again: copies (chorus, see-through copies of it peek out from behind) and dust (an old "
-     "record: tape, crackle, fry).", ("Tears", "page_tears", "the delay, in the band's tempo: one tear per echo, each smaller "
+     "walls there's only the void. Again and again: copies (chorus), dust (an old record), the swirl (a phaser, "
+     "a flanger), the burn (a fuzz, a crusher) and the mumble (a filter that moves with the beat or your playing).", ("Tears", "page_tears", "the delay, in the band's tempo: one tear per echo, each smaller "
                                       "and more worn than the last. Dark past halfway smears them into a cloud.")),
     ("SEL", "Punch", None, "Hold it (or press it twice) and a black key punches the sound while it is held: half speed, tape stop, reverse, "
      "repeats, gate, grains, crush. The white keys beside a punch light up: more, or a twist.", None),
