@@ -883,12 +883,35 @@ static void punch_resend(void)                           /* the whites beside ch
         if (ui.punched >> k & 1u)
             sy_punch(PUNCH_KEY[k], 1 + punch_mods(k));
 }
-static const char *const TWIST_SAID[PU_N] = {"A FIFTH DOWN.", "A FIFTH UP.", "AND BACK.", "LONGER.", "IN THREES.", "IN THREES.",
-                                             "A PATTERN.", "FROZEN.", "WOBBLY BITS.", "UPWARD.", "BREATHING.", "SEASICK."};
 /* what each punch says when it starts, in its voice (PU_* order) */
 static const char *const PUNCH_SAID[PU_N] = {"HALF.", "TWICE. WHY.", "STOP.", "BACKWARDS.", "AGAIN AGAIN.", "S-S-STUTTER.",
                                              "ON OFF ON OFF.", "FALLING APART.", "CRUSHED.", "MUFFLED.", "WASHED OUT.",
                                              "WARPED."};
+/* what the whites beside a held punch made of it, in words: the time ones go twice as far (MORE, the white
+ * below) or in threes (TWIST, the one above); HALF and DOUBLE say the speed they come to, knob 1 and all */
+static const char *punch_mod_said(int fx, int mods)
+{
+    static const char *const MORE[PU_N] = {0, 0, "HARDER.", "SHORTER.", "TWICE AS FAST.", "TWICE AS FAST.", "TWICE AS FAST.",
+                                           "MORE.", "MORE.", "SCREAMING.", "ONLY THE ROOM.", "DEEPER."};
+    static const char *const TWIST[PU_N] = {0, 0, "AND BACK.", "IN THREES.", "IN THREES.", "IN THREES.", "IN THREES.",
+                                            "FROZEN.", "WOBBLY BITS.", "UPWARD.", "BREATHING.", "SEASICK."};
+    if (fx == PU_HALF || fx == PU_DOUBLE) {
+        static const struct { float r; const char *w; } SPEED[] = {
+            {0.125f, "AN EIGHTH."}, {1.0f / 6.0f, "A SIXTH."}, {0.25f, "A QUARTER."}, {1.0f / 3.0f, "A THIRD."},
+            {0.375f, "THREE EIGHTHS."}, {0.5f, "HALF."}, {2.0f / 3.0f, "TWO THIRDS."}, {0.75f, "THREE QUARTERS."},
+            {4.0f / 3.0f, "A THIRD MORE."}, {1.5f, "ONE AND A HALF."}, {2.0f, "TWICE."}, {8.0f / 3.0f, "TWO AND TWO THIRDS."},
+            {3.0f, "THREE TIMES."}, {4.0f, "FOUR TIMES."}};
+        const float r = sy_punch_speed(fx, project_pk(fx, 0), mods);
+        int i, best = 0;
+        for (i = 1; i < (int)(sizeof SPEED / sizeof SPEED[0]); i++)
+            if (mm_fabsf(mm_log2f(SPEED[i].r / r)) < mm_fabsf(mm_log2f(SPEED[best].r / r)))
+                best = i;
+        return SPEED[best].w;
+    }
+    if ((mods & PM_MORE) && (mods & PM_TWIST) && fx >= PU_REVERSE && fx <= PU_GATE)
+        return fx == PU_REVERSE ? "SHORTER, IN THREES." : "FASTER, IN THREES.";
+    return (mods & PM_TWIST) ? TWIST[fx] : (mods & PM_MORE) ? MORE[fx] : PUNCH_SAID[fx];
+}
 /* ------------------------------------------------------------ the loop --- */
 /* SEQ, full screen: a cursor on the roll. Knob 1 its step, knob 2 its note, knob 3 the note's length; a step's
  * white key: there (on its nearest note), and again: that note goes, or one comes. */
@@ -990,12 +1013,10 @@ static void key_down(int k)
     }
     if (PUNCH_KEY[k] < 0 && ((k > 0 && (ui.punched >> (k - 1) & 1u)) || (k < NKEYS - 1 && (ui.punched >> (k + 1) & 1u)))) {
         const int above = k > 0 && (ui.punched >> (k - 1) & 1u);   /* a white beside a punch: it changes it */
+        const int pk = above ? k - 1 : k + 1;            /* (the punch it changes) */
         ui.modkeys |= 1u << k;
         punch_resend();
-        if (above)
-            ui_caption(TWIST_SAID[PUNCH_KEY[k - 1]], 900u);
-        else
-            ui_caption("MORE.", 700u);
+        ui_caption(punch_mod_said(PUNCH_KEY[pk], punch_mods(pk)), 900u);
         ui.page_until = plat_ms() + STAY_MS;
         return;
     }

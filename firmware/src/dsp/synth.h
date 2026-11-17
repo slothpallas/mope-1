@@ -182,6 +182,9 @@ void sy_punch(int fx, int on);
 #define PU_KMAX 15
 extern const uint8_t SY_PUNCH_KDEF[PU_N][PU_KN];
 void sy_punch_knob(int fx, int k, int v);
+/* HALF, DOUBLE: how fast the buffer is read (0.5: half speed) for its knob 1 (0..PU_KMAX) and the whites beside it
+ * held (PM_*): MORE twice as far, TWIST in threes, together both; never past an eighth or four times */
+float sy_punch_speed(int fx, int k0, int mods);
 void sy_fade_in(uint32_t ms);                       /* everything up from silence over ms (power-on) */
 void sy_load(int pct);                              /* the last block's time, % of its budget (the device's): over 88, a voice goes */
 
