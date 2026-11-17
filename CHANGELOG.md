@@ -10,17 +10,25 @@ Four macros, three new effects and a bank that shows what the engine can do.
 
 - **Macros on HOME.** HOME now opens four knobs that each take the whole sound from one end to the
   other, the same four on every preset: **Eyes** (the filter, from muffled to wide open), **Bite**
-  (clean to wrecked, dirtier but not louder), **Nerves** (frozen to wild: the LFOs, the wave, the
-  filter all restless) and **Room** (bone dry to drowned). The middle is the sound as it was made.
-  The blob acts them out: Bite makes it glare, Nerves makes it shiver. HOME again: the Body, then
+  (soft and round to wrecked, dirtier but not louder), **Nerves** (still to wild: the LFOs, the wave,
+  the filter all restless) and **Room** (bone dry to drowned). The middle is the sound as it was made,
+  and each goes a long way both ways. The blob acts them out: Bite makes it glare, Nerves makes it shiver. HOME again: the Body, then
   the Shadow. Out of the box the knobs turn the macros.
 - **Three new effects** on FX, after the dust: **Swirl** (a phaser; with Feedback up, a flanger),
   **Burn** (a fuzz after the filter, plus fewer bits and a lower sample rate) and **Mumble** (a
   filter over it all that moves with the beat, over a bar, or with your playing). The LFOs can go to
   each of them, and to the shadow oscillator's pitch, so a sync sound sweeps.
-- **Tabs.** A button with more pages shows them as tabs on top of the drawer, the open one lit.
-- **The wavetable in 3D.** The Body draws the table as a landscape with the slice you hear lit and
-  moving through it. While you turn Table or Position it fills the screen.
+- **Tabs.** A button with more pages shows them as tabs on top of the drawer, always in the same
+  places, the open one lit (FX's seven in two rows).
+- **Punches' white keys follow one rule.** The white key below a held time punch takes it twice as
+  far, the one above in threes: HALF a quarter or a third, DOUBLE four or three times, REPEAT,
+  STUTTER and GATE twice as fast or in triplets, REVERSE shorter slices or in threes. They work on
+  top of the punch's own knob, and the caption says what it came to.
+- **WOBBLE is a warped record again,** without the gritty, crushed sound under it.
+- **ARP plays your keys, not the loop.** Switching it on or off no longer changes what the loop
+  recorded: recorded chords stay chords, a recorded arpeggio stays an arpeggio.
+- **The wavetable in 3D.** The Body draws the table's frames in depth, the front and the back clear,
+  with the wave you hear lit where it is. While you turn Table or Position it fills the screen.
 - **Bolder presets, 65 in all.** Twenty new: brass, an organ, bells and chimes, wave sequences, a
   reese, an 808 sub with glide, a fuzz bass, sync, phaser and FM leads, an auto-wah clav and more.
   Fourteen re-voiced (brighter, faster, narrower basses), nine slow ones gone (Hold music, Weighted
