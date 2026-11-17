@@ -88,15 +88,20 @@ def wiggle(i, o, secs, chord):
     print(f"wiggled {secs:.0f} s: worst {worst:.1f}%")
 
 
+SOUND = list(range(0, 24)) + list(range(43, 61))   # (synth.h: Table .. Tape, B table .. Copy width: the sound's own)
+
+
 def chaos(i, o, secs, seed=1):
-    """everything over MIDI at random: any parameter to any value, presets, notes, bends, the deck"""
+    """everything over MIDI at random: any of the sound's settings to any value, presets, notes, bends, the deck.
+    Never the mix or the setup (tempo, levels, MIDI channel, the loop's length...): they are the player's and a
+    preset doesn't bring them back."""
     import random
     r = random.Random(seed)
     held, end, worst, n = set(), time.time() + secs, 0.0, 0
     while time.time() < end:
         x = r.random()
         if x < 0.35:
-            o.send(mido.Message("control_change", control=102, value=r.randint(0, 60)))
+            o.send(mido.Message("control_change", control=102, value=r.choice(SOUND)))
             o.send(mido.Message("control_change", control=103, value=r.choice([0, 127, r.randint(0, 127)])))
         elif x < 0.6:
             k = r.randint(24, 96)
@@ -137,6 +142,7 @@ def main():
     a.add_argument("--wiggle", type=float, default=0, help="seconds of beat + chords + LFO knob turning")
     a.add_argument("--chaos", type=float, default=0, help="seconds of everything at random over MIDI")
     a.add_argument("--punch", type=int, nargs="*", default=[], help="punches held during the measurement (PU_* numbers)")
+    a.add_argument("--channel", type=int, default=1, help="the MIDI channel its notes go on (as Settings > MIDI in has it)")
     o_ = a.parse_args()
     name = o_.port or next((n for n in mido.get_output_names() if "FM-1" in n or "Felucca" in n), None)
     if not name:
@@ -178,7 +184,7 @@ def main():
             ask(i, o)
             before = ask(i, o)
             for n in chord:
-                o.send(mido.Message("note_on", note=n, velocity=100))
+                o.send(mido.Message("note_on", channel=o_.channel - 1, note=n, velocity=100))
             for fx in o_.punch:
                 o.send(mido.Message("control_change", control=105, value=64 + fx))
             worst, avgs, end = 0.0, [], time.time() + o_.secs
@@ -192,7 +198,7 @@ def main():
             for fx in o_.punch:
                 o.send(mido.Message("control_change", control=105, value=fx))
             for n in chord:
-                o.send(mido.Message("note_off", note=n))
+                o.send(mido.Message("note_off", channel=o_.channel - 1, note=n))
             time.sleep(1.5)
             print(f"preset {p:2d}: average {max(avgs or [0]):5.1f}%  worst {worst:5.1f}%  late {s['late'] - before['late']}  "
                   f"voices {s['voices']}")
