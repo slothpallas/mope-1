@@ -22,7 +22,7 @@ rows=[]
 for p,nm in enumerate(names):
     r={}
     for mi,mac in enumerate(("EYES","BITE","NERVES","ROOM")):
-        for end in (0,127):
+        for end in (0,64,127):
             L=["master 4096","wait 500","midi B0 66 23","midi B0 67 00",f"midi C0 {p:02X} 00","wait 300",f"midi B0 66 {70+mi:02X}",f"midi B0 67 {end:02X}","wait 200","wav m.wav"]
             for n in (48,55,60,63): L.append(f"midi 90 {n:02X} 64")
             L.append("wait 2000")
@@ -36,7 +36,11 @@ for p,nm in enumerate(names):
     b=r[("BITE",127)]["top"]-r[("BITE",0)]["top"]; bc=np.log2(r[("BITE",127)]["cent"]/r[("BITE",0)]["cent"]); bl=r[("BITE",127)]["rms"]-r[("BITE",0)]["rms"]
     n=100*(r[("NERVES",127)]["move"]-r[("NERVES",0)]["move"]); ro=r[("ROOM",127)]["tail"]-r[("ROOM",0)]["tail"]
     decays=r[("NERVES",0)]["sounding"]<=3 and r[("NERVES",127)]["sounding"]<=3
-    rows.append(dict(eyes_top_db=round(r[("EYES",127)]["top"]-r[("EYES",0)]["top"],1),decays=bool(decays),name=nm,eyes_oct=round(e,1),eyes_db=round(el,1),bite_top_db=round(b,1),bite_oct=round(bc,1),bite_db=round(bl,1),nerves_move=round(n),room_tail_db=round(ro,1)))
+    H=lambda m,k,a,b: round(r[(m,b)][k]-r[(m,a)][k],1)
+    halves=dict(eyes_lo=H("EYES","top",0,64),eyes_hi=H("EYES","top",64,127),bite_lo=H("BITE","top",0,64),bite_hi=H("BITE","top",64,127),
+                nerves_lo=round(100*(r[("NERVES",64)]["move"]-r[("NERVES",0)]["move"])),nerves_hi=round(100*(r[("NERVES",127)]["move"]-r[("NERVES",64)]["move"])),
+                room_lo=H("ROOM","tail",0,64),room_hi=H("ROOM","tail",64,127))
+    rows.append(dict(**halves,eyes_top_db=round(r[("EYES",127)]["top"]-r[("EYES",0)]["top"],1),decays=bool(decays),name=nm,eyes_oct=round(e,1),eyes_db=round(el,1),bite_top_db=round(b,1),bite_oct=round(bc,1),bite_db=round(bl,1),nerves_move=round(n),room_tail_db=round(ro,1)))
 json.dump(rows,open('build/review/macros.json','w'),indent=1)
 print(f"{'name':20s} EYES oct / dB   BITE top dB / oct / dB   NERVES +move%   ROOM tail dB   (the room's rain off; a decaying sound's NERVES is not judged)")
 for r in rows:

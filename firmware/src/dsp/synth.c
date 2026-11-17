@@ -1126,6 +1126,7 @@ static inline __attribute__((always_inline)) float lfo_shape_in(int shape, float
 float sy_lfo_shape(int shape, float ph, float from, float to) { return lfo_shape_in(shape, ph, from, to); }   /* (the panel's: in XIP) */
 static float mac_rate;                                 /* NERVES: both LFOs faster or slower, octaves */
 static float mac_fry, mac_fryk = 1.0f, mac_fb;          /* BITE: fry added and x; ROOM: more feedback */
+static float bite_soft, nerve_still;                     /* BITE down: the shadow's harsh meetings tamed; NERVES down: no drift */
 SY_FAST static float lfo_tick(lfo_t *l, int rate, int shape, uint32_t n)
 {
     const float hz = 0.05f * mm_exp2f(pf(rate) * 9.0f + mac_rate);
@@ -1275,7 +1276,7 @@ SY_FAST static void render_voices(float *ol, float *or_, uint32_t n, const mods_
     int i;
     uint8_t nv = 0, ng = 0, stage = ST_OFF;
     md.vol *= mm_exp2f((float)par[P_LEVEL] * 0.04f);   /* the preset's own level */
-    lvl = mm_clampf(pf(P_BLEVEL) + md.shadow, 0.0f, 1.0f);
+    lvl = mm_clampf(pf(P_BLEVEL) + md.shadow, 0.0f, 1.0f) * (meet != MEET_MIX ? 1.0f - 0.8f * bite_soft : 1.0f);
     const int scan = md.scanning || tpos0 != tpos_now || tpos_now != (float)(int)tpos_now;
     const int shadow_on = lvl > 0.0f, plain = !shadow_on && ftype == FT_LOW && drive <= 0.0f && !scan;
     base_pos = pf(P_POS) + md.pos + mod_amt;
@@ -1313,7 +1314,7 @@ SY_FAST static void render_voices(float *ol, float *or_, uint32_t n, const mods_
             v->cents += (v->cents_to - v->cents) * glide;
             if ((rnd() & 255u) == 0u)
                 v->drift_to = rnds() * 4.0f;
-            v->drift += 0.002f * (v->drift_to - v->drift);
+            v->drift += 0.002f * (v->drift_to * (1.0f - nerve_still) - v->drift);
             c = v->cents + v->drift + bend_c + md.pitch + (float)par[P_TUNE];
             hz = 8.1757989f * mm_exp2f(c * (1.0f / 1200.0f));
             /* where in the table: the knob, the LFOs, the wheel, and this note's sweep (SIGH) */
@@ -3793,7 +3794,7 @@ static float mb_a1, mb_a2, mb_a3, mb_k = 1.0f, mb_s1[2], mb_s2[2], mb_u, mb_env,
 SY_FAST static void fxn_chunk(const mods_t *md, float bite)
 {
     sw_amt = mm_clampf(pf(P_SWIRL) + md->swirl, 0.0f, 1.0f);
-    bn_amt = mm_clampf(pf(P_BURN) + md->burn + bite * 0.85f, 0.0f, 1.0f);
+    bn_amt = mm_clampf(pf(P_BURN) * (1.0f - bite_soft) + md->burn + bite * 0.85f, 0.0f, 1.0f);
     bn_crush = pf(P_BNCRUSH);
     bn_rate = pf(P_BNRATE);
     mb_amt = mm_clampf(pf(P_MUMBLE) + md->mumble, 0.0f, 1.0f);
@@ -3960,15 +3961,19 @@ SY_FAST void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
      *   EYES    shut and muffled .. wide open: a low-pass from nearly closed, through where the sound has it, to
      *           all the way open (the other kinds: two octaves each way; a high-pass the other way round, so
      *           open is still more of it), the filter's envelope, some resonance
-     *   BITE    clean and soft .. wrecked: the push into the filter, the fry, the burn after it, a harder attack,
-     *           a brighter edge; taken back in level, so it is dirtier, not louder
-     *   NERVES  frozen .. wild: the LFOs' depth and speed, the Sigh's sweep, and a restlessness of its own
-     *           (the wave's position, the filter, the tables, the pitch) for sounds whose LFOs do nothing
+     *   BITE    soft and round .. wrecked. Up: the push into the filter, the fry, the burn after it, a harder
+     *           attack, a brighter edge; taken back in level, so it is dirtier, not louder. Down: all of that
+     *           gone, and the edges taken off: a darker, gentler filter, no resonance, the shadow's FM, ring
+     *           and sync tamed, the top rolled off, a slower attack
+     *   NERVES  frozen .. wild. Up: the LFOs' depth and speed, the Sigh's sweep, and a restlessness of its own
+     *           (the wave's position, the filter, the tables, the pitch) for sounds whose LFOs do nothing.
+     *           Down: nothing moves: the LFOs and the Sigh's sweep fade out, the detune closes, the drift stops
      *   ROOM    bone dry .. drowned: the room, the echoes and their feedback, the copies */
     const float me = (float)(par[P_MEYES] - 50) * 0.02f, mb = (float)(par[P_MBITE] - 50) * 0.02f;
     const float mn = (float)(par[P_MNERVE] - 50) * 0.02f, mr = (float)(par[P_MROOM] - 50) * 0.02f;
     const float mbu = mb > 0.0f ? mb : 0.0f, mnu = mn > 0.0f ? mn : 0.0f, mru = mr > 0.0f ? mr : 0.0f;
     const float nk = mn < 0.0f ? 1.0f + mn : 1.0f;      /* (below the middle: everything that moves, less) */
+    const float mbd = mb < 0.0f ? -mb : 0.0f;           /* (BITE below the middle: how soft) */
     const float d1 = pf(P_LFODEPTH), d2 = pf(P_LFO2DEPTH);
     mac_rate = mn * 1.5f;
     mac_fry = mbu * 0.6f;
@@ -3984,13 +3989,17 @@ SY_FAST void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
          * tilt on the voices after them (below), as their cutoff alone may darken (a band moving past the
          * sound) or say a vowel. What closing takes in level is given back, most of it. */
         const float eo = ft == FT_LOW ? (me < 0.0f ? me * mm_maxf(c - 3.0f, 0.0f) : me * (9.3f - c)) : me * (ft == FT_HIGH ? 2.0f : 1.0f);
-        md.cut += eo + mbu * 1.5f;                      /* (BITE: a brighter edge too) */
+        md.cut += eo + mbu * 1.5f - mbd * 1.6f;         /* (BITE: a brighter edge; down: a duller one) */
         md.vol *= mm_exp2f(mm_clampf(-eo * (eo < 0.0f ? 0.32f : 0.08f), -1.0f, 1.6f));
-        eyes_tilt = (ft == FT_LOW ? 0.0f : me) + mbu * 0.5f;
+        eyes_tilt = mm_clampf((ft == FT_LOW ? (me > 0.0f ? me * 0.7f : 0.0f) : me) + mbu * 0.5f - mbd * 0.7f, -1.0f, 1.0f);   /* (a low-pass already open: brighter still) */
+        md.vol *= 1.0f + mbd * 0.2f;                    /* (BITE down: what the softer edges take, back) */
         md.vol *= 1.0f / (1.0f + 0.15f * mbu);          /* (BITE: what the push adds in level, back out; the fry and the burn even themselves) */
     }
-    md.reso = (me > 0.0f ? me : 0.0f) * 0.25f;
-    md.envk = mm_maxf(1.0f + me * 0.6f + mbu * 0.5f, 0.0f);
+    md.reso = (me > 0.0f ? me : 0.0f) * 0.25f - mbd * pf(P_RESO) * 0.8f;
+    md.envk = mm_maxf(1.0f + me * 0.6f + mbu * 0.5f - mbd * 0.6f, 0.0f);
+    bite_soft = mbd;                                    /* (the shadow's FM, ring and sync: tamed, in the voices) */
+    nerve_still = mn < 0.0f ? -mn : 0.0f;               /* (the drift: stilled, in the voices) */
+    md.detune -= (mn < 0.0f ? -mn : 0.0f) * pf(P_DETUNE) * 0.9f;   /* (NERVES down: the detune closes) */
     md.drv = mbu * 0.9f;
     md.drvk = mb < 0.0f ? 1.0f + mb : 1.0f;
     md.attk = mb < 0.0f ? 1.0f / (1.0f - mb * 3.0f) : 1.0f + mb * 5.0f;
@@ -4031,9 +4040,9 @@ SY_FAST void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
         }
     {
         const float rk = mr < 0.0f ? 1.0f + mr : 1.0f;  /* (ROOM down: all of it less, to none) */
-        md.copies = (pf(P_CHORUS) + md.copies) * rk + mru * 0.3f - pf(P_CHORUS);
-        md.echo = (pf(P_DELAY) + md.echo) * rk + mru * 0.45f - pf(P_DELAY);
-        md.verb = (pf(P_REVERB) + md.verb) * rk + mru * 0.65f - pf(P_REVERB);
+        md.copies = (pf(P_CHORUS) + md.copies) * rk * (1.0f - nerve_still) + mru * 0.3f - pf(P_CHORUS);   /* (NERVES down: the copies still too) */
+        md.echo = (pf(P_DELAY) + md.echo) * rk + mru * 0.55f - pf(P_DELAY);
+        md.verb = (pf(P_REVERB) + md.verb) * rk + mru * 0.85f - pf(P_REVERB);
     }
     to_ch = mm_clampf(pf(P_CHORUS) + md.copies, 0.0f, 1.0f);
     to_dl = mm_clampf(pf(P_DELAY) + md.echo, 0.0f, 1.0f) * 0.8f;
