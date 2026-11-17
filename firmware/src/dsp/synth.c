@@ -444,6 +444,7 @@ static float comb_line[SY_NVOICE][COMB_N] SY_POOL;
 static uint32_t age_n;
 static float bend_c, mod_amt, press, press_to, vib_ph;
 static uint8_t sus_on, sus_note[128];             /* the pedal down; the notes it is keeping (let go meanwhile) */
+static uint8_t key_held[128];                      /* your keys down now (the panel's or MIDI's), not the band's or the loop's */
 
 /* the load guard: when a block takes too long (sy_load, from the device), fewer voices may sound
  * until it has been calm for a while. The FM-1 crackles otherwise. */
@@ -844,10 +845,11 @@ SY_FAST static void arp_tick(void)                             /* one sample */
 SY_FAST static void arp_set(int on)
 {
     int i;
-    if (on && !arp_on) {                                /* what is held now becomes the pattern */
+    if (on && !arp_on) {                                /* what you hold now becomes the pattern (your keys only: the loop
+                                                           plays on as it was recorded, chords stay chords) */
         arp_nh = 0;
         for (i = 0; i < SY_NVOICE; i++)
-            if (vc[i].gate) {
+            if (vc[i].gate && key_held[vc[i].note]) {
                 arp_add(vc[i].note);
                 note_off(vc[i].note);
             }
@@ -2529,7 +2531,9 @@ SY_FAST static void punch_chunk(void)
     {   /* WOBBLE (MORE: deeper; TWIST: slow and seasick) */
         const int md = pu_mod[PU_WOBBLE];
         const float top = (pu_held >> PU_WOBBLE & 1u) ? ((md & PM_TWIST) ? 2.0f : (md & PM_MORE) ? 1.5f : 1.0f) * (0.15f + 0.85f * pkf(PU_WOBBLE, 1)) : 0.0f;   /* (knob 2: how deep) */
-        pu_wob = mm_clampf(pu_wob + (pu_wob < top ? in * 0.2f : -out * 0.5f), 0.0f, 2.0f);
+        /* (to its depth and no further: it overshot and came back every chunk, the line jumping ~7 samples
+         * 2756 times a second: a crusher's grind under every wobble) */
+        pu_wob = pu_wob < top ? mm_minf(pu_wob + in * 0.2f, top) : mm_maxf(pu_wob - out * 0.5f, top);
         pu_wob_ph += ((md & PM_TWIST) ? ((md & PM_MORE) ? 0.6f : 0.35f) : (md & PM_MORE) ? 1.6f : 1.1f) *
                      pke(PU_WOBBLE, 0, 8.0f, 3.0f) * 16.0f / SY_SR;   /* (knob 1: how fast) */
     }
@@ -3608,11 +3612,12 @@ SY_FAST static void panic(void)                                 /* everything qu
     sus_on = 0;
     sy_tel.sustain = 0;
     for (i = 0; i < 128; i++)
-        sus_note[i] = 0;
+        sus_note[i] = key_held[i] = 0;
     mo_all_off();
 }
 SY_FAST static void key_off(int n)                              /* a key let go (or the pedal up after it) */
 {
+    key_held[n] = 0;
     if (arp_on)
         arp_remove(n);
     else {
@@ -3657,6 +3662,7 @@ SY_FAST static void drain(void)
             break;
         case C_ON:
             sus_note[c.a] = 0;                          /* (again while the pedal kept it: a new note) */
+            key_held[c.a] = 1;
             if (arp_on) {
                 arp_vel = (uint8_t)c.b;
                 arp_add(c.a);
@@ -4097,12 +4103,19 @@ SY_FAST void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
         tear_ef_ph -= (float)(int)tear_ef_ph;
         tear_wob = tape * 0.004f * mm_sin_turns(wow_ph) + (0.0012f + 0.003f * tape) * mm_sin_turns(tear_ew_ph) +
                    (0.00025f + 0.0008f * tape) * mm_sin_turns(tear_ef_ph);
-        /* (the tape's line: how far back, once a chunk: all it hangs on moves once a chunk. Four sines a
-         * sample, before, cost the FM-1 a few %) */
+        /* (the tape's line: how far back, worked out once a chunk (four sines a sample cost the FM-1 a few %)
+         * and glided to across it, a sample at a time: stepped, a moving line grinds like a crusher, WOBBLE most) */
+        /* WOBBLE's lurch and flutter, though, every sample (only while it is held): glided once a chunk, its
+         * speed stepped 2756 times a second and rang, -30 dB, like a crusher */
+        static float tp_back_was, wb_ph_was, wb_fl_ph;
         const int tp_on = tape > 0.0f || pu_wob > 0.0f;
-        const float tp_back = tp_on ? 40.0f + tape * (30.0f * mm_sin_turns(wow_ph) + 6.0f * mm_sin_turns(flut_ph) + 36.0f) +
-                                          pu_wob * (190.0f + 170.0f * mm_sin_turns(pu_wob_ph) + 20.0f * mm_sin_turns(flut_ph * 1.08f))
-                                    : 0.0f;
+        const float tp_back = tp_on ? 40.0f + tape * (30.0f * mm_sin_turns(wow_ph) + 6.0f * mm_sin_turns(flut_ph) + 36.0f) : 0.0f;
+        const float tp_step = (tp_back - tp_back_was) * (1.0f / 16.0f);
+        float tp_now = tp_on ? tp_back_was : tp_back, wb_ph = wb_ph_was, wb_fl = wb_fl_ph;
+        float wb_inc = pu_wob_ph - wb_ph_was;
+        wb_inc = (wb_inc - mm_floorf(wb_inc + 0.5f)) * (1.0f / 16.0f);   /* (its phase, round: the nearest way) */
+        wb_fl_ph += 7.02f * 16.0f / SY_SR;              /* (the flutter: its own phase, so it never jumps) */
+        wb_fl_ph -= (float)(int)wb_fl_ph;
         for (j = j0; j < j0 + 16u && j < n; j++) {
             float l = bl[j], r = br[j], el, er, rl, rr, dm, bass;
             fry(&l, &r);
@@ -4167,7 +4180,12 @@ SY_FAST void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
             tp_w = (tp_w + 1u) & (TP_N - 1u);
             if (tp_on) {
                 /* (WOBBLE: a warped record, a slow lurch and a quick flutter on the same line, up to 870 back) */
-                const float back = tp_back;
+                float back = (tp_now += tp_step);
+                if (pu_wob > 0.0f) {
+                    wb_ph += wb_inc;
+                    wb_fl += 7.02f / SY_SR;
+                    back += pu_wob * (190.0f + 170.0f * mm_sin_turns(wb_ph) + 20.0f * mm_sin_turns(wb_fl));
+                }
                 l = line_read4(tp_l, TP_N - 1u, tp_w, back);   /* (cubic: the wobble keeps its top) */
                 r = line_read4(tp_r, TP_N - 1u, tp_w, back);
                 if (tape > 0.0f) {
@@ -4202,6 +4220,8 @@ SY_FAST void sy_render(int32_t *out, uint32_t n, uint32_t gain_q12)
                 out[2 * j + 1] = (int32_t)sr;
             }
         }
+        tp_back_was = tp_back;
+        wb_ph_was = pu_wob_ph;
     }
     was_ch = to_ch;
     was_dl = to_dl;
