@@ -475,10 +475,12 @@ static void shade_px(const shade_t *sh, int32_t x, int32_t y)
     }
     idx = (int)(lv * 5.0f + dith + 0.5f);
     idx = idx < 0 ? 0 : idx > 5 ? 5 : idx;
-    if (sh->fry > 0.0f) {                               /* fried: in burnt patches, not all over */
-        const uint32_t hh = ((uint32_t)(x / 3) * 73856093u) ^ ((uint32_t)(y / 3) * 19349663u);
-        const float patch = (float)((hh >> 9) & 255u) / 255.0f;
-        c = patch < sh->fry * 1.1f + dith * 0.15f ? RAMP_FRY[idx] : sh->ramp[idx];
+    if (sh->fry > 0.0f) {                               /* fried: in burnt blotches, soft-edged, that spread as it fries
+                                                           (a few waves across its skin, not squares) */
+        const float u = dx / sh->rmax, v = dy / sh->rmax;
+        const float patch = 0.5f + 0.17f * mm_sin_turns(u * 1.3f + v * 0.7f + 0.11f) + 0.15f * mm_sin_turns(v * 1.9f - u * 0.4f + 0.37f) +
+                            0.12f * mm_sin_turns((u + v) * 2.7f + 0.62f) + 0.06f * mm_sin_turns(u * 4.1f - v * 3.3f);
+        c = patch < sh->fry * 1.1f + (dith - 0.5f) * 0.06f ? RAMP_FRY[idx] : sh->ramp[idx];
     } else {
         c = sh->ramp[idx];
     }
@@ -711,7 +713,7 @@ static void draw_face(const geo_t *g)
         {   /* the brows: inner ends up (sad); the mod envelope lifts them */
             const float by = ey - 8.0f * s - brow * (1.0f - mad) + mad * 2.5f * s;
             const float yin = by - 3.0f * s + mad * 7.5f * s, yout = by + 0.5f * s - mad * 4.0f * s;   /* (angry: the inner ends down) */
-            const uint8_t bc = fine ? PC_BLOB0 : mad > 0.85f ? PC_RED : PC_PUPIL;
+            const uint8_t bc = fine ? PC_BLOB0 : PC_PUPIL;
             px_line((int32_t)(ex - (float)e * 5.5f * s), (int32_t)yin, (int32_t)(ex + (float)e * 4.5f * s), (int32_t)yout, bc);
             px_line((int32_t)(ex - (float)e * 5.5f * s), (int32_t)yin + 1, (int32_t)(ex + (float)e * 4.5f * s), (int32_t)yout + 1, bc);   /* (thick: it reads from across the room) */
             if (mad > 0.4f)                              /* (and thicker still) */
@@ -1002,23 +1004,27 @@ static float lfo_shape_at(int shape, float ph)
     return sy_lfo_shape(shape, ph, lfo_hash(k), lfo_hash(k + 1));
 }
 
-/* A wavetable as a landscape (as Serum draws one, or the OP-1 its strings): its eight frames and what lies
- * between them, NZ slices deep, the first frame nearest, each slice a ridge that hides what is behind and
- * under it; the far ones fade into the room. The slice being played is lit, and travels through it as the
- * position moves (the knob, the LFOs, the Sigh: live). A new table: the land morphs into it. It turns a
- * little, slowly. Drawn back to front into x0..x1, y0..y1. */
+/* A wavetable in 3D (as Serum draws one, or the OP-1 its strings): its eight frames, one line each, the
+ * first nearest and the last at the back, each hiding what is behind and under it; the first and the last
+ * drawn bright so the two ends read, the ones between dimmer, deeper. Tall: the highs and lows show. The
+ * wave playing is lit and laid over it where it is in the table (the knob, the LFOs, the Sigh: live), its
+ * detuned twin beside. A new table: the lines morph into it. It turns a little, slowly. Into x0..x1, y0..y1. */
 static struct {
     int8_t tab[2];                                       /* the table shown, and the one it is morphing from */
     float mix;                                           /* how far along (1: there) */
 } w3[2];                                                 /* (0: the body's, 1: the shadow's) */
+static float w3_at(int which, int table, float fp, float t)
+{
+    const float v = sy_shape(table, fp, t), m = w3[which].mix;
+    return m < 1.0f ? v * m + sy_shape(w3[which].tab[1], fp, t) * (1.0f - m) : v;
+}
 static void wave3d(int which, int32_t x0, int32_t x1, int32_t y0, int32_t y1, int table, float pos, float ghost)
 {
     const int32_t w = x1 - x0, h = y1 - y0;
-    const int big = h > 40, NZ = big ? 26 : 9, NX = big ? 60 : 44;
+    const int NZ = SY_NFRAME, NX = h > 40 ? 64 : 48;
     const float turn = mm_sin_turns(bs.t * 0.07f);
-    const float depx = (float)w * (0.2f + 0.04f * turn), depy = (float)h * (big ? 0.5f : 0.4f);
-    const float amp = (float)h * (big ? 0.17f : 0.22f), fw = (float)w - depx - 2.0f;
-    const int zplay = (int)(mm_clampf(pos, 0.0f, 1.0f) * (float)(NZ - 1) + 0.5f);
+    const float depx = (float)w * (0.18f + 0.03f * turn), depy = (float)h * 0.34f;
+    const float amp = (float)h * 0.3f, fw = (float)w - depx - 2.0f;
     int z, i;
     if (w3[which].tab[0] != table) {                     /* (another table: from the one shown, in a third of a second) */
         if (w3[which].mix >= 1.0f)                       /* (mid-morph: it goes on from where it came) */
@@ -1027,44 +1033,36 @@ static void wave3d(int which, int32_t x0, int32_t x1, int32_t y0, int32_t y1, in
         w3[which].mix = 0.0f;
     }
     w3[which].mix = mm_minf(w3[which].mix + bs.dt * 3.0f, 1.0f);
-    for (z = NZ - 1; z >= 0; z--) {
-        const float zf = (float)z / (float)(NZ - 1), fp = zf, k = 1.0f - 0.22f * zf;   /* (the far ones a little smaller) */
-        const float bx = (float)x0 + 1.0f + depx * zf, by = (float)y1 - 1.0f - amp - depy * zf, m = w3[which].mix;
-        const int play = z == zplay;
-        const uint8_t c = play ? PC_SPEC : zf > 0.75f ? PC_WALL : zf > 0.45f ? PC_WALL2 : zf > 0.2f ? PC_BLOBM : PC_BLOB2;
+    for (z = NZ; z >= 0; z--) {                          /* back to front; z == NZ: the one playing, last, on top */
+        const int play = z == NZ;
+        const float zf = play ? mm_clampf(pos, 0.0f, 1.0f) : (float)z / (float)(NZ - 1), k = 1.0f - 0.2f * zf;
+        const float bx = (float)x0 + 1.0f + depx * zf, by = (float)y1 - 1.0f - amp * k - depy * zf;
+        const uint8_t c = play ? PC_SPEC : z == 0 ? PC_BLOB2 : z == NZ - 1 ? PC_BLOB1 : zf > 0.55f ? PC_WALL : PC_WALL2;
         int32_t lx = 0, ly = 0;
         for (i = 0; i <= NX; i++) {
             const float t = (float)i / (float)NX;
-            float v = sy_shape(table, fp, t);
-            int32_t x, y, yy;
-            if (m < 1.0f)
-                v = v * m + sy_shape(w3[which].tab[1], fp, t) * (1.0f - m);
-            x = (int32_t)(bx + t * fw * k);
-            y = (int32_t)(by - v * amp * k);
-            if (i) {                                     /* the ridge, and under it dark: what is behind is hidden */
-                const int32_t n = x - lx > 0 ? x - lx : 1;
-                int32_t q;
-                for (q = 0; q <= n; q++) {
-                    const int32_t cx = lx + q, cy = ly + (y - ly) * q / n, floor_y = (int32_t)(by + amp * k) + 1;
-                    for (yy = cy + 1; yy <= floor_y && yy <= y1; yy++)
-                        px_pset(cx, yy, PC_BG0);
+            const int32_t x = (int32_t)(bx + t * fw * k), y = (int32_t)(by - w3_at(which, table, zf, t) * amp * k);
+            if (i) {
+                if (!play) {                             /* (under the line, dark: what is behind is hidden) */
+                    const int32_t nn = x - lx > 0 ? x - lx : 1, floor_y = (int32_t)(by + amp * k) + 1;
+                    int32_t q, yy;
+                    for (q = 0; q <= nn; q++)
+                        for (yy = ly + (y - ly) * q / nn + 1; yy <= floor_y && yy <= y1; yy++)
+                            px_pset(lx + q, yy, PC_BG0);
                 }
                 px_line(lx, ly, x, y, c);
-                if (play && big)
-                    px_line(lx, ly - 1, x, y - 1, PC_BLOB2);   /* (the one playing: bold) */
+                if (play || z == 0)
+                    px_line(lx, ly - 1, x, y - 1, play ? PC_BLOB2 : PC_BLOBM);   /* (bold: the one playing, the first) */
             }
             lx = x;
             ly = y;
         }
-        if (play && ghost > 0.05f) {                     /* its detuned twin, sliding */
-            for (i = 0; i <= NX; i++) {
+        if (play && ghost > 0.05f)                       /* its detuned twin, sliding */
+            for (i = 0; i <= NX; i += 2) {
                 const float t = (float)i / (float)NX;
-                const int32_t x = (int32_t)(bx + t * fw * k);
-                const int32_t y = (int32_t)(by - sy_shape(table, fp, t + ghost * 0.1f * mm_sin_turns(bs.t * 0.5f)) * amp * k);
-                if (i & 1)
-                    px_pset(x, y, PC_GHOST);
+                px_pset((int32_t)(bx + t * fw * k),
+                        (int32_t)(by - w3_at(which, table, zf, t + ghost * 0.1f * mm_sin_turns(bs.t * 0.5f)) * amp * k), PC_GHOST);
             }
-        }
     }
 }
 /* the table big, over the room, while its knobs are being turned (BODY: WAVE or POS; SHADOW: its WAVE) */
@@ -1074,18 +1072,18 @@ static int wave_big(void)
            ((ui.page == PG_BODY && (ui.touched == 0 || ui.touched == 1)) || (ui.page == PG_SHADOW && ui.touched == 0));
 }
 
-static void schem_body(const drawer_t *p)                /* the wavetable: a landscape, the slice playing lit */
+static void schem_body(const drawer_t *p)                /* the wavetable in 3D; while it is big above: the wave playing, flat */
 {
-    if (!wave_big())                                     /* (big: it is over the room, not in here too) */
-        wave3d(0, p->gx0, p->gx1 - 14, p->gy0 - 1, p->gy1 + 1, proj.par[P_TABLE], sy_tel.wave_pos, pn(P_DETUNE));
-    {   /* the position, a slider of frames on the right */
-        const float pos = pn(P_POS);
-        int f;
-        for (f = 0; f < SY_NFRAME; f++) {
-            const int32_t y = p->gy1 - f * (p->gy1 - p->gy0) / (SY_NFRAME - 1);
-            const int on = (int)(pos * (float)(SY_NFRAME - 1) + 0.5f) == f;
-            px_rect(p->gx1 - 12, y, on ? 10 : 6, 1, on ? PC_SPEC : PC_WALL2);
-        }
+    if (!wave_big()) {
+        wave3d(0, p->gx0, p->gx1, p->gy0 - 2, p->gy1 + 1, proj.par[P_TABLE], sy_tel.wave_pos, pn(P_DETUNE));
+        return;
+    }
+    {
+        float v[64];
+        int i;
+        for (i = 0; i < 64; i++)
+            v[i] = 0.5f + 0.45f * sy_shape(proj.par[P_TABLE], sy_tel.wave_pos, (float)i / 63.0f);
+        curve(p, v, 64, PC_SPEC, PC_BLOBD, 1);
     }
 }
 
@@ -1733,8 +1731,7 @@ static void schem_mumble(const drawer_t *p)              /* its peak, where it i
 
 static void schem_macro(const drawer_t *p)               /* the macros: four dials, the middle the sound as it is made */
 {
-    static const uint8_t KC[4] = {PC_TEAR, PC_RED, PC_XP, PC_BLOB2};
-    static const int8_t KP[4] = {P_MEYES, P_MBITE, P_MNERVE, P_MROOM};
+    static const int8_t KP[4] = {P_MEYES, P_MBITE, P_MNERVE, P_MROOM};   /* (one quiet colour, the drawer's: the blob shows what they do) */
     const uint32_t since = plat_ms() - ui.focus_t;
     const int32_t cy = (p->gy0 + p->gy1) / 2 + 2;
     int k, j;
@@ -1748,13 +1745,13 @@ static void schem_macro(const drawer_t *p)               /* the macros: four dia
             int rr;
             for (rr = 0; rr < 2; rr++) {
                 const float sx = mm_sin_turns(t) * (8.5f - (float)rr), sy = mm_sin_turns(t + 0.25f) * (8.5f - (float)rr);
-                px_pset(cx + (int32_t)(sx + (sx < 0.0f ? -0.5f : 0.5f)), cy - (int32_t)(sy + (sy < 0.0f ? -0.5f : 0.5f)), lit ? KC[k] : PC_WALL2);
+                px_pset(cx + (int32_t)(sx + (sx < 0.0f ? -0.5f : 0.5f)), cy - (int32_t)(sy + (sy < 0.0f ? -0.5f : 0.5f)), lit ? PC_BLOB2 : PC_WALL2);
             }
         }
         px_rect(cx, cy - 11, 1, 2, PC_DIM);              /* (the middle's mark: the sound as it was made) */
         px_line(cx, cy, cx + (int32_t)(mm_sin_turns(a) * 5.6f + (mm_sin_turns(a) < 0.0f ? -0.5f : 0.5f)),
-                cy - (int32_t)(mm_sin_turns(a + 0.25f) * 5.6f + (mm_sin_turns(a + 0.25f) < 0.0f ? -0.5f : 0.5f)), hot ? PC_WHITE : KC[k]);
-        px_rect(cx - 1, cy - 1, 2, 2, hot ? PC_WHITE : KC[k]);
+                cy - (int32_t)(mm_sin_turns(a + 0.25f) * 5.6f + (mm_sin_turns(a + 0.25f) < 0.0f ? -0.5f : 0.5f)), hot ? PC_WHITE : PC_BLOB2);
+        px_rect(cx - 1, cy - 1, 2, 2, hot ? PC_WHITE : PC_BLOB2);
     }
 }
 
@@ -1831,60 +1828,54 @@ static void draw_preset_card(int32_t y0)
     }
 }
 
-/* a button's pages as tabs on the drawer's top edge, in the order the button goes round them: the one open
- * lit and joined to the drawer, the others dark. All of them if they fit across; else as many as fit around
- * the open one, whole, with a small arrow where more are hidden (FX's seven). */
+/* a button's pages as tabs on the drawer's top edge, in the order the button goes round them, always in the
+ * same places whichever is open (the open one lit): one row; FX's seven, two (they don't fit across). */
+static int tab_rows(int pg)                             /* (how many rows its button's tabs take) */
+{
+    int n = 0, first = pg;
+    int32_t x = 1;
+    while (PAGE_NTH[first] && n++ < 8)
+        first = PAGE_AGAIN[first];
+    pg = first;
+    n = 0;
+    do {
+        x += px_text_w(PAGE_NAME[pg]) + 5;
+        pg = PAGE_AGAIN[pg];
+    } while (pg >= 0 && pg != first && ++n < 8);
+    return x > PX_W ? 2 : 1;
+}
 static void draw_tabs(int32_t y0)
 {
     int8_t pgs[8];
-    int32_t w[8], x = 1;
-    int n = 0, pg = ui.page, k, cur = 0, lo, hi;
-    if (PAGE_AGAIN[pg] < 0 || y0 < 9 || y0 > PX_H - 16)     /* (none, no room over it, or the drawer nearly away) */
+    int n = 0, pg = ui.page, k, rows;
+    int32_t x = 1, row = 0;
+    if (PAGE_AGAIN[pg] < 0 || y0 > PX_H - 16)           /* (none, or the drawer nearly away) */
+        return;
+    rows = tab_rows(pg);
+    if (y0 < 9 * rows)
         return;
     while (PAGE_NTH[pg] && n++ < 8)                      /* (round to its button's first) */
         pg = PAGE_AGAIN[pg];
     n = 0;
     do {
-        if (pg == ui.page)
-            cur = n;
-        pgs[n] = (int8_t)pg;
-        w[n] = px_text_w(PAGE_NAME[pg]) + 4;
-        n++;
+        pgs[n++] = (int8_t)pg;
         pg = PAGE_AGAIN[pg];
     } while (pg >= 0 && pg != pgs[0] && n < 8);
-    {   /* the window: from the open one out, a tab each side in turn, while they fit (with room for the arrows) */
-        int32_t used = w[cur];
-        int grew = 1;
-        lo = hi = cur;
-        while (grew) {
-            grew = 0;
-            if (hi + 1 < n && used + w[hi + 1] + 1 + (hi + 2 < n ? 5 : 0) + (lo > 0 ? 5 : 0) <= PX_W - 2) {
-                used += w[++hi] + 1;
-                grew = 1;
-            }
-            if (lo > 0 && used + w[lo - 1] + 1 + (lo - 1 > 0 ? 5 : 0) + (hi + 1 < n ? 5 : 0) <= PX_W - 2) {
-                used += w[--lo] + 1;
-                grew = 1;
-            }
-        }
-    }
-    if (lo > 0) {                                        /* (more to the left) */
-        px_line(x + 3, y0 - 7, x, y0 - 4, PC_DIM);
-        px_line(x, y0 - 4, x + 3, y0 - 1, PC_DIM);
-        x += 5;
-    }
-    for (k = lo; k <= hi; k++) {
+    for (k = 0; k < n; k++) {
         const int on = pgs[k] == ui.page;
-        px_rect(x, y0 - 8, w[k], 8, on ? PC_PANEL : PC_BG0);
-        px_rect(x, y0 - 9, w[k], 1, on ? PC_BLOB2 : PC_GRID);
-        if (on)
-            px_rect(x, y0, w[k], 1, PC_PANEL);           /* (open: no edge between it and the drawer) */
-        px_text(x + 2, y0 - 6, PAGE_NAME[pgs[k]], on ? PC_WHITE : PC_BLOBM);
-        x += w[k] + 1;
-    }
-    if (hi + 1 < n) {                                    /* (more to the right) */
-        px_line(x + 1, y0 - 7, x + 4, y0 - 4, PC_DIM);
-        px_line(x + 4, y0 - 4, x + 1, y0 - 1, PC_DIM);
+        const int32_t w = px_text_w(PAGE_NAME[pgs[k]]) + 4;
+        int32_t ty;
+        if (rows > 1 && row == 0 && x + w > PX_W - 1) { /* (the first row full: the rest above it) */
+            row = 1;
+            x = 1;
+        }
+        ty = y0 - 9 * (rows - row);                     /* (the first pages on top, the last next to the drawer) */
+        px_rect(x, ty + 1, w, 8, on ? PC_PANEL : PC_BG0);
+        px_rect(x, ty, w, 1, on ? PC_BLOB2 : PC_GRID);
+        if (on && ty + 9 == y0)
+            px_rect(x, y0, w, 1, PC_PANEL);              /* (open, next to the drawer: no edge between them) */
+        px_text(x + 2, ty + 3, PAGE_NAME[pgs[k]], on ? PC_WHITE : PC_BLOBM);
+        x += w + 1;
     }
 }
 
@@ -1910,20 +1901,20 @@ static void draw_panel(const geo_t *g)
         return;
     }
     /* the page's name and what it is set to; a button with more pages: their tabs, standing on the drawer */
-    const int tabbed = PAGE_AGAIN[ui.page] >= 0 && p.y0 >= 9 && p.y0 <= PX_H - 16;   /* (its name is on its tab) */
+    const int tabbed = PAGE_AGAIN[ui.page] >= 0 && p.y0 >= 9 * tab_rows(ui.page) && p.y0 <= PX_H - 16;   /* (its name is on its tab) */
     const int32_t dots_w = tabbed ? -(px_text_w(PAGE_NAME[ui.page]) + 6) : 0;
     if (!tabbed)
         px_text(3, p.y0 + 3, PAGE_NAME[ui.page], PC_BLOB2);
     draw_tabs(p.y0);
     if (wave_big() && p.y0 > 60) {                      /* the table, big: the room behind dark glass */
         int32_t x, y;
-        for (y = 9; y < p.y0 - 10; y++)
+        for (y = 9; y < p.y0 - 9 * tab_rows(ui.page) - 1; y++)
             for (x = 0; x < PX_W; x++) {
                 uint8_t *q = &px_fb[y * PX_W + x];
                 *q = ((x ^ y) & 1) ? PC_BG0 : GLASS[*q < PC_N ? *q : 0];
             }
         if (ui.page == PG_SHADOW)
-            wave3d(1, 3, PX_W - 4, 12, p.y0 - 13, proj.par[P_BTABLE], sy_tel.wave_pos, 0.0f);
+            wave3d(1, 3, PX_W - 4, 12, p.y0 - 13, proj.par[P_BTABLE], 0.0f, 0.0f);
         else
             wave3d(0, 3, PX_W - 4, 12, p.y0 - 13, proj.par[P_TABLE], sy_tel.wave_pos, pn(P_DETUNE));
     }
@@ -1977,7 +1968,7 @@ static void draw_panel(const geo_t *g)
             for (i = 0; i < n; i++)
                 b[i] = what[i];
             b[n] = 0;
-            px_text(PX_W - 3 - px_text_w(b), p.y0 + 3, b, PC_DIM);
+            px_text(tabbed ? 3 : PX_W - 3 - px_text_w(b), p.y0 + 3, b, PC_DIM);   /* (tabbed: where its name was) */
         }
     }
     p.gx0 = 4;
