@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """How loud each MOPE-1 preset is on a connected FM-1: plays a chord on each over USB-MIDI, records
 the FM-1's USB audio and prints its loudness (K-weighted like BS.1770: the deep bass counts less, the
-top a little more; the loudest 400 ms). Rain, drums and bass off while it measures.
+top a little more; the loudest 400 ms). Rain and bass off while it measures, back at their defaults after.
 Needs mido with python-rtmidi, sounddevice and numpy.
 
   fm1_levels.py [--presets 0-37] [--octaves FILE]   (FILE: one octave per preset, -1 0 1 ...)"""
@@ -92,6 +92,8 @@ def main():
             sd.wait()
             print(f"{p:2d} {loudness(rec):7.2f}", flush=True)
             time.sleep(1.5)
+        setp(35, 38)                       # (and back as they come: the rain 30, the auto-bass 60; they are the
+        setp(27, 76)                       #  mix's, not the preset's, so a preset change doesn't bring them back)
 
 
 if __name__ == "__main__":

@@ -707,6 +707,30 @@ int main(int argc, char **argv)
                   (double)(20.0f * mm_log2f(dev[1] / (dev[0] + 1e-9f)) * 0.30103f));
             run(300);
         }
+        {   /* WOBBLE: a warped record, not a crusher: through it a sine gets no more top than it had (its depth
+             * used to overshoot and come back every chunk, the line jumping 2756 times a second: -30 dB of grind) */
+            float h1, hi[2];
+            int q, w;
+            sy_set(P_POS, 0);
+            sy_set(P_CUTOFF, 100);
+            sy_set(P_TAPE, 0);
+            sy_note_on(81, 100);
+            run(400);
+            for (w = 0; w < 2; w++) {
+                if (w)
+                    sy_punch(PU_WOBBLE, 1);
+                run(600);
+                capture();
+                h1 = goertzel(880.0f);
+                for (hi[w] = 0.0f, q = 3000; q < 9000; q += 160)
+                    hi[w] += goertzel((float)q) / h1;
+            }
+            sy_punch(PU_WOBBLE, 0);
+            sy_note_off(81);
+            quiet();
+            CHECK(hi[1] < hi[0] * 3.0f + 1e-6f, "WOBBLE: nothing ground out of a sine (above 3 kHz: %.0f dB under it; without it %.0f)",
+                  (double)(-10.0f * mm_log2f(hi[1] + 1e-20f) * 0.30103f), (double)(-10.0f * mm_log2f(hi[0] + 1e-20f) * 0.30103f));
+        }
         /* SWEEP: a bright saw goes dark */
         sy_set(P_POS, 100);                             /* (PLAIN's end: a saw) */
         sy_note_on(57, 100);
