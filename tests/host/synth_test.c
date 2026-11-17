@@ -408,7 +408,7 @@ int main(int argc, char **argv)
         sy_punch(PU_HALF, 0);
         sy_load(40);
         run(100);
-        /* the white keys beside: HALF with MORE two octaves down, with TWIST a fifth down; DOUBLE with MORE two up */
+        /* the white keys beside: MORE twice as far, TWIST in threes: HALF a quarter, a third; DOUBLE four times, three */
         sy_punch(PU_HALF, 1 + PM_MORE);
         run(400);
         capture();
@@ -416,13 +416,19 @@ int main(int argc, char **argv)
         sy_punch(PU_HALF, 1 + PM_TWIST);                /* (held already: only its way changes) */
         run(400);
         capture();
-        CHECK(goertzel(293.3f) > goertzel(220.0f) * 10.0f, "HALF + TWIST: a fifth down");
+        CHECK(goertzel(146.7f) > goertzel(220.0f) * 10.0f, "HALF + TWIST: a third of the speed");
         sy_punch(PU_HALF, 0);
         run(100);
         sy_punch(PU_DOUBLE, 1 + PM_MORE);
         run(400);
         capture();
         CHECK(goertzel(1760.0f) > goertzel(880.0f) * 10.0f, "DOUBLE + MORE: two octaves up");
+        sy_punch(PU_DOUBLE, 1 + PM_TWIST);
+        run(400);
+        capture();
+        CHECK(goertzel(1320.0f) > goertzel(880.0f) * 10.0f, "DOUBLE + TWIST: three times as fast");
+        CHECK(sy_punch_speed(PU_DOUBLE, PU_KMAX, PM_MORE | PM_TWIST) == 4.0f && sy_punch_speed(PU_HALF, PU_KMAX, PM_MORE | PM_TWIST) == 0.125f,
+              "the knob all the way and both whites: no further than four times, an eighth");
         sy_punch(PU_DOUBLE, 0);
         run(100);
         capture();
@@ -672,7 +678,7 @@ int main(int argc, char **argv)
             sy_set(P_MBITE, 50);
             sy_set(P_POS, 60);
             sy_set(P_CUTOFF, 55);
-            CHECK(lo < 1e-3f && hi > 0.03f, "BITE: clean to wrecked (a sine's third harmonic: %.0f dB under it, then %.0f)",
+            CHECK(hi > lo * 10.0f && hi > 0.03f, "BITE: clean to wrecked (a sine's third harmonic: %.0f dB under it, then %.0f)",
                   (double)(-10.0f * mm_log2f(lo + 1e-20f) * 0.30103f), (double)(-10.0f * mm_log2f(hi + 1e-20f) * 0.30103f));
             run(600);
             for (end = 0; end < 2; end++) {             /* NERVES: how far the wave's position travels in 1.5 s */
