@@ -30,6 +30,7 @@
 static struct {
     uint32_t last_ms;
     float t, dt;
+    float vph[2];                                       /* the LFOs as drawn: their own phase once they are too fast to draw */
     float kick, snare, bass, hat;                       /* pulses, 1 on a hit, falling */
     uint32_t kick_n, snare_n, hat_n, bass_n, notes, steals, clips;
     uint8_t gates;
@@ -1179,6 +1180,32 @@ static void schem_mouth(const drawer_t *p)               /* the envelope: attack
     }
 }
 
+/* An LFO as drawn. The screen is redrawn a few dozen times a second: an LFO faster than a few Hz, drawn
+ * where it really is, strobes (it looks slow, or still, at the top of the knob). Up to 2 Hz it is drawn as it
+ * is; faster, at a speed of its own that keeps rising with the knob but stays under 8 Hz, so a faster LFO
+ * always looks faster. (The sound is the real one.) which: 0 the first LFO, 1 the second; out: its phase. */
+static float lfo_drawn(int which, float *phase)
+{
+    const int rate_p = which ? P_LFO2RATE : P_LFORATE, shape_p = which ? P_LFO2SHAPE : P_LFOSHAPE;
+    const float hz = 0.05f * mm_exp2f(pn_knob(rate_p) * 9.0f + (float)(proj.par[P_MNERVE] - 50) * 0.02f * 1.5f);
+    const float real_ph = which ? sy_tel.lfo2_phase : sy_tel.lfo_phase, real = which ? sy_tel.lfo2 : sy_tel.lfo;
+    const int shape = proj.par[shape_p];
+    if (hz <= 2.0f || shape == LFO_RANDOM || shape == LFO_DRIFT) {   /* (slow, or no pattern to strobe: as it is) */
+        bs.vph[which] = real_ph;
+        *phase = real_ph;
+        return real;
+    }
+    {   /* (by the time since it was last asked: the same however many ask a frame) */
+        static uint32_t moved_ms[2];
+        const uint32_t now = plat_ms(), el = now - moved_ms[which];
+        moved_ms[which] = now;
+        bs.vph[which] += (2.0f + 6.0f * (1.0f - mm_expf(-(hz - 2.0f) / 6.0f))) * (float)(el < 100u ? el : 100u) * 0.001f;
+        bs.vph[which] -= mm_floorf(bs.vph[which]);
+    }
+    *phase = bs.vph[which];
+    return sy_lfo_shape(shape, bs.vph[which], 0.0f, 0.0f);
+}
+
 /* an LFO (VIBE's, TREMBLE's): its wave, its speed, where it is, where it goes */
 static void schem_lfo(const drawer_t *p, int shape_p, int rate_p, int depth_p, int dest_p, float phase)
 {
@@ -1212,8 +1239,8 @@ static void schem_lfo(const drawer_t *p, int shape_p, int rate_p, int depth_p, i
     }
 }
 
-static void schem_vibe(const drawer_t *p) { schem_lfo(p, P_LFOSHAPE, P_LFORATE, P_LFODEPTH, P_LFODEST, sy_tel.lfo_phase); }
-static void schem_tremble(const drawer_t *p) { schem_lfo(p, P_LFO2SHAPE, P_LFO2RATE, P_LFO2DEPTH, P_LFO2DEST, sy_tel.lfo2_phase); }
+static void schem_vibe(const drawer_t *p) { float ph; (void)lfo_drawn(0, &ph); schem_lfo(p, P_LFOSHAPE, P_LFORATE, P_LFODEPTH, P_LFODEST, ph); }
+static void schem_tremble(const drawer_t *p) { float ph; (void)lfo_drawn(1, &ph); schem_lfo(p, P_LFO2SHAPE, P_LFO2RATE, P_LFO2DEPTH, P_LFO2DEST, ph); }
 
 static void schem_shadow(const drawer_t *p)              /* the second wave: its own table, as the body's; how it meets the first */
 {
@@ -1843,28 +1870,26 @@ static void draw_dock(int32_t yb)                        /* yb: the drawer's bot
             break;
         hi = lo - 1;
     }
-    px_rect(0, y, PX_W, DOCK_H, PC_BG0);                 /* (the dock: its own dark strip, a line over it) */
-    px_rect(0, y, PX_W, 1, PC_GRID);
+    px_rect(0, y - 1, PX_W, DOCK_H + 1, PC_BG0);         /* (the dock: its own darkest strip, a line over it, apart from the knobs) */
+    px_rect(0, y, PX_W, 1, PC_WALL);
     {
         int32_t x = 2;
         if (lo > 0) {                                    /* (more before: an arrow) */
-            px_line(x + 3, y + 2, x, y + 5, PC_BLOBM);
-            px_line(x, y + 5, x + 3, y + 8, PC_BLOBM);
+            px_line(x + 3, y + 2, x, y + 5, PC_WALL2);
+            px_line(x, y + 5, x + 3, y + 8, PC_WALL2);
             x += 6;
         }
         for (k = lo; k <= hi; k++) {
             const int on = k == cur;
-            if (on) {
-                px_rect(x, y + 1, w[k], DOCK_H - 1, PC_PANEL);
-                px_rect(x + 1, y, w[k] - 2, 1, PC_BLOB2); /* (lit along its top, as a dock marks what is open) */
-            }
-            px_text(x + 2, y + 2, PAGE_NAME[pgs[k]], on ? PC_WHITE : PC_BLOBM);
+            if (on)                                      /* (the open one: a lit key, its name dark on it) */
+                px_rect(x, y + 1, w[k], DOCK_H - 1, PC_BLOB2);
+            px_text(x + 2, y + 2, PAGE_NAME[pgs[k]], on ? PC_BG0 : PC_WALL2);
             x += w[k] + 1;
         }
         if (hi + 1 < n) {                                /* (more after: an arrow) */
             const int32_t ax = PX_W - 6;
-            px_line(ax, y + 2, ax + 3, y + 5, PC_BLOBM);
-            px_line(ax + 3, y + 5, ax, y + 8, PC_BLOBM);
+            px_line(ax, y + 2, ax + 3, y + 5, PC_WALL2);
+            px_line(ax + 3, y + 5, ax, y + 8, PC_WALL2);
         }
     }
 }
@@ -2723,7 +2748,8 @@ static void blob_draw(void)
     const uint32_t now = plat_ms();
     geo_t g;
     float sqx = 1.0f, sqy = 1.0f, bobx = 0.0f, boby = 0.0f, pa;
-    const float size = pn(P_SIZE), lfo = sy_tel.lfo;
+    float lfo_ph;
+    const float size = pn(P_SIZE), lfo = lfo_drawn(0, &lfo_ph);   /* (the first LFO, as drawn: see lfo_drawn) */
     float depth = pn(P_LFODEPTH);
     bs.dt = bs.last_ms ? (float)(now - bs.last_ms) * 0.001f : 0.033f;
     if (bs.dt > 0.1f)
