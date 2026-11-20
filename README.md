@@ -47,7 +47,7 @@ through X0X, FoMni and FiMba-1, the firmware MOPE-1 started from.
 | ![](docs/img/02b_env_schematic.png) envelope | ![](docs/img/02c_lfo_schematic.png) LFO | ![](docs/img/04_lasers.png) resonance | ![](docs/img/05_tears_chorus.png) chorus (copies) |
 | ![](docs/img/04b_preset_card.png) a preset's card | ![](docs/img/08_deep_fried.png) fry | ![](docs/img/09_drums.png) drums | ![](docs/img/12b_blob_alone.png) the blob alone |
 | ![](docs/img/10b_mixer.png) mixer | ![](docs/img/10c_arp.png) arpeggiator | ![](docs/img/07_void.png) the void | ![](docs/img/13_asleep.png) asleep |
-| ![](docs/img/14_punch.png) a punch (SEL) | ![](docs/img/15_punch_knobs.png) its knobs | ![](docs/img/16_save_as.png) save as | ![](docs/img/17_seq.png) the sequencer |
+| ![](docs/img/14_punch.png) a punch (FX) | ![](docs/img/15_punch_knobs.png) its knobs | ![](docs/img/16_save_as.png) save as | ![](docs/img/17_seq.png) the sequencer |
 | ![](docs/img/18_macros.png) the macros (Bite up) | ![](docs/img/19_wavetable_3d.png) the wavetable in 3D | ![](docs/img/20_swirl.png) the swirl | ![](docs/img/01_chord.png) a chord |
 
 ## The look
@@ -60,7 +60,7 @@ through X0X, FoMni and FiMba-1, the firmware MOPE-1 started from.
 
 ## Controls
 
-Press or hold a part's button: its schematic opens in a dark glass drawer over the bottom of the screen and the four knobs turn that part, each knob's name over its meter (the one you turn lights up). The drawer stays until 3 seconds after your last touch, then slides away, but **the page stays**: its button stays lit and the knobs still turn that part (turning one brings the drawer back). **HOME** goes back to the Macros. **Some buttons have more pages**, shown in a dock along the bottom of the drawer, the open one lit: press the button again while its page shows to go to the next (HOME: Macros, Body, Shadow; ENV: Mouth, Sigh; LFO: Vibe, Tremble; GLO: Mixer, Settings; SEQ: Loop, Tape deck; FX goes round seven: Walls, Tears, Copies, then, past an arrow, Dust, Swirl, Burn, Mumble). **Press a part's button twice quickly and its drawer stays open** (switch pages with the other buttons) until you press **HOME**. OCT+ or OCT− is lit while the keyboard is shifted up or down. The blob stays big and shows faintly through the glass. The drawer is drawn in the room's cold colours, like the drum grid.
+Press or hold a part's button: its schematic opens in a dark glass drawer over the bottom of the screen and the four knobs turn that part, each knob's name over its meter (the one you turn lights up). The drawer stays until 3 seconds after your last touch, then slides away, but **the page stays**: its button stays lit and the knobs still turn that part (turning one brings the drawer back). **HOME** goes back to the Macros. **Some buttons have more pages**, shown in a dock along the bottom of the drawer, the open one lit: press the button again while its page shows to go to the next (HOME: Macros, Body, Shadow; ENV: Mouth, Sigh; LFO: Vibe, Tremble; GLO: Mixer, Settings; SEQ: Loop, Tape deck; SEL goes round seven: Walls, Tears, Copies, then, past an arrow, Dust, Swirl, Burn, Mumble). **Press a part's button twice quickly and its drawer stays open** (switch pages with the other buttons) until you press **HOME**. OCT+ or OCT− is lit while the keyboard is shifted up or down. The blob stays big and shows faintly through the glass. The drawer is drawn in the room's cold colours, like the drum grid.
 
 | Page | Its schematic |
 | --- | --- |
@@ -96,14 +96,14 @@ Press or hold a part's button: its schematic opens in a dark glass drawer over t
 | ENV again | Sigh | Its attack (0: the mouth's) | Its decay | Wave (how far it sweeps the table, either way) | Eyes (how far it opens the filter) |
 | LFO | Vibe | Rate | Depth | Shape (sway, bob, bounce, nod, twitch, heave, wander, stagger, throb) | Destination (position, eyes, voice, volume, shadow, across the tables, detune, walls, tears, copies, dust, swirl, burn, mumble, the shadow's pitch) |
 | LFO again | Tremble | Rate | Depth | Shape | Destination |
-| FX | Walls | Reverb | Size | Tone | Rain |
-| FX again | Tears | Delay | Time (in the tempo: sixteenths, triplets, eighths, slow triplets, dotted eighths, the beat, dotted quarters) | Feedback (each echo more worn, like tape) | Dark (past halfway: each echo smeared into a cloud) |
-| FX again | Copies | Chorus | Rate | Depth | Width |
-| FX again | Dust | Tape | Crackle | Dust | Fry |
-| FX again | Swirl | Swirl (a phaser) | Rate | Depth | Feedback (past 60: a flanger) |
-| FX again | Burn | Burn (a fuzz after the filter) | Tone | Crush (fewer bits) | Rate (a lower sample rate) |
-| FX again | Mumble | Mumble (a filter over it all that moves) | Way (with the beat, slowly over a bar, when you play) | Range | Resonance |
-| SEL | Punch | Held (or pressed twice): the last punch's first knob | Its second knob | | |
+| SEL | Walls | Reverb | Size | Tone | Rain |
+| SEL again | Tears | Delay | Time (in the tempo: sixteenths, triplets, eighths, slow triplets, dotted eighths, the beat, dotted quarters) | Feedback (each echo more worn, like tape) | Dark (past halfway: each echo smeared into a cloud) |
+| SEL again | Copies | Chorus | Rate | Depth | Width |
+| SEL again | Dust | Tape | Crackle | Dust | Fry |
+| SEL again | Swirl | Swirl (a phaser) | Rate | Depth | Feedback (past 60: a flanger) |
+| SEL again | Burn | Burn (a fuzz after the filter) | Tone | Crush (fewer bits) | Rate (a lower sample rate) |
+| SEL again | Mumble | Mumble (a filter over it all that moves) | Way (with the beat, slowly over a bar, when you play) | Range | Resonance |
+| FX | Punch | Held (or pressed twice): the last punch's first knob | Its second knob | | |
 | SEQ | Loop | Step (the cursor, along the bars) | Note (under the cursor) | Length (of that note) | Bars (1, 2, 4) |
 | SEQ again | Tape deck | Style | Tempo | Swing | Human (looser timing and velocity) |
 | GLO | Mixer | Tempo (one for every beat) | Voice | Drums | Bass (0: no bass) |
@@ -115,7 +115,7 @@ Press or hold a part's button: its schematic opens in a dark glass drawer over t
 - **SELECT**: the drum tape (the blob swaps the cassette and shrugs).
 - **Close-ups:** while you hold EDIT (Eyes) the view moves in on its eyes; while you hold ENV (Mouth), on its mouth.
 - **Tap tempo:** on the tape deck or the mixer, tap **HOME** in time (two taps or more). Turning or tapping the tempo shows its number big at the top for a moment (BPM in blue while it follows a MIDI clock).
-- **Punches (hold SEL, or press it twice to keep them):** a black key punches while it is held. The drawer shows the keyboard, each black key with its punch's symbol: lit while it plays, blinking while it waits for the step. The two white keys beside a held punch light up, on the screen and on the pads: hold the left one for more, the right one for a twist. The punch's two knobs sit at the bottom corners over the drawer, as big dials with their names (HOW LOW, SMEAR, GRAIN SIZE...).
+- **Punches (hold FX, or press it twice to keep them):** a black key punches while it is held. The drawer shows the keyboard, each black key with its punch's symbol: lit while it plays, blinking while it waits for the step. The two white keys beside a held punch light up, on the screen and on the pads: hold the left one for more, the right one for a twist. The punch's two knobs sit at the bottom corners over the drawer, as big dials with their names (HOW LOW, SMEAR, GRAIN SIZE...).
 - **Captions** sit in their own dark band at the top (right of the cassette when it is up), never on the blob. One tap alone is HOME, as always (a moment later).
 - **PLAY**: the band on and off: drums, bass and your loop. **ARP**: tap for the arpeggiator on or off; hold for its page: the keys you hold become its pattern, at the tempo, starting each bar with the drums.
 
@@ -135,7 +135,7 @@ As on X0X, Melodee and JIANT FM: **PLAY**, **REC** and **SEQ** do what they say.
 - **SAVE** (tapped): SAVE AS, to keep the sound as a preset of yours (below). Everything else saves by itself when quiet. Hold SAVE for 1.5 s, then press it again, to reset everything; the blob keeps its level.
 - The lowest and highest keys together: it gives up.
 
-**The macros** (HOME, and what the knobs turn out of the box): four knobs that each take the whole sound from one end to the other, the middle the sound as it was made. They add to what the other knobs and the LFOs do, so nothing else moves under you. **Eyes**: the filter from nearly shut (muffled, not gone) to wide open, always brighter the higher it goes, whatever the filter's kind. **Bite**: up, the push into the filter, the fry and the burn, a harder attack: dirtier, not louder (the blob glares); down, soft and round: a gentler filter, the shadow's FM and sync tamed, a slower attack. **Nerves**: up, the LFOs deeper and faster, the wave, the filter and the tables wandering on their own (it shivers); down, still: no LFO, no drift, the detune closed. **Room**: reverb, echoes and copies, from none at all to drowned. A preset starts with all four in the middle; your own presets keep where you left them.
+**The macros** (HOME, and what the knobs turn out of the box; with no drawer open, four faint dials at the bottom of the screen show where they are): four knobs that each take the whole sound from one end to the other, the middle the sound as it was made. They add to what the other knobs and the LFOs do, so nothing else moves under you. **Eyes**: the filter from nearly shut (muffled, not gone) to wide open, always brighter the higher it goes, whatever the filter's kind. **Bite**: up, the push into the filter, the fry and the burn, a harder attack: dirtier, not louder (the blob glares); down, soft and round: a gentler filter, the shadow's FM and sync tamed, a slower attack. **Nerves**: up, the LFOs deeper and faster, the wave, the filter and the tables wandering on their own (it shivers); down, still: no LFO, no drift, the detune closed. **Room**: reverb, echoes and copies, from none at all to drowned. A preset starts with all four in the middle; your own presets keep where you left them.
 
 **Presets** (65, in seven kinds; the card shows the kind):
 - **Pad:** Monday, 3AM, Rain again, Church of nothing, Mood swing, Seen 2:14, Tide goes out

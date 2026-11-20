@@ -155,12 +155,12 @@ if (/[?&]bare\b/.test(location.search)) document.documentElement.classList.add("
   </div>
   <ul>
     <li><a data-m="macros">Four macros</a><span><b>HOME</b> now opens Eyes, Bite, Nerves and Room: each knob takes the whole sound from one end to the other. The blob glares, shivers, shuts its eyes.</span></li>
-    <li><a data-m="walls">Three new effects</a><span><b>FX</b> goes on to the swirl (a phaser, a flanger), the burn (a fuzz, a crusher) and the mumble (a filter that moves with the beat or your playing).</span></li>
+    <li><a data-m="walls">Three new effects</a><span><b>SEL</b> goes on to the swirl (a phaser, a flanger), the burn (a fuzz, a crusher) and the mumble (a filter that moves with the beat or your playing).</span></li>
     <li><a data-m="body">A wavetable in 3D</a><span>The table as a landscape, the slice you hear lit and moving through it; it fills the room while you turn Table or Position.</span></li>
     <li><a data-m="macros">Bolder presets</a><span>Twenty new ones (brass, organ, bells, reese and 808 basses, sync and phaser leads, wave sequences), fourteen re-voiced, nine slow ones gone. 65 in all.</span></li>
     <li><a data-m="body">A dock for pages</a><span>A button with more pages shows them along the bottom of the drawer: press it again for the next.</span></li>
     <li><a data-m="mixer">A calmer settings list</a><span>One row a click, and it stops at the ends (<b>GLO</b> twice).</span></li>
-    <li><a data-m="punch">Punches</a><span>Hold <b>SEL</b> and a black key: half speed, tape stop, reverse, repeats, grains, a gate… while it's held.</span></li>
+    <li><a data-m="punch">Punches</a><span>Hold <b>FX</b> and a black key: half speed, tape stop, reverse, repeats, grains, a gate… while it's held.</span></li>
     <li><a data-m="saving">Presets of your own</a><span>Tap <b>SAVE</b>, name it (type it here), <b>SAVE</b> again. Sixteen places, after the factory presets.</span></li>
     <li><a data-m="patterns">Patterns and mutes</a><span>On the <b>SEQ</b> screen the black keys pick four patterns (on the next bar) and mute the drums, bass and loop.</span></li>
     <li><a href="#keys">Keys like a DAW</a><span><kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> <kbd>F</kbd>… play, <kbd>1</kbd>–<kbd>0</kbd> are the buttons; the letters are on the drawn keys.</span></li>
@@ -174,7 +174,7 @@ if (/[?&]bare\b/.test(location.search)) document.documentElement.classList.add("
       <li>The blob is the sound. Its body is the wavetable, its eyes the filter, its mouth the envelope, its tears the delay, the room around it the reverb.</li>
       <li>Press a part's button: its drawer opens under the blob and the four knobs turn that part. The drawer hides after 3 s, the page stays (its button lit). Press twice: the drawer stays until <b>HOME</b>.</li>
       <li>Some parts have a second page: press the button again (not twice fast). The caption says so (AGAIN: SHADOW.).</li>
-      <li><b>HOME</b> the macros (eyes, bite, nerves, room: the whole sound, four ways), again body (the wavetable), again shadow (a second oscillator) · <b>EDIT</b> eyes (the filter, its kind and drive) · <b>ENV</b> mouth, again sigh (a second envelope that sweeps the wavetable) · <b>LFO</b> vibe, again tremble (a second LFO) · <b>FX</b> walls, again tears (the delay, in the tempo), copies (chorus), dust · <b>SEL</b> held: punches on the black keys (the whites beside one light up: more, twist) · <b>GLO</b> mixer, again setup · <b>ARP</b> held: the arpeggiator · <b>SEQ</b> the loop, again the tape deck.</li>
+      <li><b>HOME</b> the macros (eyes, bite, nerves, room: the whole sound, four ways), again body (the wavetable), again shadow (a second oscillator) · <b>EDIT</b> eyes (the filter, its kind and drive) · <b>ENV</b> mouth, again sigh (a second envelope that sweeps the wavetable) · <b>LFO</b> vibe, again tremble (a second LFO) · <b>SEL</b> walls, again tears (the delay, in the tempo), copies (chorus), dust, swirl, burn, mumble · <b>FX</b> held: punches on the black keys (the whites beside one light up: more, twist) · <b>GLO</b> mixer, again setup · <b>ARP</b> held: the arpeggiator · <b>SEQ</b> the loop, again the tape deck.</li>
     </ul>
   </div>
   <div>
@@ -241,7 +241,7 @@ if (/[?&]bare\b/.test(location.search)) document.documentElement.classList.add("
 // numbers are its encoders (SELECT, ALGORITHM, PRESETS, then KNOB1..4), the master volume is apart.
 const BUTTONS = [
   // row by row, as on the panel
-  ["FX", 0, "Effects: walls (reverb), again tears (delay), copies (chorus), dust"], ["SEL", 1, "Hold: the black keys punch"],
+  ["FX", 0, "Hold: the black keys punch"], ["SEL", 1, "Effects: walls (reverb), again tears (delay), copies (chorus), dust, swirl, burn, mumble"],
   ["ENV", 2, "Mouth: attack, decay, sustain, release; again: sigh"], ["LFO", 3, "Vibe: rate, depth, shape, where it goes; again: tremble"],
   ["EDIT", 4, "Eyes: cutoff, resonance, filter kind, drive"], ["GLO", 5, "Mixer; again: setup"],
   ["HOME", 6, "Macros: eyes, bite, nerves, room; again: body (the wavetable), shadow"], ["SAVE", 7, "Save (hold 1.5 s: factory settings)"],

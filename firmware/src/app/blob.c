@@ -2306,6 +2306,27 @@ static int is_blob(uint8_t c)
  * crushed, warped, washed */
 /* the punch's two knobs, at the bottom corners just over the drawer: a big dial each (lit as far as it's
  * turned), its name over it */
+/* The macros, faint, at the bottom of the screen while no drawer is open and the knobs turn them (out of the
+ * box): each a thin dark arc and its pointer, under its knob. Only a hint that the four knobs do something. */
+static void draw_idle_macros(void)
+{
+    static const int8_t KP[4] = {P_MEYES, P_MBITE, P_MNERVE, P_MROOM};
+    int k, j;
+    if (ui.page != PG_MACRO || bs.panel > 0.05f || preset_card() || ui.naming)
+        return;
+    for (k = 0; k < 4; k++) {
+        const int32_t cx = 14 + k * 30, cy = PX_H - 7;
+        const float a = 0.375f * mac(KP[k]);
+        for (j = 0; j <= 16; j++) {                      /* (the arc: a bit of the circle over it, thin) */
+            const float t = -0.25f + 0.5f * (float)j / 16.0f;
+            const float sx = mm_sin_turns(t) * 5.0f, sy = mm_sin_turns(t + 0.25f) * 5.0f;
+            px_pset(cx + (int32_t)(sx + (sx < 0.0f ? -0.5f : 0.5f)), cy - (int32_t)(sy + (sy < 0.0f ? -0.5f : 0.5f)), PC_WALL);
+        }
+        px_line(cx, cy, cx + (int32_t)(mm_sin_turns(a) * 4.0f + (mm_sin_turns(a) < 0.0f ? -0.5f : 0.5f)),
+                cy - (int32_t)(mm_sin_turns(a + 0.25f) * 4.0f + (mm_sin_turns(a + 0.25f) < 0.0f ? -0.5f : 0.5f)), PC_WALL2);
+    }
+}
+
 static void draw_punch_knobs(const geo_t *g)
 {
     static const uint8_t KC[PU_KN] = {PC_TEAR, PC_XP};
@@ -2937,6 +2958,7 @@ static void blob_draw(void)
     draw_particles();
     punch_post(&g);
     draw_cassette(&g);
+    draw_idle_macros();
     draw_panel(&g);
     draw_punch_knobs(&g);
     draw_xp();

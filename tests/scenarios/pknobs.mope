@@ -6,10 +6,10 @@ midi 90 30 64
 midi 90 37 64
 midi 90 3c 64
 wait 600
-# SEL twice: the punches stay, the hands free for the knobs
-tap SEL
+# FX twice: the punches stay, the hands free for the knobs
+tap FX
 wait 100
-tap SEL
+tap FX
 wait 100
 expect latch 1
 # nothing punched yet: the knobs say so
@@ -52,7 +52,7 @@ spin K1 -4
 expect pk4_0 4
 wait 100
 shot 05_roll_knobs.png
-tap SEL
+tap FX
 wait 100
 expect latch 0
 midi 80 30 00

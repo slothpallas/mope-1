@@ -50,11 +50,11 @@ PARTS = [
                                  "note, and open the eyes.")),
     ("LFO", "Vibe", "page_vibe", "It dances at the rate, as far as the depth: sway, bob, bounce, nod, twitch, heave, "
      "wander, stagger, throb.", ("Tremble", "page_tremble", "a second LFO, for the things the first one is busy with.")),
-    ("FX", "Walls", "page_walls", "The reverb is the room: the bigger it gets, the smaller the blob looks, and past the "
+    ("SEL", "Walls", "page_walls", "The reverb is the room: the bigger it gets, the smaller the blob looks, and past the "
      "walls there's only the void. Again and again: copies (chorus), dust (an old record), the swirl (a phaser, "
      "a flanger), the burn (a fuzz, a crusher) and the mumble (a filter that moves with the beat or your playing).", ("Tears", "page_tears", "the delay, in the band's tempo: one tear per echo, each smaller "
                                       "and more worn than the last. Dark past halfway smears them into a cloud.")),
-    ("SEL", "Punch", None, "Hold it (or press it twice) and a black key punches the sound while it is held: half speed, tape stop, reverse, "
+    ("FX", "Punch", None, "Hold it (or press it twice) and a black key punches the sound while it is held: half speed, tape stop, reverse, "
      "repeats, gate, grains, crush. The white keys beside a punch light up: more, or a twist.", None),
     ("GLO", "Mixer", "page_mixer", "How loud each part is: the blob, the drums, the bass and the rain.",
      ("Setup", None, "the settings, a list on the whole screen: how notes take voices, glide, the tempo, the room, the auto-bass, MIDI in and out, the clock (its own, following, leading), aftertouch and the tuning.")),

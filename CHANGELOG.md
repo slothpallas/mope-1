@@ -14,7 +14,9 @@ Four macros, three new effects and a bank that shows what the engine can do.
   the filter all restless) and **Room** (bone dry to drowned). The middle is the sound as it was made,
   and each goes a long way both ways. The blob acts them out: Bite makes it glare, Nerves makes it shiver. HOME again: the Body, then
   the Shadow. Out of the box the knobs turn the macros.
-- **Three new effects** on FX, after the dust: **Swirl** (a phaser; with Feedback up, a flanger),
+- **SEL and FX swapped back.** **SEL** goes round the effect pages again and **FX** holds the punches,
+  as before 0.4.
+- **Three new effects** on SEL, after the dust: **Swirl** (a phaser; with Feedback up, a flanger),
   **Burn** (a fuzz after the filter, plus fewer bits and a lower sample rate) and **Mumble** (a
   filter over it all that moves with the beat, over a bar, or with your playing). The LFOs can go to
   each of them, and to the shadow oscillator's pitch, so a sync sound sweeps.
