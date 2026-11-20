@@ -35,7 +35,7 @@ static struct {
     uint8_t gates;
     float fire, blink, blink_due, shrug, tape_anim, pancake, sleep, stare, reel;
     int8_t tape_shown, tape_dir;
-    float puddle, ripple, panel, wall_flash, echo_flash;
+    float puddle, ripple, panel, panel_h, wall_flash, echo_flash;   /* (panel_h: the drawer's height now: the wavetables' pages taller) */
     struct { float x, y, vy, vx, s; uint8_t on; } tear[24];
     struct { float due, s; uint8_t on, side; } echo[10];
     struct { float r, a, dir; uint8_t on; } wave[6];
@@ -953,6 +953,7 @@ static void draw_puddle(const geo_t *g)
  * All in the room's cold colours, like the drum grid: blob-blue lines, tear-blue and violet for the
  * second things, a pale glint for where it is now. */
 #define PANEL_H 44
+#define PANEL_TALL 66                     /* (BODY, SHADOW: a wavetable needs the room) */
 typedef struct {
     int32_t y0;                                         /* the panel's top */
     int32_t gx0, gx1, gy0, gy1;                         /* the drawing's box */
@@ -1004,11 +1005,12 @@ static float lfo_shape_at(int shape, float ph)
     return sy_lfo_shape(shape, ph, lfo_hash(k), lfo_hash(k + 1));
 }
 
-/* A wavetable in 3D (as Serum draws one, or the OP-1 its strings): its eight frames, one line each, the
- * first nearest and the last at the back, each hiding what is behind and under it; the first and the last
- * drawn bright so the two ends read, the ones between dimmer, deeper. Tall: the highs and lows show. The
- * wave playing is lit and laid over it where it is in the table (the knob, the LFOs, the Sigh: live), its
- * detuned twin beside. A new table: the lines morph into it. It turns a little, slowly. Into x0..x1, y0..y1. */
+/* A wavetable in 3D (as Serum draws one, or the OP-1 its strings): W3_N lines through the table, from its
+ * first wave in front to its last at the back, each hiding what is behind and under it. The line at the
+ * position is lit: turning Position lights the next line, one by one (and the LFOs and the Sigh move the
+ * light as they move the position). Tall, so the highs and lows show. A new table: the lines morph into it.
+ * It turns a little, slowly. Into x0..x1, y0..y1. */
+#define W3_N 12
 static struct {
     int8_t tab[2];                                       /* the table shown, and the one it is morphing from */
     float mix;                                           /* how far along (1: there) */
@@ -1021,10 +1023,11 @@ static float w3_at(int which, int table, float fp, float t)
 static void wave3d(int which, int32_t x0, int32_t x1, int32_t y0, int32_t y1, int table, float pos, float ghost)
 {
     const int32_t w = x1 - x0, h = y1 - y0;
-    const int NZ = SY_NFRAME, NX = h > 40 ? 64 : 48;
+    const int NX = 56, lit = (int)(mm_clampf(pos, 0.0f, 1.0f) * (float)(W3_N - 1) + 0.5f);
     const float turn = mm_sin_turns(bs.t * 0.07f);
-    const float depx = (float)w * (0.18f + 0.03f * turn), depy = (float)h * 0.34f;
-    const float amp = (float)h * 0.3f, fw = (float)w - depx - 2.0f;
+    const float depx = (float)w * (0.2f + 0.03f * turn), depy = (float)h * 0.42f;
+    const float amp = (float)h * 0.26f, fw = (float)w - depx - 2.0f;
+    int32_t lx[57], ly[57];                              /* (the lit line's points, to draw it again on top) */
     int z, i;
     if (w3[which].tab[0] != table) {                     /* (another table: from the one shown, in a third of a second) */
         if (w3[which].mix >= 1.0f)                       /* (mid-morph: it goes on from where it came) */
@@ -1033,58 +1036,48 @@ static void wave3d(int which, int32_t x0, int32_t x1, int32_t y0, int32_t y1, in
         w3[which].mix = 0.0f;
     }
     w3[which].mix = mm_minf(w3[which].mix + bs.dt * 3.0f, 1.0f);
-    for (z = NZ; z >= 0; z--) {                          /* back to front; z == NZ: the one playing, last, on top */
-        const int play = z == NZ;
-        const float zf = play ? mm_clampf(pos, 0.0f, 1.0f) : (float)z / (float)(NZ - 1), k = 1.0f - 0.2f * zf;
+    for (z = W3_N - 1; z >= 0; z--) {                    /* back to front */
+        const float zf = (float)z / (float)(W3_N - 1), k = 1.0f - 0.2f * zf;
         const float bx = (float)x0 + 1.0f + depx * zf, by = (float)y1 - 1.0f - amp * k - depy * zf;
-        const uint8_t c = play ? PC_SPEC : z == 0 ? PC_BLOB2 : z == NZ - 1 ? PC_BLOB1 : zf > 0.55f ? PC_WALL : PC_WALL2;
-        int32_t lx = 0, ly = 0;
+        const uint8_t c = z == lit ? PC_SPEC : zf > 0.6f ? PC_WALL : zf > 0.25f ? PC_WALL2 : PC_BLOBM;
+        int32_t px0 = 0, py0 = 0;
         for (i = 0; i <= NX; i++) {
             const float t = (float)i / (float)NX;
             const int32_t x = (int32_t)(bx + t * fw * k), y = (int32_t)(by - w3_at(which, table, zf, t) * amp * k);
             if (i) {
-                if (!play) {                             /* (under the line, dark: what is behind is hidden) */
-                    const int32_t nn = x - lx > 0 ? x - lx : 1, floor_y = (int32_t)(by + amp * k) + 1;
-                    int32_t q, yy;
-                    for (q = 0; q <= nn; q++)
-                        for (yy = ly + (y - ly) * q / nn + 1; yy <= floor_y && yy <= y1; yy++)
-                            px_pset(lx + q, yy, PC_BG0);
-                }
-                px_line(lx, ly, x, y, c);
-                if (play || z == 0)
-                    px_line(lx, ly - 1, x, y - 1, play ? PC_BLOB2 : PC_BLOBM);   /* (bold: the one playing, the first) */
+                const int32_t nn = x - px0 > 0 ? x - px0 : 1, floor_y = (int32_t)(by + amp * k) + 1;
+                int32_t q, yy;
+                for (q = 0; q <= nn; q++)                /* (under the line, dark: what is behind is hidden) */
+                    for (yy = py0 + (y - py0) * q / nn + 1; yy <= floor_y && yy <= y1; yy++)
+                        px_pset(px0 + q, yy, PC_BG0);
+                px_line(px0, py0, x, y, c);
             }
-            lx = x;
-            ly = y;
+            if (z == lit) {
+                lx[i] = x;
+                ly[i] = y;
+            }
+            px0 = x;
+            py0 = y;
         }
-        if (play && ghost > 0.05f)                       /* its detuned twin, sliding */
-            for (i = 0; i <= NX; i += 2) {
-                const float t = (float)i / (float)NX;
-                px_pset((int32_t)(bx + t * fw * k),
-                        (int32_t)(by - w3_at(which, table, zf, t + ghost * 0.1f * mm_sin_turns(bs.t * 0.5f)) * amp * k), PC_GHOST);
-            }
     }
-}
-/* the table big, over the room, while its knobs are being turned (BODY: WAVE or POS; SHADOW: its WAVE) */
-static int wave_big(void)
-{
-    return ui.panel && plat_ms() - ui.focus_t < 1500u &&
-           ((ui.page == PG_BODY && (ui.touched == 0 || ui.touched == 1)) || (ui.page == PG_SHADOW && ui.touched == 0));
+    for (i = 1; i <= NX; i++) {                          /* the lit line again, over the ones in front: whole, bold */
+        px_line(lx[i - 1], ly[i - 1] - 1, lx[i], ly[i] - 1, PC_BLOB2);
+        px_line(lx[i - 1], ly[i - 1], lx[i], ly[i], PC_SPEC);
+    }
+    if (ghost > 0.05f) {                                 /* its detuned twin, sliding along it */
+        const float zf = (float)lit / (float)(W3_N - 1), k = 1.0f - 0.2f * zf;
+        const float bx = (float)x0 + 1.0f + depx * zf, by = (float)y1 - 1.0f - amp * k - depy * zf;
+        for (i = 0; i <= NX; i += 2) {
+            const float t = (float)i / (float)NX;
+            px_pset((int32_t)(bx + t * fw * k),
+                    (int32_t)(by - w3_at(which, table, zf, t + ghost * 0.1f * mm_sin_turns(bs.t * 0.5f)) * amp * k), PC_GHOST);
+        }
+    }
 }
 
-static void schem_body(const drawer_t *p)                /* the wavetable in 3D; while it is big above: the wave playing, flat */
+static void schem_body(const drawer_t *p)                /* the wavetable in 3D, the line at the position lit */
 {
-    if (!wave_big()) {
-        wave3d(0, p->gx0, p->gx1, p->gy0 - 2, p->gy1 + 1, proj.par[P_TABLE], sy_tel.wave_pos, pn(P_DETUNE));
-        return;
-    }
-    {
-        float v[64];
-        int i;
-        for (i = 0; i < 64; i++)
-            v[i] = 0.5f + 0.45f * sy_shape(proj.par[P_TABLE], sy_tel.wave_pos, (float)i / 63.0f);
-        curve(p, v, 64, PC_SPEC, PC_BLOBD, 1);
-    }
+    wave3d(0, p->gx0, p->gx1, p->gy0 - 2, p->gy1 + 1, proj.par[P_TABLE], sy_tel.wave_pos, pn(P_DETUNE));
 }
 
 static void schem_eyes(const drawer_t *p)                /* the filter: its curve, and where the envelope takes it */
@@ -1222,23 +1215,11 @@ static void schem_lfo(const drawer_t *p, int shape_p, int rate_p, int depth_p, i
 static void schem_vibe(const drawer_t *p) { schem_lfo(p, P_LFOSHAPE, P_LFORATE, P_LFODEPTH, P_LFODEST, sy_tel.lfo_phase); }
 static void schem_tremble(const drawer_t *p) { schem_lfo(p, P_LFO2SHAPE, P_LFO2RATE, P_LFO2DEPTH, P_LFO2DEST, sy_tel.lfo2_phase); }
 
-static void schem_shadow(const drawer_t *p)              /* the second wave: its own, over the first, at its interval */
+static void schem_shadow(const drawer_t *p)              /* the second wave: its own table, as the body's; how it meets the first */
 {
     static const char *const MEET[] = {"MIX", "FM", "RING", "SYNC"};
     _Static_assert(sizeof MEET / sizeof MEET[0] == MEET_N, "a name for every meeting");
-    const float pos = pn(P_POS), lvl = pn(P_BLEVEL), ratio = mm_exp2f((float)proj.par[P_BTUNE] / 12.0f);
-    float a[64], b[64];
-    int i;
-    drawer_t q = *p;
-    q.gx1 = p->gx1 - 26;
-    for (i = 0; i < 64; i++) {                           /* two of A's cycles */
-        const float t = (float)i / 63.0f * 2.0f;
-        a[i] = 0.5f + 0.42f * sy_shape(proj.par[P_TABLE], pos, t - mm_floorf(t));
-        b[i] = 0.5f + 0.42f * (0.15f + 0.85f * lvl) * sy_shape(proj.par[P_BTABLE], pos, t * ratio - mm_floorf(t * ratio));
-    }
-    px_line(q.gx0, (q.gy0 + q.gy1) / 2, q.gx1, (q.gy0 + q.gy1) / 2, PC_WALL);
-    curve(&q, a, 64, PC_WALL2, 0, 0);                    /* the first, dim behind */
-    curve(&q, b, 64, lvl > 0.0f ? PC_GHOST : PC_GRID, 0, 0);
+    wave3d(1, p->gx0, p->gx1 - 26, p->gy0 - 2, p->gy1 + 1, proj.par[P_BTABLE], sy_tel.wave_pos, 0.0f);
     {   /* how they meet, and how far apart */
         char iv[6];
         int n = proj.par[P_BTUNE], j = 0;
@@ -1885,6 +1866,7 @@ static void draw_panel(const geo_t *g)
     const uint32_t now = plat_ms(), since = now - ui.focus_t;
     int i;
     p.y0 = (int32_t)g->drawer;
+    const int32_t tall = (int32_t)(bs.panel_h - (float)PANEL_H + 0.5f);   /* (the extra height: under the picture) */
     if (p.y0 >= PX_H)
         return;
     {   /* dark glass: three pixels in four go dark, the fourth keeps a darker shade of what is behind */
@@ -1906,18 +1888,6 @@ static void draw_panel(const geo_t *g)
     if (!tabbed)
         px_text(3, p.y0 + 3, PAGE_NAME[ui.page], PC_BLOB2);
     draw_tabs(p.y0);
-    if (wave_big() && p.y0 > 60) {                      /* the table, big: the room behind dark glass */
-        int32_t x, y;
-        for (y = 9; y < p.y0 - 9 * tab_rows(ui.page) - 1; y++)
-            for (x = 0; x < PX_W; x++) {
-                uint8_t *q = &px_fb[y * PX_W + x];
-                *q = ((x ^ y) & 1) ? PC_BG0 : GLASS[*q < PC_N ? *q : 0];
-            }
-        if (ui.page == PG_SHADOW)
-            wave3d(1, 3, PX_W - 4, 12, p.y0 - 13, proj.par[P_BTABLE], 0.0f, 0.0f);
-        else
-            wave3d(0, 3, PX_W - 4, 12, p.y0 - 13, proj.par[P_TABLE], sy_tel.wave_pos, pn(P_DETUNE));
-    }
     {
         const char *what = 0;
         switch (ui.page) {
@@ -1974,7 +1944,7 @@ static void draw_panel(const geo_t *g)
     p.gx0 = 4;
     p.gx1 = PX_W - 5;
     p.gy0 = p.y0 + 12;
-    p.gy1 = ui.page == PG_PUNCH ? p.y0 + 41 : p.y0 + 30;   /* (no knob row: the whole drawer) */
+    p.gy1 = ui.page == PG_PUNCH ? p.y0 + 41 : p.y0 + 30 + tall;   /* (no knob row: the whole drawer) */
     grid(&p);
     switch (ui.page) {
     case PG_MACRO: schem_macro(&p); break;
@@ -2003,7 +1973,7 @@ static void draw_panel(const geo_t *g)
     /* the knobs: a name over a meter, the one being turned lit up */
     for (i = 0; i < 4; i++) {
         const int k = PAGE_KNOB[ui.page][i];
-        const int32_t x = 3 + i * 29, y = p.y0 + 32;   /* (the name 6 high, the meter under it) */
+        const int32_t x = 3 + i * 29, y = p.y0 + 32 + tall;   /* (the name 6 high, the meter under it) */
         const int hot = ui.touched == i && since < 1500u;
         const sy_param_t *sp;
         float v;
@@ -2790,8 +2760,10 @@ static void blob_draw(void)
     /* the panel slides in and out; the room takes what is left */
     bs.panel = approach(bs.panel, ui.panel || preset_card() ? 1.0f : 0.0f, bs.dt * 8.0f);
     pa = bs.panel;
+    bs.panel_h = approach(bs.panel_h < 1.0f ? (float)PANEL_H : bs.panel_h,
+                          (ui.page == PG_BODY || ui.page == PG_SHADOW) && !preset_card() ? (float)PANEL_TALL : (float)PANEL_H, bs.dt * 10.0f);
     g.ab = (float)PX_H;                                 /* the room keeps the screen; the drawer is a dark glass over it */
-    g.drawer = (float)PX_H - (float)PANEL_H * pa;
+    g.drawer = (float)PX_H - bs.panel_h * pa;
     /* the room: Size pushes its walls out (then away); the blob shrinks in it */
     g.rcx = 60.0f;
     g.rcy = 55.0f - 12.0f * pa;                          /* (the room lifts a little when the drawer opens) */

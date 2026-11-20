@@ -65,7 +65,7 @@ Press or hold a part's button: its schematic opens in a dark glass drawer over t
 | Page | Its schematic |
 | --- | --- |
 | Macros | four dials, each lit from the middle to where it is; the blob shows them (Bite: it glares; Nerves: it shivers) |
-| Body | the wavetable in 3D, its eight frames in depth (the first in front and the last at the back drawn bright), the wave playing lit where it is in the table (live, with the LFOs and the Sigh), the detuned copy sliding; while Table or Position turns it fills the room and the drawer shows the wave playing, flat; a new table morphs in |
+| Body | the wavetable in 3D in a taller drawer: twelve lines through the table, its first wave in front and its last at the back; turning Position lights the line it is on, one by one (the LFOs and the Sigh move the light too); the detuned copy sliding along it; a new table morphs in |
 | Eyes | the filter's curve for its kind (low, band, high, notch, or the comb's teeth) and its resonance peak, the cutoff marked, and where the note's envelope opens it now (red) |
 | Mouth | the ADSR, a red dot riding it where the loudest note is |
 | Vibe | the LFO's wave (more cycles: faster), a red dot at its phase, where it goes |
@@ -82,7 +82,7 @@ Press or hold a part's button: its schematic opens in a dark glass drawer over t
 | Mixer | the tempo, and three channel strips: each a fader and a live meter (voice, drums, bass) |
 | Arp | the next 16 steps as a piano roll, the playing one lit, each as long as the gate |
 | Setup | a note gliding to the next, MIDI out and channel |
-| Shadow | the second wave over the first at its interval, how they meet (mix, FM, ring, sync), the interval in semitones |
+| Shadow | its own table in 3D, as the Body's, the line at the position lit; how it meets the first (mix, FM, ring, sync), the interval in semitones |
 | Sigh | the second envelope's rise and fall, full width, the wave a note starts on and the one its sweep reaches |
 | Tremble | the second LFO, drawn like Vibe's |
 

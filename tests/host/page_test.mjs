@@ -23,7 +23,7 @@ const PROBE = `(async () => {
   document.getElementById("on").click();
   for (let i = 0; i < 100 && !document.getElementById("power").hidden; i++) await wait(100);
   if (!document.getElementById("power").hidden) return "did not switch on: " + document.getElementById("said").textContent;
-  await wait(2800);                                 // (it fades in over 2.5 s)
+  await wait(4000);                                 // (it fades in over 2.5 s, from when its audio starts: on a cold first load, later)
   voice.port.postMessage({ is: "hold", buttons: 0, keys: 1 << 12 });
   const key = await loudest(30);
   voice.port.postMessage({ is: "hold", buttons: 0, keys: 0 });
