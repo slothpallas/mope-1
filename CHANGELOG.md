@@ -18,8 +18,9 @@ Four macros, three new effects and a bank that shows what the engine can do.
   **Burn** (a fuzz after the filter, plus fewer bits and a lower sample rate) and **Mumble** (a
   filter over it all that moves with the beat, over a bar, or with your playing). The LFOs can go to
   each of them, and to the shadow oscillator's pitch, so a sync sound sweeps.
-- **Tabs.** A button with more pages shows them as tabs on top of the drawer, always in the same
-  places, the open one lit (FX's seven in two rows).
+- **A dock for pages.** A button with more pages shows them in a dock along the bottom of the drawer,
+  the open one lit; FX's seven in two groups with an arrow between (Walls, Tears, Copies; Dust, Swirl,
+  Burn, Mumble).
 - **Punches' white keys follow one rule.** The white key below a held time punch takes it twice as
   far, the one above in threes: HALF a quarter or a third, DOUBLE four or three times, REPEAT,
   STUTTER and GATE twice as fast or in triplets, REVERSE shorter slices or in threes. They work on

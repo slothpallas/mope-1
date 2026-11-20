@@ -1809,54 +1809,63 @@ static void draw_preset_card(int32_t y0)
     }
 }
 
-/* a button's pages as tabs on the drawer's top edge, in the order the button goes round them, always in the
- * same places whichever is open (the open one lit): one row; FX's seven, two (they don't fit across). */
-static int tab_rows(int pg)                             /* (how many rows its button's tabs take) */
-{
-    int n = 0, first = pg;
-    int32_t x = 1;
-    while (PAGE_NTH[first] && n++ < 8)
-        first = PAGE_AGAIN[first];
-    pg = first;
-    n = 0;
-    do {
-        x += px_text_w(PAGE_NAME[pg]) + 5;
-        pg = PAGE_AGAIN[pg];
-    } while (pg >= 0 && pg != first && ++n < 8);
-    return x > PX_W ? 2 : 1;
-}
-static void draw_tabs(int32_t y0)
+/* a button's pages as a dock along the bottom of the drawer, in the order the button goes round them, the
+ * open one lit. When they don't all fit across (FX's seven): in groups, each as many as fit, an arrow to the
+ * others; a group's pages stay where they are while you go round them. */
+#define DOCK_H 9
+static int has_dock(int pg) { return PAGE_AGAIN[pg] >= 0; }
+static void draw_dock(int32_t yb)                        /* yb: the drawer's bottom */
 {
     int8_t pgs[8];
-    int n = 0, pg = ui.page, k, rows;
-    int32_t x = 1, row = 0;
-    if (PAGE_AGAIN[pg] < 0 || y0 > PX_H - 16)           /* (none, or the drawer nearly away) */
-        return;
-    rows = tab_rows(pg);
-    if (y0 < 9 * rows)
+    int32_t w[8];
+    int n = 0, pg = ui.page, k, cur = 0, lo, hi;
+    const int32_t y = yb - DOCK_H;
+    if (!has_dock(pg) || y >= PX_H)
         return;
     while (PAGE_NTH[pg] && n++ < 8)                      /* (round to its button's first) */
         pg = PAGE_AGAIN[pg];
     n = 0;
     do {
-        pgs[n++] = (int8_t)pg;
+        if (pg == ui.page)
+            cur = n;
+        pgs[n] = (int8_t)pg;
+        w[n] = px_text_w(PAGE_NAME[pg]) + 4;
+        n++;
         pg = PAGE_AGAIN[pg];
     } while (pg >= 0 && pg != pgs[0] && n < 8);
-    for (k = 0; k < n; k++) {
-        const int on = pgs[k] == ui.page;
-        const int32_t w = px_text_w(PAGE_NAME[pgs[k]]) + 4;
-        int32_t ty;
-        if (rows > 1 && row == 0 && x + w > PX_W - 1) { /* (the first row full: the rest above it) */
-            row = 1;
-            x = 1;
+    hi = n - 1;                                          /* (the groups, from the last back: as many as fit, room for the arrows) */
+    for (;;) {
+        int32_t used = w[hi] + (hi + 1 < n ? 6 : 0);
+        lo = hi;
+        while (lo > 0 && used + 1 + w[lo - 1] + (lo - 1 > 0 ? 6 : 0) <= PX_W - 4)
+            used += 1 + w[--lo];
+        if (cur >= lo || lo == 0)
+            break;
+        hi = lo - 1;
+    }
+    px_rect(0, y, PX_W, DOCK_H, PC_BG0);                 /* (the dock: its own dark strip, a line over it) */
+    px_rect(0, y, PX_W, 1, PC_GRID);
+    {
+        int32_t x = 2;
+        if (lo > 0) {                                    /* (more before: an arrow) */
+            px_line(x + 3, y + 2, x, y + 5, PC_BLOBM);
+            px_line(x, y + 5, x + 3, y + 8, PC_BLOBM);
+            x += 6;
         }
-        ty = y0 - 9 * (rows - row);                     /* (the first pages on top, the last next to the drawer) */
-        px_rect(x, ty + 1, w, 8, on ? PC_PANEL : PC_BG0);
-        px_rect(x, ty, w, 1, on ? PC_BLOB2 : PC_GRID);
-        if (on && ty + 9 == y0)
-            px_rect(x, y0, w, 1, PC_PANEL);              /* (open, next to the drawer: no edge between them) */
-        px_text(x + 2, ty + 3, PAGE_NAME[pgs[k]], on ? PC_WHITE : PC_BLOBM);
-        x += w + 1;
+        for (k = lo; k <= hi; k++) {
+            const int on = k == cur;
+            if (on) {
+                px_rect(x, y + 1, w[k], DOCK_H - 1, PC_PANEL);
+                px_rect(x + 1, y, w[k] - 2, 1, PC_BLOB2); /* (lit along its top, as a dock marks what is open) */
+            }
+            px_text(x + 2, y + 2, PAGE_NAME[pgs[k]], on ? PC_WHITE : PC_BLOBM);
+            x += w[k] + 1;
+        }
+        if (hi + 1 < n) {                                /* (more after: an arrow) */
+            const int32_t ax = PX_W - 6;
+            px_line(ax, y + 2, ax + 3, y + 5, PC_BLOBM);
+            px_line(ax + 3, y + 5, ax, y + 8, PC_BLOBM);
+        }
     }
 }
 
@@ -1866,7 +1875,7 @@ static void draw_panel(const geo_t *g)
     const uint32_t now = plat_ms(), since = now - ui.focus_t;
     int i;
     p.y0 = (int32_t)g->drawer;
-    const int32_t tall = (int32_t)(bs.panel_h - (float)PANEL_H + 0.5f);   /* (the extra height: under the picture) */
+    const int32_t tall = (int32_t)(bs.panel_h - (float)PANEL_H + 0.5f) - (has_dock(ui.page) ? DOCK_H : 0);   /* (the extra height: under the picture; the dock under the knobs) */
     if (p.y0 >= PX_H)
         return;
     {   /* dark glass: three pixels in four go dark, the fourth keeps a darker shade of what is behind */
@@ -1883,11 +1892,10 @@ static void draw_panel(const geo_t *g)
         return;
     }
     /* the page's name and what it is set to; a button with more pages: their tabs, standing on the drawer */
-    const int tabbed = PAGE_AGAIN[ui.page] >= 0 && p.y0 >= 9 * tab_rows(ui.page) && p.y0 <= PX_H - 16;   /* (its name is on its tab) */
-    const int32_t dots_w = tabbed ? -(px_text_w(PAGE_NAME[ui.page]) + 6) : 0;
-    if (!tabbed)
-        px_text(3, p.y0 + 3, PAGE_NAME[ui.page], PC_BLOB2);
-    draw_tabs(p.y0);
+    const int tabbed = 0;                               /* (the page's name stays at the top; its pages are in the dock) */
+    const int32_t dots_w = 0;
+    px_text(3, p.y0 + 3, PAGE_NAME[ui.page], PC_BLOB2);
+    draw_dock(p.y0 + (int32_t)(bs.panel_h + 0.5f));
     {
         const char *what = 0;
         switch (ui.page) {
@@ -2761,7 +2769,8 @@ static void blob_draw(void)
     bs.panel = approach(bs.panel, ui.panel || preset_card() ? 1.0f : 0.0f, bs.dt * 8.0f);
     pa = bs.panel;
     bs.panel_h = approach(bs.panel_h < 1.0f ? (float)PANEL_H : bs.panel_h,
-                          (ui.page == PG_BODY || ui.page == PG_SHADOW) && !preset_card() ? (float)PANEL_TALL : (float)PANEL_H, bs.dt * 10.0f);
+                          ((ui.page == PG_BODY || ui.page == PG_SHADOW) && !preset_card() ? (float)PANEL_TALL : (float)PANEL_H) +
+                              (has_dock(ui.page) && !preset_card() ? (float)DOCK_H : 0.0f), bs.dt * 10.0f);   /* (and the dock under it) */
     g.ab = (float)PX_H;                                 /* the room keeps the screen; the drawer is a dark glass over it */
     g.drawer = (float)PX_H - bs.panel_h * pa;
     /* the room: Size pushes its walls out (then away); the blob shrinks in it */
