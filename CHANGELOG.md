@@ -12,8 +12,9 @@ Four macros, three new effects and a bank that shows what the engine can do.
   other, the same four on every preset: **Eyes** (the filter, from muffled to wide open), **Bite**
   (soft and round to wrecked, dirtier but not louder), **Nerves** (still to wild: the LFOs, the wave,
   the filter all restless) and **Room** (bone dry to drowned). The middle is the sound as it was made,
-  and each goes a long way both ways. The blob acts them out: Bite makes it glare, Nerves makes it shiver. HOME again: the Body, then
-  the Shadow. Out of the box the knobs turn the macros.
+  and each goes a long way both ways. The blob acts them out: Bite makes it glare, Nerves makes it
+  shiver. HOME again: the Body, then the Shadow. Out of the box the knobs turn the macros, and while
+  no drawer is open four faint dials at the bottom of the screen show them.
 - **SEL and FX swapped back.** **SEL** goes round the effect pages again and **FX** holds the punches,
   as before 0.4.
 - **Three new effects** on SEL, after the dust: **Swirl** (a phaser; with Feedback up, a flanger),
